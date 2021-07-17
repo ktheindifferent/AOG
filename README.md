@@ -6,7 +6,8 @@ When I first activated the A.O.G....my average indoor CO2 levels were 1000-2000p
 
 I decided to license this project under the MIT license so that individuals and corporations can make/modify/sell A.O.G without restrictions. Speed is essential in controlling climate change. The more units built...the better.
 
-Build pictures, and videos can be found in the media folder. Hardware schematics and build instructions coming soon :)
+Build pictures, and videos can be found in the media folder. 
+Hardware schematics and build instructions coming soon :)
 
 # Support and follow my work by:
 
