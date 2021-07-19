@@ -1,5 +1,7 @@
 # A.O.G. (Algae Oxygen Reactor)
 
+![image info](./media/VID_20200927_114934.mp4)
+
 CO2 is a dangerous indoor/outdoor air pollutant. A.O.G. (Algae Oxygen Reactor) uses blue-green algae to convert CO2 into Oxygen.
 
 When I first activated the A.O.G....my average indoor CO2 levels were 1000-2000ppm+.  After 6+ months of use my indoor CO2 level averages between 400-600ppm. 
