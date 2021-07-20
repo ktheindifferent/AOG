@@ -4,6 +4,7 @@ Required (Indoor Build):
 
 * 1x 600W+ Grow Light
 * 1x 55 Gallon Plastic Drum
+* 1x RAINPAL RBS024 Brass Rain Barrel Spigot
 * 1x Raspberry SC15184 Pi 4 Model B 2019 Quad Core 64 Bit WiFi Bluetooth (2GB)
 * 1x 6ft Industrial USB-C Cable (For Pi)
 * 1x 4 Channel 5vDC relay
@@ -18,6 +19,7 @@ Required (Outdoor Build):
 * 1x Solar Battery Bank
 * 1x Solar Inverter 
 * 1x 55 Gallon Plastic Drum
+* 1x RAINPAL RBS024 Brass Rain Barrel Spigot
 * 1x Raspberry SC15184 Pi 4 Model B 2019 Quad Core 64 Bit WiFi Bluetooth (2GB)
 * 1x 6ft Industrial USB-C Cable (For Pi)
 * 1x 4 Channel 5vDC relay
