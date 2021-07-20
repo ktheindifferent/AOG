@@ -1,6 +1,6 @@
 # A.O.G. (Algae Oxygen Reactor)
 
-![image info](./media/IMG_20200917_201800.jpg)
+<img src="./media/IMG_20200917_201800.jpg" alt="drawing" width="200"/>
 
 CO2 is a dangerous indoor/outdoor air pollutant. A.O.G. (Algae Oxygen Reactor) uses blue-green algae to convert CO2 into Oxygen.
 
