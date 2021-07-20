@@ -40,3 +40,5 @@ HVAC Kit (Optional):
 * 2x HVAC Intake Vents
 * 2x HVAC Inline Fans
 * 1x Y HVAC Splitter
+
+## build instructions coming soon....
