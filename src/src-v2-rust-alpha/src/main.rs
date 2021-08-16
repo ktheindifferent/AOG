@@ -62,6 +62,7 @@ fn main() {
         }
 
         aog::command::run(s);
+        
 
         // if s.contains("Y") || s.contains("y") {
         //     aog_config.power_type = "solar";

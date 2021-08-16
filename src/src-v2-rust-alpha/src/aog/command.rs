@@ -8,6 +8,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+
+use sds011::{SDS011};
+use std::thread::sleep;
+
+
 // Gpio uses BCM pin numbering. BCM GPIO 23 is tied to physical pin 16.
 // const GPIO_LED: u8 = 23;
 
@@ -55,6 +60,28 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
     if command == "help".to_string(){
         println!("clear/cls:                clears screen");
         println!("help [command]:           shows help");
+    }
+
+
+    if command == "test".to_string(){
+
+        // let mut sensor = SDS011::new("/dev/ttyUSB0").unwrap();
+
+
+        match SDS011::new("/dev/ttyUSB0") {
+            Ok(mut sensor) => {
+                sensor.set_work_period(5).unwrap();
+        
+                loop {
+                    if let Ok(m) = sensor.query() {
+                        println!("{:?}", m);
+                    }
+        
+                    sleep(Duration::from_secs(5u64 * 60));
+                }
+            },
+            Err(e) => println!("{:?}", e),
+        };
     }
 
 
