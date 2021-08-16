@@ -76,8 +76,6 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
                     if let Ok(m) = sensor.query() {
                         println!("{:?}", m);
                     }
-        
-                    sleep(Duration::from_secs(5u64 * 60));
                 }
             },
             Err(e) => println!("{:?}", e),
@@ -91,8 +89,6 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
                     if let Ok(m) = sensor.query() {
                         println!("{:?}", m);
                     }
-        
-                    sleep(Duration::from_secs(5u64 * 60));
                 }
             },
             Err(e) => println!("{:?}", e),
