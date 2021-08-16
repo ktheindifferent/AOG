@@ -31,6 +31,15 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
         println!("{}", aog::sensors::get_pm25());
     }
 
+    if command.starts_with("pm10"){
+        println!("{}", aog::sensors::get_pm10());
+    }
+
+    if command.starts_with("arduino"){
+        aog::sensors::get_arduino_raw();
+    }
+
+    
  
 
     // 0-21

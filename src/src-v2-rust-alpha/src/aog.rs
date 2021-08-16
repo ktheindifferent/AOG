@@ -35,7 +35,7 @@ pub fn processing_animation(){
 
 
 pub fn print_stats(){
-    println!("{}{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{}   TEMP: {}{}{}   HUM: {}{}{}    {}", color::Fg(color::Blue), style::Bold, color::Fg(color::White), "1.2", color::Fg(color::Blue), color::Fg(color::White), "3.2", color::Fg(color::Blue), color::Fg(color::White), "634ppm", color::Fg(color::Blue), color::Fg(color::White), "22C", color::Fg(color::Blue), color::Fg(color::White), "54%", color::Fg(color::Blue), style::Reset);
+    println!("{}{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{}   TEMP: {}{}{}   HUM: {}{}{}    {}", color::Fg(color::Blue), style::Bold, color::Fg(color::White), sensors::get_pm25(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_pm10(), color::Fg(color::Blue), color::Fg(color::White), "634ppm", color::Fg(color::Blue), color::Fg(color::White), "22C", color::Fg(color::Blue), color::Fg(color::White), "54%", color::Fg(color::Blue), style::Reset);
     println!(r"------------------------------------------------------------------");
 }
 
