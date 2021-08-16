@@ -89,7 +89,7 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
         
                 loop {
                     if let Ok(m) = sensor.query() {
-                        println!("{:?}", m);
+                        println!("{:?}", m.pm25);
                     }
                 }
             },
