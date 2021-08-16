@@ -1,3 +1,6 @@
+pub mod command;
+pub mod gpio_status;
+
 use std::io::Error;
 use std::io::{Write, stdin, stdout};
 use std::path::{Path};
@@ -10,6 +13,23 @@ use shuteye::sleep;
 use std::time::Duration;
 
 use savefile::prelude::*;
+
+pub fn print_logo(){
+    println!("\n\n");
+    println!(r"█████      ██████      ██████      ");
+    println!(r"██   ██    ██    ██    ██          ");
+    println!(r"███████    ██    ██    ██   ███    ");
+    println!(r"██   ██    ██    ██    ██    ██    ");
+    println!(r"██   ██ ██  ██████  ██  ██████  ██ ");                      
+    println!(r"------------------------------------------------------------------");
+    println!(r"v2.0.0-alpha");
+    println!(r"------------------------------------------------------------------");
+}
+
+pub fn cls(){
+    assert!( std::process::Command::new("cls").status().or_else(|_| std::process::Command::new("clear").status()).unwrap().success() );
+    print_logo();
+}
 
 
 
@@ -30,11 +50,23 @@ pub struct SensorLog {
 pub struct Config {
     pub id: String,
     pub boot_time: usize,
-    pub sensor_logs: Vec<SensorLog>,
     pub enable_automatic_updates: bool,
     pub is_hvac_kit_installed: bool, 
     pub is_sensor_kit_installed: bool,
     pub power_type: String, // Grid, Solar, Etc.
+    pub sensor_kit_config: Option<SensorKitConfig>,
+    pub sensor_logs: Vec<SensorLog>
+}
+
+#[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
+pub struct SensorKitConfig {
+    pub dht11_pin: u8, //default 7
+    pub tank_one_overflow: u8, //default 4
+    pub tank_two_overflow: u8, //default 2
+    pub analog_co2_pin: String, //default A0
+    pub enable_dht11: bool,
+    pub enable_analog_co2: bool,
+    pub enable_ccs811: bool, 
 }
 
 impl Default for Config {
@@ -42,6 +74,6 @@ impl Default for Config {
 
         let sensor_logs :Vec<SensorLog> = Vec::new();
 
-        Config{id: "rand".to_string(), boot_time: 0, sensor_logs: sensor_logs, enable_automatic_updates: false, is_hvac_kit_installed: false, is_sensor_kit_installed: false, power_type: "".to_string()}
+        Config{id: "rand".to_string(), boot_time: 0, sensor_logs: sensor_logs, enable_automatic_updates: false, is_hvac_kit_installed: false, is_sensor_kit_installed: false, sensor_kit_config: None, power_type: "".to_string()}
     }
 }

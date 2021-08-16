@@ -1,0 +1,4 @@
+/src/src-v2-rust-alpha/target
+**/*.rs.bk
+
+.vscode

@@ -31,31 +31,46 @@ const GPIO_LED: u8 = 23;
 
 fn main() {
 
-    println!("\n\n");
-    println!(r"█████      ██████      ██████      ");
-    println!(r"██   ██    ██    ██    ██          ");
-    println!(r"███████    ██    ██    ██   ███    ");
-    println!(r"██   ██    ██    ██    ██    ██    ");
-    println!(r"██   ██ ██  ██████  ██  ██████  ██ ");                      
-    println!(r"------------------------------------------------------------------");
-    println!(r"v2.0.0-alpha");
-    println!(r"------------------------------------------------------------------");
+    aog::cls();
+
+
 
 
     if !Path::new("/opt/aog/dat/").exists() {
 		setup::install();
 	} else {
         // TODO - Print installed version and check for updates
-        
+
     }
 
     // Retrieve the GPIO pin and configure it as an output.
     // let mut pin = Gpio::new()?.get(GPIO_LED)?.into_output();
 
-    // loop {
-    //     pin.toggle();
-    //     thread::sleep(Duration::from_millis(500));
-    // }
+    loop {
+        // pin.toggle();
+        // thread::sleep(Duration::from_millis(500));
+
+        let mut s=String::new();
+        print!("> ");
+        let _=stdout().flush();
+        stdin().read_line(&mut s).expect("Did not enter a correct string");
+        if let Some('\n')=s.chars().next_back() {
+            s.pop();
+        }
+        if let Some('\r')=s.chars().next_back() {
+            s.pop();
+        }
+
+        aog::command::run(s);
+
+        // if s.contains("Y") || s.contains("y") {
+        //     aog_config.power_type = "solar";
+        // } else {
+        //     aog_config.power_type = "grid";
+        // }
+
+
+    }
 
 
 

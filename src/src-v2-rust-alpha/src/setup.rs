@@ -27,7 +27,7 @@ pub fn install() {
         if s.contains("Y") || s.contains("y") {
             abort_install = false;
         } else {
-            println!("Goodbye...")
+            println!("Skipping Setup...")
         }
 
         if !abort_install {
@@ -94,10 +94,12 @@ pub fn install() {
                 s.pop();
             }
             if s.contains("Y") || s.contains("y") {
-                aog_config.power_type = "solar";
+                aog_config.power_type = "solar".to_string();
             } else {
-                aog_config.power_type = "grid";
+                aog_config.power_type = "grid".to_string();
             }
+
+            aog::cls();
 
 
         }
