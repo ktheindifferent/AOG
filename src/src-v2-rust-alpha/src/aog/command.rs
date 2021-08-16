@@ -33,15 +33,19 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
         if command.contains("on"){
             let selected_pin = split_vec[2].parse::<u8>().unwrap();
             let mut pin = Gpio::new()?.get(selected_pin)?.into_output();
-            pin.set_low();
-            thread::sleep(Duration::from_millis(500000));
+            loop {
+                pin.set_low();
+                thread::sleep(Duration::from_millis(500));
+            }
         }
 
         if command.contains("off"){
             let selected_pin = split_vec[2].parse::<u8>().unwrap();
             let mut pin = Gpio::new()?.get(selected_pin)?.into_output();
-            pin.set_high();
-            thread::sleep(Duration::from_millis(500000));
+            loop {
+                pin.set_high();
+                thread::sleep(Duration::from_millis(500));
+            }
         }
     }
 
