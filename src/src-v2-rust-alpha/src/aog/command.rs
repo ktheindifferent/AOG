@@ -82,6 +82,21 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
             },
             Err(e) => println!("{:?}", e),
         };
+
+        match SDS011::new("/dev/ttyUSB1") {
+            Ok(mut sensor) => {
+                sensor.set_work_period(5).unwrap();
+        
+                loop {
+                    if let Ok(m) = sensor.query() {
+                        println!("{:?}", m);
+                    }
+        
+                    sleep(Duration::from_secs(5u64 * 60));
+                }
+            },
+            Err(e) => println!("{:?}", e),
+        };
     }
 
 
