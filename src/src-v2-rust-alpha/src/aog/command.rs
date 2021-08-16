@@ -27,6 +27,10 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
         aog::cls();
     }
 
+    if command.starts_with("pm25"){
+        println!("{}", aog::sensors::get_pm25());
+    }
+
  
 
     // 0-21

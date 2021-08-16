@@ -1,4 +1,5 @@
 pub mod command;
+pub mod sensors;
 pub mod gpio_status;
 
 use std::io::Error;
