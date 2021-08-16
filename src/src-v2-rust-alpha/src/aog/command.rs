@@ -58,8 +58,10 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
 
 
     if command == "help".to_string(){
-        println!("clear/cls:                clears screen");
-        println!("help [command]:           shows help");
+        println!("gpio status:                  prints status of the gpio bus");
+        println!("gpio [on/off] [gpio_bdm]:     change state of a gpio pin");
+        println!("clear/cls:                    clears screen");
+        println!("help [command]:               shows help");
     }
 
 
@@ -74,7 +76,7 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
         
                 loop {
                     if let Ok(m) = sensor.query() {
-                        println!("{:?}", m);
+                        println!("{:?}", m.pm25);
                     }
                 }
             },

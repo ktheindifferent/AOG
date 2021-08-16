@@ -14,6 +14,30 @@ use std::time::Duration;
 
 use savefile::prelude::*;
 
+extern crate termion;
+
+use termion::{color, style};
+
+pub fn processing_animation(){
+    let mut stdout = stdout();
+
+    for i in 0..=100 {
+        print!("\rProcessing {}%...", i);
+        // or
+        // stdout.write(format!("\rProcessing {}%...", i).as_bytes()).unwrap();
+
+        stdout.flush().unwrap();
+        sleep(Duration::from_millis(20));
+    }
+    println!();
+}
+
+
+pub fn print_stats(){
+    println!("{}{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{}   TEMP: {}{}{}   HUM: {}{}{}    {}", color::Fg(color::Blue), style::Bold, color::Fg(color::White), "1.2", color::Fg(color::Blue), color::Fg(color::White), "3.2", color::Fg(color::Blue), color::Fg(color::White), "634ppm", color::Fg(color::Blue), color::Fg(color::White), "22C", color::Fg(color::Blue), color::Fg(color::White), "54%", color::Fg(color::Blue), style::Reset);
+    println!(r"------------------------------------------------------------------");
+}
+
 pub fn print_logo(){
     println!("\n\n");
     println!(r"█████      ██████      ██████      ");
@@ -29,6 +53,7 @@ pub fn print_logo(){
 pub fn cls(){
     assert!( std::process::Command::new("cls").status().or_else(|_| std::process::Command::new("clear").status()).unwrap().success() );
     print_logo();
+    print_stats();
 }
 
 

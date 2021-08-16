@@ -13,5 +13,6 @@ savefile-derive="0.7.4"
 shuteye = "0.3.3"
 rouille = { version = "3.1.1", features = ["ssl"] }
 sds011 = "0.2.1"
+termion = "1.5.6"
 serde = { version = "1.0.127", features = ["derive"] }
 serde_derive = "1.0.127"
