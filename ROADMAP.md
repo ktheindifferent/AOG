@@ -11,5 +11,5 @@ Roadmap:
 * Support for USB Webcams
 * Solinoid support for automatic tank draining/filling
 * Tensorflow Scripts for Deep Algae Growth Detection
-* Better Web Management Interface for better control over A.O.G.
+* Better Web Management Interface for better control over A.O.G. system
 * A.O.G. Local Web API

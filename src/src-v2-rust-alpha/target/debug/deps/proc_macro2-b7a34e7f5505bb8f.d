@@ -1,0 +1,12 @@
+/home/kal/Documents/AOG PUBLISHING/src/src-v2-rust/target/debug/deps/proc_macro2-b7a34e7f5505bb8f.rmeta: /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/lib.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/marker.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/parse.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/detection.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/fallback.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/wrapper.rs
+
+/home/kal/Documents/AOG PUBLISHING/src/src-v2-rust/target/debug/deps/libproc_macro2-b7a34e7f5505bb8f.rlib: /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/lib.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/marker.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/parse.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/detection.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/fallback.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/wrapper.rs
+
+/home/kal/Documents/AOG PUBLISHING/src/src-v2-rust/target/debug/deps/proc_macro2-b7a34e7f5505bb8f.d: /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/lib.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/marker.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/parse.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/detection.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/fallback.rs /home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/wrapper.rs
+
+/home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/lib.rs:
+/home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/marker.rs:
+/home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/parse.rs:
+/home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/detection.rs:
+/home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/fallback.rs:
+/home/kal/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.28/src/wrapper.rs:
