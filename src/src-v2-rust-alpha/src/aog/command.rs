@@ -36,6 +36,7 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
             loop {
                 pin.set_low();
                 thread::sleep(Duration::from_millis(500));
+                break;
             }
         }
 
@@ -45,6 +46,7 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
             loop {
                 pin.set_high();
                 thread::sleep(Duration::from_millis(500));
+                break;
             }
         }
     }
