@@ -20,22 +20,32 @@ pub fn get_arduino_raw() -> String {
             .timeout(Duration::from_millis(10))
             .open();
 
+
+        let mut response = String::new();
+
         match port {
             Ok(mut port) => {
                 loop{
                     let mut serial_buf: Vec<u8> = vec![0; 1000];
                     match port.read(serial_buf.as_mut_slice()) {
                         Ok(t) => {
-                            io::stdout().write_all(&serial_buf[..t]).unwrap();
-                            return str::from_utf8(&serial_buf[..t]).unwrap().to_string();
+
+                            let value = str::from_utf8(&serial_buf[..t]).unwrap().to_string();
+                            
+                            if value.len() > 0{
+                                response += &value;
+                            }
+
+                            if response.len() > 1000 {
+                                return str::from_utf8(&serial_buf[..t]).unwrap().to_string();
+                            }
+                            
                         },
-                        Err(e) => println!(""),
+                        Err(e) => {},
                     }
                 }
             },
-            Err(e) => {
-                eprintln!("Failed to open \"{}\". Error: {}", port_name, e);
-            }
+            Err(e) => {}
 
             
         }
