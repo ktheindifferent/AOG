@@ -35,8 +35,10 @@ pub fn get_arduino_raw() -> String {
                 eprintln!("Failed to open \"{}\". Error: {}", port_name, e);
             }
 
-            tty_port += 1
+            
         }
+
+        tty_port += 1;
     }
 
     return format!("N/A");
