@@ -85,7 +85,7 @@ pub fn get_co2() -> String {
         }
     }
 
-    return raw;
+    return "N/A".to_string();
 }
 
 pub fn get_tvoc() -> String {
@@ -102,7 +102,7 @@ pub fn get_tvoc() -> String {
         }
     }
 
-    return raw;
+    return "N/A".to_string();
 }
 
 pub fn get_temperature() -> String {
@@ -119,7 +119,7 @@ pub fn get_temperature() -> String {
         }
     }
 
-    return raw;
+    return "N/A".to_string();
 }
 
 pub fn get_humidity() -> String {
@@ -136,7 +136,7 @@ pub fn get_humidity() -> String {
         }
     }
 
-    return raw;
+    return "N/A".to_string();
 }
 
 
