@@ -50,7 +50,16 @@ pub fn sensors_check_animation(){
 
 pub fn print_stats(){
     sensors_check_animation();
-    println!("{}{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{}   TEMP: {}{}{}   HUM: {}{}{}   TVOC: {}{}{} {}", color::Fg(color::Blue), style::Bold, color::Fg(color::White), sensors::get_pm25(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_pm10(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_co2(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_temperature(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_humidity(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_tvoc(), color::Fg(color::Blue), style::Reset);
+
+    let pm25 = sensors::get_pm25();
+    let pm10 = sensors::get_pm10();
+    let co2 = sensors::get_co2();
+    let temp = sensors::get_temperature();
+    let hum = sensors::get_humidity();
+    let tvoc = sensors::get_tvoc();
+
+
+    println!("{}{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{}   TEMP: {}{}{}   HUM: {}{}{}   TVOC: {}{}{} {}", color::Fg(color::Blue), style::Bold, color::Fg(color::White), pm25, color::Fg(color::Blue), color::Fg(color::White), pm10, color::Fg(color::Blue), color::Fg(color::White), co2, color::Fg(color::Blue), color::Fg(color::White), temp, color::Fg(color::Blue), color::Fg(color::White), hum, color::Fg(color::Blue), color::Fg(color::White), tvoc, color::Fg(color::Blue), style::Reset);
     println!(r"----------------------------------------------------------------------------");
 }
 
