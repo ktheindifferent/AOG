@@ -40,12 +40,16 @@ pub fn get_arduino_raw() -> String {
                     match port.read(serial_buf.as_mut_slice()) {
                         Ok(t) => {
 
-                            let value = str::from_utf8(&serial_buf[..t]).unwrap().to_string();
-                            
-                            if value.len() > 0{
-                                response += &value;
-                            }
+                            let pre_value = str::from_utf8(&serial_buf[..t]);
 
+                            if pre_value.is_ok(){
+                                let value = pre_value.unwrap().to_string();
+                                if value.len() > 0{
+                                    response += &value;
+                                }    
+                            }
+                            
+                     
                             if response.len() > 300 {
                                 return response;
                             }
