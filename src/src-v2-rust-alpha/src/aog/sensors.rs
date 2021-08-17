@@ -22,7 +22,7 @@ pub fn get_arduino_raw() -> String {
 
         match port {
             Ok(mut port) => {
-                let mut serial_buf: Vec<u8> = vec![0; 1000];
+                let mut serial_buf: Vec<u8> = vec![0; 10000];
                 match port.read(serial_buf.as_mut_slice()) {
                     Ok(t) => {
                         io::stdout().write_all(&serial_buf[..t]).unwrap();
