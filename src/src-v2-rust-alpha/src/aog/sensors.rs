@@ -36,7 +36,7 @@ pub fn get_arduino_raw() -> String {
                                 response += &value;
                             }
 
-                            if response.len() > 1000 {
+                            if response.len() > 300 {
                                 return response;
                             }
                             
