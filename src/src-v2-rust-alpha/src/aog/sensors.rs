@@ -37,7 +37,7 @@ pub fn get_arduino_raw() -> String {
                             }
 
                             if response.len() > 1000 {
-                                return str::from_utf8(&serial_buf[..t]).unwrap().to_string();
+                                return response;
                             }
                             
                         },
