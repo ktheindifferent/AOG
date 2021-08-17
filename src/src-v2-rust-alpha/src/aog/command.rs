@@ -41,7 +41,7 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
     }
 
     if command.starts_with("arduino"){
-        aog::sensors::get_arduino_raw();
+        println!("{}", aog::sensors::get_arduino_raw());
     }
 
     
