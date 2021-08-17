@@ -27,6 +27,22 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
         aog::cls();
     }
 
+    
+    if command.starts_with("stats"){
+        aog::print_stats();
+    }
+
+    if command.starts_with("tvoc"){
+        println!("{}", aog::sensors::get_tvoc());
+    }
+
+    if command.starts_with("temp"){
+        println!("{}", aog::sensors::get_temperature());
+    }
+
+    if command.starts_with("hum"){
+        println!("{}", aog::sensors::get_humidity());
+    }
 
     if command.starts_with("co2"){
         println!("{}", aog::sensors::get_co2());

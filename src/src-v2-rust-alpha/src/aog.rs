@@ -33,10 +33,25 @@ pub fn processing_animation(){
     println!();
 }
 
+pub fn sensors_check_animation(){
+    let mut stdout = stdout();
+
+    for i in 0..=99 {
+        print!("\rChecking sensors {}%...", i);
+        // or
+        // stdout.write(format!("\rProcessing {}%...", i).as_bytes()).unwrap();
+
+        stdout.flush().unwrap();
+        sleep(Duration::from_millis(20));
+    }
+    println!();
+}
+
 
 pub fn print_stats(){
-    println!("{}{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{}   TEMP: {}{}{}   HUM: {}{}{}    {}", color::Fg(color::Blue), style::Bold, color::Fg(color::White), sensors::get_pm25(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_pm10(), color::Fg(color::Blue), color::Fg(color::White), "634ppm", color::Fg(color::Blue), color::Fg(color::White), "22C", color::Fg(color::Blue), color::Fg(color::White), "54%", color::Fg(color::Blue), style::Reset);
-    println!(r"------------------------------------------------------------------");
+    sensors_check_animation();
+    println!("{}{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{}   TEMP: {}{}{}   HUM: {}{}{}   TVOC: {}{}{} {}", color::Fg(color::Blue), style::Bold, color::Fg(color::White), sensors::get_pm25(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_pm10(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_co2(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_temperature(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_humidity(), color::Fg(color::Blue), color::Fg(color::White), sensors::get_tvoc(), color::Fg(color::Blue), style::Reset);
+    println!(r"----------------------------------------------------------------------------");
 }
 
 pub fn print_logo(){
@@ -46,9 +61,9 @@ pub fn print_logo(){
     println!(r"███████    ██    ██    ██   ███    ");
     println!(r"██   ██    ██    ██    ██    ██    ");
     println!(r"██   ██ ██  ██████  ██  ██████  ██ ");                      
-    println!(r"------------------------------------------------------------------");
+    println!(r"----------------------------------------------------------------------------");
     println!(r"v2.0.0-alpha");
-    println!(r"------------------------------------------------------------------");
+    println!(r"----------------------------------------------------------------------------");
 }
 
 pub fn cls(){
