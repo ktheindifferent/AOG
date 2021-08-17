@@ -59,7 +59,7 @@ pub fn print_stats(){
     let tvoc = sensors::get_tvoc();
 
 
-    println!("{}{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{}   TEMP: {}{}{}   HUM: {}{}{}   TVOC: {}{}{} {}", color::Fg(color::Blue), style::Bold, color::Fg(color::White), pm25, color::Fg(color::Blue), color::Fg(color::White), pm10, color::Fg(color::Blue), color::Fg(color::White), co2, color::Fg(color::Blue), color::Fg(color::White), temp, color::Fg(color::Blue), color::Fg(color::White), hum, color::Fg(color::Blue), color::Fg(color::White), tvoc, color::Fg(color::Blue), style::Reset);
+    println!("{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{}   TEMP: {}{}{}   HUM: {}{}{}   TVOC: {}{}{} {}", color::Fg(color::Blue), color::Fg(color::White), pm25, color::Fg(color::Blue), color::Fg(color::White), pm10, color::Fg(color::Blue), color::Fg(color::White), co2, color::Fg(color::Blue), color::Fg(color::White), temp, color::Fg(color::Blue), color::Fg(color::White), hum, color::Fg(color::Blue), color::Fg(color::White), tvoc, color::Fg(color::Blue), style::Reset);
     println!(r"----------------------------------------------------------------------------");
 }
 

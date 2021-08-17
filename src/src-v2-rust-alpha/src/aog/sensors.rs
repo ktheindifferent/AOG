@@ -79,7 +79,7 @@ pub fn get_co2() -> String {
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
         if line.contains("AVGCO2:") {
-            let split2 = line.split(": ");
+            let split2 = line.split(":");
             let split2_vec = split2.collect::<Vec<&str>>();
             return split2_vec[1].to_string();
         }
@@ -96,7 +96,7 @@ pub fn get_tvoc() -> String {
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
         if line.contains("S1TVOC:") {
-            let split2 = line.split(": ");
+            let split2 = line.split(":");
             let split2_vec = split2.collect::<Vec<&str>>();
             return split2_vec[1].to_string();
         }
@@ -113,7 +113,7 @@ pub fn get_temperature() -> String {
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
         if line.contains("TEMPERATURE:") {
-            let split2 = line.split(": ");
+            let split2 = line.split(":");
             let split2_vec = split2.collect::<Vec<&str>>();
             return split2_vec[1].to_string();
         }
@@ -130,7 +130,7 @@ pub fn get_humidity() -> String {
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
         if line.contains("HUMIDITY:") {
-            let split2 = line.split(": ");
+            let split2 = line.split(":");
             let split2_vec = split2.collect::<Vec<&str>>();
             return split2_vec[1].to_string();
         }
