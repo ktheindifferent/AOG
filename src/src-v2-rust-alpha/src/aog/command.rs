@@ -27,6 +27,11 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
         aog::cls();
     }
 
+
+    if command.starts_with("co2"){
+        println!("{}", aog::sensors::get_co2());
+    }
+
     if command.starts_with("pm25"){
         println!("{}", aog::sensors::get_pm25());
     }
