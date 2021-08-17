@@ -7,6 +7,16 @@ use std::time::Duration;
 
 use std::str;
 
+
+// S1CO2: 400.00ppm
+// S1TVOC: 0ppb
+// S2CO2: 1343.75ppm
+// AVGCO2: 871.88ppm
+// HUMIDITY: 43.00%
+// TEMPERATURE: 29.00C  
+// TOP_TANK_OVERFLOW: OVERFLOW
+// BARREL_WATER_OVERFLOW: NONE
+
 pub fn get_arduino_raw() -> String {
     let mut tty_port = 0;
     let mut tty_quit = 25;
@@ -59,6 +69,17 @@ pub fn get_arduino_raw() -> String {
 
 pub fn get_co2() -> String {
     let raw = get_arduino_raw();
+
+
+    let split = raw.split("\n");
+    let split_vec = split.collect::<Vec<&str>>();
+    for line in split_vec {
+        if line.contains("AVGCO2:") {
+            let split2 = line.split(": ");
+            let split2_vec = split2.collect::<Vec<&str>>();
+            return split2_vec[1].to_string();
+        }
+    }
 
     return raw;
 }
