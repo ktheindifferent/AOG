@@ -24,11 +24,15 @@ pub fn get_arduino_raw() -> String {
             Ok(mut port) => {
                 let mut serial_buf: Vec<u8> = vec![0; 1000];
                 match port.read(serial_buf.as_mut_slice()) {
-                    Ok(t) => return str::from_utf8(&serial_buf[..t]).unwrap().to_string(),
+                    Ok(t) => {
+                        io::stdout().write_all(&serial_buf[..t]).unwrap();
+                        return str::from_utf8(&serial_buf[..t]).unwrap().to_string();
+                    },
                     Err(e) => tty_port += 1,
                 }
-            }
+            },
             Err(e) => {
+                eprintln!("Failed to open \"{}\". Error: {}", port_name, e);
                 tty_port += 1;
             }
         }
