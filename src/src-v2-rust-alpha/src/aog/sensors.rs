@@ -25,7 +25,7 @@ pub fn get_arduino_raw() -> String {
                 let mut serial_buf: Vec<u8> = vec![0; 1000];
                 match port.read(serial_buf.as_mut_slice()) {
                     Ok(t) => return str::from_utf8(&serial_buf[..t]).unwrap().to_string(),
-                    Err(e) => return e.to_string(),
+                    Err(e) => tty_port += 1,
                 }
             }
             Err(e) => {
