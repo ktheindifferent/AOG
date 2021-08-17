@@ -28,13 +28,14 @@ pub fn get_arduino_raw() -> String {
                         io::stdout().write_all(&serial_buf[..t]).unwrap();
                         return str::from_utf8(&serial_buf[..t]).unwrap().to_string();
                     },
-                    Err(e) => tty_port += 1,
+                    Err(e) => println!(""),
                 }
             },
             Err(e) => {
                 eprintln!("Failed to open \"{}\". Error: {}", port_name, e);
-                tty_port += 1;
             }
+
+            tty_port += 1
         }
     }
 
