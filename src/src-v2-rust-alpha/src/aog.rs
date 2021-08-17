@@ -53,7 +53,7 @@ pub fn print_stats(){
 
     let pm25 = sensors::get_pm25();
     let pm10 = sensors::get_pm10();
-    let co2 = "".to_string();
+    let co2 = sensors::get_co2();
     let temp = "".to_string();
     let hum = sensors::get_humidity();
     let tvoc = sensors::get_tvoc();
