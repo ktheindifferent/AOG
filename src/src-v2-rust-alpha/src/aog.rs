@@ -53,15 +53,13 @@ pub fn print_stats(){
     sensors_check_animation();
     println!("");
 
-    let pm25 = sensors::get_pm25();
-    let pm10 = sensors::get_pm10();
-    let co2 = sensors::get_co2();
-    let temp = sensors::get_temperature();
-    let hum = sensors::get_humidity();
-    let tvoc = sensors::get_tvoc();
-
-    println!("{}PM2.5: {}{}{}   PM10: {}{}{}   CO2: {}{}{} {}", color::Fg(color::Blue), color::Fg(color::White), pm25, color::Fg(color::Blue), color::Fg(color::White), pm10, color::Fg(color::Blue), color::Fg(color::White), co2, color::Fg(color::Blue), style::Reset);
-    println!("{}TEMP: {}{}{}   HUM: {}{}{}   TVOC: {}{}{} {}", color::Fg(color::Blue), color::Fg(color::White), temp, color::Fg(color::Blue), color::Fg(color::White), hum, color::Fg(color::Blue), color::Fg(color::White), tvoc, color::Fg(color::Blue), style::Reset);
+    println!("CO2: {}", sensors::get_co2());
+    println!("TVOC: {}", sensors::get_tvoc()); 
+    println!("PM2.5: {}", sensors::get_pm25());
+    println!("PM10: {}", sensors::get_pm10());
+    println!("TEMPERATURE: {}", sensors::get_temperature());
+    println!("HUMIDITY: {}", sensors::get_humidity()); 
+    
     println!("");
 }
 
