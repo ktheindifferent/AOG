@@ -50,7 +50,7 @@ pub fn get_arduino_raw() -> String {
                             }
                             
                      
-                            if response.len() > 300 {
+                            if response.len() > 250 {
                                 return response;
                             }
                             
@@ -71,10 +71,7 @@ pub fn get_arduino_raw() -> String {
 
 }
 
-pub fn get_co2() -> String {
-    let raw = get_arduino_raw();
-
-
+pub fn get_co2(raw: String) -> String {
     let split = raw.split("\n");
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
@@ -88,10 +85,7 @@ pub fn get_co2() -> String {
     return "N/A".to_string();
 }
 
-pub fn get_tvoc() -> String {
-    let raw = get_arduino_raw();
-
-
+pub fn get_tvoc(raw: String) -> String {
     let split = raw.split("\n");
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
@@ -105,10 +99,7 @@ pub fn get_tvoc() -> String {
     return "N/A".to_string();
 }
 
-pub fn get_temperature() -> String {
-    let raw = get_arduino_raw();
-
-
+pub fn get_temperature(raw: String) -> String {
     let split = raw.split("\n");
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
@@ -122,10 +113,7 @@ pub fn get_temperature() -> String {
     return "N/A".to_string();
 }
 
-pub fn get_humidity() -> String {
-    let raw = get_arduino_raw();
-
-
+pub fn get_humidity(raw: String) -> String {
     let split = raw.split("\n");
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {

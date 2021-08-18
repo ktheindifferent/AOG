@@ -33,19 +33,19 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
     }
 
     if command.starts_with("tvoc"){
-        println!("{}", aog::sensors::get_tvoc());
+        println!("{}", aog::sensors::get_tvoc(aog::sensors::get_arduino_raw()));
     }
 
     if command.starts_with("temp"){
-        println!("{}", aog::sensors::get_temperature());
+        println!("{}", aog::sensors::get_temperature(aog::sensors::get_arduino_raw()));
     }
 
     if command.starts_with("hum"){
-        println!("{}", aog::sensors::get_humidity());
+        println!("{}", aog::sensors::get_humidity(aog::sensors::get_arduino_raw()));
     }
 
     if command.starts_with("co2"){
-        println!("{}", aog::sensors::get_co2());
+        println!("{}", aog::sensors::get_co2(aog::sensors::get_arduino_raw()));
     }
 
     if command.starts_with("pm25"){
