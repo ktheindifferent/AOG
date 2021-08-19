@@ -101,34 +101,16 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
 
     if command == "test".to_string(){
 
-        // let mut sensor = SDS011::new("/dev/ttyUSB0").unwrap();
+       loop {
+           let raw = aog::sensors::get_arduino_raw();
 
+           if raw.contains("TOP_TANK_OVERFLOW: NONE"){
+            run("gpio on 17".to_string());
+           } else {
+            run("gpio off 17".to_string());
+           }
 
-        match SDS011::new("/dev/ttyUSB0") {
-            Ok(mut sensor) => {
-                sensor.set_work_period(5).unwrap();
-        
-                loop {
-                    if let Ok(m) = sensor.query() {
-                        println!("{:?}", m.pm25);
-                    }
-                }
-            },
-            Err(e) => println!("{:?}", e),
-        };
-
-        match SDS011::new("/dev/ttyUSB1") {
-            Ok(mut sensor) => {
-                sensor.set_work_period(5).unwrap();
-        
-                loop {
-                    if let Ok(m) = sensor.query() {
-                        println!("{:?}", m.pm25);
-                    }
-                }
-            },
-            Err(e) => println!("{:?}", e),
-        };
+       }
     }
 
 
