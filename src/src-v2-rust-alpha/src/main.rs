@@ -32,40 +32,36 @@ fn main() {
 
     aog::cls();
 
-    let args: Vec<String> = env::args().collect();
-
-    if args.len() > 1 {
-       
-    } else {
-        // Running on screen
-        aog::print_stats();
+  
+        // // Running on screen
+        // aog::print_stats();
 
 
-        if !Path::new("/opt/aog/").exists() {
-            setup::install();
-        }
+        // if !Path::new("/opt/aog/").exists() {
+        //     setup::install();
+        // }
     
     
-        // Does config file exist and is it valid?
-        // Config can become invalid with software updates
-        if Path::new("/opt/aog/").exists() {
-            let aog_config = load_file("/opt/aog/config.bin", 0);
+        // // Does config file exist and is it valid?
+        // // Config can become invalid with software updates
+        // if Path::new("/opt/aog/").exists() {
+        //     let aog_config = load_file("/opt/aog/config.bin", 0);
     
-            if aog_config.is_ok() {
-                let cfg: aog::Config = aog_config.unwrap();
-                if cfg.version_installed != VERSION.unwrap_or("unknown").to_string(){
-                    println!("An old A.O.G. install was detected.");
-                    setup::update();
-                }
-            } else {
-                println!("A.O.G. config is corrupt....");
-                println!("Deleting config and re-initializing setup...");
-                setup::uninstall();
-                setup::install();
-            }
-        }
+        //     if aog_config.is_ok() {
+        //         let cfg: aog::Config = aog_config.unwrap();
+        //         if cfg.version_installed != VERSION.unwrap_or("unknown").to_string(){
+        //             println!("An old A.O.G. install was detected.");
+        //             setup::update();
+        //         }
+        //     } else {
+        //         println!("A.O.G. config is corrupt....");
+        //         println!("Deleting config and re-initializing setup...");
+        //         setup::uninstall();
+        //         setup::install();
+        //     }
+        // }
     
-    }
+    
 
  
 
