@@ -78,8 +78,14 @@ pub fn get_arduino_raw() -> String {
     
         return format!("N/A");
     });
-    return receiver.recv_timeout(Duration::from_millis(5000)).unwrap();
 
+    let value = receiver.recv_timeout(Duration::from_millis(20000));
+
+    if value.is_ok(){
+        return value.unwrap();
+    } else {
+        return format!("N/A");
+    }
 
 
   
