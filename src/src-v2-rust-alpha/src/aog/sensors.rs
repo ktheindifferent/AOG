@@ -64,7 +64,7 @@ pub fn get_arduino_raw() -> String {
                                 }
                                 
                          
-                                if response.len() > 500 {
+                                if response.len() > 250 {
                                     return response;
                                     break;
                                 }
@@ -88,7 +88,7 @@ pub fn get_arduino_raw() -> String {
         return format!("N/A");
     });
 
-    let value = receiver.recv_timeout(Duration::from_millis(5000));
+    let value = receiver.recv_timeout(Duration::from_millis(10000));
 
     if value.is_ok(){
         return value.unwrap();
