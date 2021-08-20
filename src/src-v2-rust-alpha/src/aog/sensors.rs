@@ -21,8 +21,6 @@ use std::sync::mpsc;
 // BARREL_WATER_OVERFLOW: NONE
 
 
-// Add a N/A timeout to address loop bugs
-// Add safety to unwraps
 pub fn get_arduino_raw() -> String {
 
     let (sender, receiver) = mpsc::channel();
@@ -36,7 +34,7 @@ pub fn get_arduino_raw() -> String {
             let baud_rate = 9600;
     
             let port = serialport::new(port_name.clone(), baud_rate)
-                .timeout(Duration::from_millis(10))
+                .timeout(Duration::from_millis(100))
                 .open();
     
     
@@ -81,7 +79,7 @@ pub fn get_arduino_raw() -> String {
         return format!("N/A");
     });
 
-    let value = receiver.recv_timeout(Duration::from_millis(20000));
+    let value = receiver.recv_timeout(Duration::from_millis(5000));
 
     if value.is_ok(){
         return value.unwrap();
