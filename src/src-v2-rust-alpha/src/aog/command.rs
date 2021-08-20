@@ -76,9 +76,16 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
            let raw = aog::sensors::get_arduino_raw();
 
            if raw.contains("TOP_TANK_OVERFLOW: NONE"){
-            run("gpio on 17".to_string());
+
+            let selected_pin = 17;
+            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
+            pin.set_low();
+            
+
            } else {
-            run("gpio off 17".to_string());
+            let selected_pin = 17;
+            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
+            pin.set_high();
            }
 
        }
