@@ -73,6 +73,10 @@ fn main() {
 
     
     // Secondary-Tank Water Pump Thread
+    // Add safety to unwraps
+    // Switch to while true
+    // Make thread killable by main Program
+    // Wrap in a function for restarting the thread
     thread::spawn(|| {
      
         

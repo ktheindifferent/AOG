@@ -7,6 +7,9 @@ use std::time::Duration;
 
 use std::str;
 
+use std::net;
+use std::thread;
+use std::sync::mpsc;
 
 // S1CO2: 400.00ppm
 // S1TVOC: 0ppb
@@ -17,57 +20,69 @@ use std::str;
 // TOP_TANK_OVERFLOW: OVERFLOW
 // BARREL_WATER_OVERFLOW: NONE
 
+
+// Add a N/A timeout to address loop bugs
+// Add safety to unwraps
 pub fn get_arduino_raw() -> String {
-    let mut tty_port = 0;
-    let mut tty_quit = 25;
-    let mut tty_found = false;
-    while tty_found == false && tty_port < tty_quit{
 
-        let port_name = format!("/dev/ttyUSB{}", tty_port);
-        let baud_rate = 9600;
-
-        let port = serialport::new(port_name.clone(), baud_rate)
-            .timeout(Duration::from_millis(10))
-            .open();
-
-
-        let mut response = String::new();
-
-        match port {
-            Ok(mut port) => {
-                loop{
-                    let mut serial_buf: Vec<u8> = vec![0; 1000];
-                    match port.read(serial_buf.as_mut_slice()) {
-                        Ok(t) => {
-
-                            let pre_value = str::from_utf8(&serial_buf[..t]);
-
-                            if pre_value.is_ok(){
-                                let value = pre_value.unwrap().to_string();
-                                if value.len() > 0{
-                                    response += &value;
-                                }    
-                            }
-                            
-                     
-                            if response.len() > 500 {
-                                return response;
-                            }
-                            
-                        },
-                        Err(e) => {},
+    let (sender, receiver) = mpsc::channel();
+    let t = thread::spawn(move || {
+        let mut tty_port = 0;
+        let mut tty_quit = 25;
+        let mut tty_found = false;
+        while tty_found == false && tty_port < tty_quit{
+    
+            let port_name = format!("/dev/ttyUSB{}", tty_port);
+            let baud_rate = 9600;
+    
+            let port = serialport::new(port_name.clone(), baud_rate)
+                .timeout(Duration::from_millis(10))
+                .open();
+    
+    
+            let mut response = String::new();
+    
+            match port {
+                Ok(mut port) => {
+                    loop{
+                        let mut serial_buf: Vec<u8> = vec![0; 1000];
+                        match port.read(serial_buf.as_mut_slice()) {
+                            Ok(t) => {
+    
+                                let pre_value = str::from_utf8(&serial_buf[..t]);
+    
+                                if pre_value.is_ok(){
+                                    let value = pre_value.unwrap().to_string();
+                                    if value.len() > 0{
+                                        response += &value;
+                                    }    
+                                }
+                                
+                         
+                                if response.len() > 500 {
+                                    return response;
+                                }
+                                
+                            },
+                            Err(e) => {},
+                        }
                     }
-                }
-            },
-            Err(e) => {}
-
-            
+                },
+                Err(e) => {}
+    
+                
+            }
+    
+            tty_port += 1;
         }
+    
+        return format!("N/A");
+    });
+    return receiver.recv_timeout(Duration::from_millis(5000)).unwrap();
 
-        tty_port += 1;
-    }
 
-    return format!("N/A");
+
+  
 
 }
 
