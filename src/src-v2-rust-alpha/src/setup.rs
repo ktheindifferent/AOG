@@ -9,6 +9,9 @@ use std::io;
 
 use crate::aog;
 
+extern crate savefile;
+use savefile::prelude::*;
+
 pub fn install() {
 
 
@@ -99,6 +102,63 @@ pub fn install() {
                 aog_config.power_type = "grid".to_string();
             }
 
+
+            let mut sudo_password = String::new();
+            print!("Enter 'sudo' password: ");
+            let _=stdout().flush();
+            stdin().read_line(&mut sudo_password).expect("Did not enter a correct string");
+            println!();
+        
+        
+            let step1 = Command::new("sh")
+            .arg("-c")
+            .arg(format!("echo \"{}\" | sudo -S mkdir /opt/aog", sudo_password))
+            .output()
+            .expect("failed to execute process");
+            if step1.status.success() {
+                println!("");
+            } else {
+                let er = String::from_utf8_lossy(&step1.stderr);
+                println!("{}", er);
+            }
+        
+            let step2 = Command::new("sh")
+            .arg("-c")
+            .arg(format!("echo \"{}\" | sudo -S chmod -R 777 /opt/aog", sudo_password))
+            .output()
+            .expect("failed to execute process");
+            if step2.status.success() {
+                println!("");
+            } else {
+                let er = String::from_utf8_lossy(&step2.stderr);
+                println!("{}", er);
+            }
+        
+            let step3 = Command::new("sh")
+            .arg("-c")
+            .arg(format!("echo \"{}\" | sudo -S chown 1000 -R /opt/aog", sudo_password))
+            .output()
+            .expect("failed to execute process");
+            if step3.status.success() {
+                println!("");
+            } else {
+                let er = String::from_utf8_lossy(&step3.stderr);
+                println!("{}", er);
+            }
+        
+            Command::new("sh")
+            .arg("-c")
+            .arg("mkdir /opt/aog/bak")
+            .output()
+            .expect("failed to execute process");
+        
+          
+        
+            
+            save_file("/opt/aog/config.bin", 0, &aog_config).unwrap();
+
+
+
             aog::cls();
 
 
@@ -107,4 +167,33 @@ pub fn install() {
      
   
 
+}
+
+pub fn update(){
+
+    let mut s=String::new();
+    print!("Do you want to update A.O.G (Y/n): ");
+    let _=stdout().flush();
+    stdin().read_line(&mut s).expect("Did not enter a correct string");
+    if let Some('\n')=s.chars().next_back() {
+        s.pop();
+    }
+    if let Some('\r')=s.chars().next_back() {
+        s.pop();
+    }
+    if s.contains("Y") || s.contains("y") {
+        uninstall();
+        install();
+    } else {
+        println!("Skipping Update...")
+    }
+
+}
+
+pub fn uninstall(){
+    Command::new("sh")
+    .arg("-c")
+    .arg("rm -rf /opt/aog")
+    .output()
+    .expect("failed to execute process");
 }

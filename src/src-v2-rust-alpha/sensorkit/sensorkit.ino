@@ -22,7 +22,7 @@ void setup(void)
     /*Wait for the chip to be initialized completely, and then exit*/
     while(sensor.begin() != 0){
         Serial.println("failed to init chip, please check if the chip connection is fine");
-        // delay(1000);
+        delay(1000);
     }
 
     int chk = DHT.read11(DHT11_PIN);

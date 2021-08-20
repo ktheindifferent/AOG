@@ -6,10 +6,13 @@ use std::io::Error;
 use std::io::{Write, stdin, stdout};
 use std::path::{Path};
 
-
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 
 use serde::{Serialize, Deserialize};
 use shuteye::sleep;
+
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use std::time::Duration;
 
@@ -19,19 +22,9 @@ extern crate termion;
 
 use termion::{color, style};
 
-pub fn processing_animation(){
-    let mut stdout = stdout();
+const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
-    for i in 0..=100 {
-        print!("\rProcessing {}%...", i);
-        // or
-        // stdout.write(format!("\rProcessing {}%...", i).as_bytes()).unwrap();
 
-        stdout.flush().unwrap();
-        sleep(Duration::from_millis(20));
-    }
-    println!();
-}
 
 pub fn sensors_check_animation(){
     let mut stdout = stdout();
@@ -81,7 +74,6 @@ pub fn print_logo(){
 pub fn cls(){
     assert!( std::process::Command::new("cls").status().or_else(|_| std::process::Command::new("clear").status()).unwrap().success() );
     print_logo();
-    print_stats();
 }
 
 
@@ -102,11 +94,17 @@ pub struct SensorLog {
 #[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
 pub struct Config {
     pub id: String,
-    pub boot_time: usize,
+    pub version_installed: String,
+    pub boot_time: u64,
     pub enable_automatic_updates: bool,
     pub is_hvac_kit_installed: bool, 
     pub is_sensor_kit_installed: bool,
+    pub photo_cycle_start: u8, //default 6
+    pub photo_cycle_end: u8, //default 24
     pub power_type: String, // Grid, Solar, Etc.
+    pub tank_one_to_two_pump_pin: usize, // default 17
+    pub uv_light_pin: usize,  // default 27
+    pub air_circulation_pin: usize,  // default 22
     pub sensor_kit_config: Option<SensorKitConfig>,
     pub sensor_logs: Vec<SensorLog>
 }
@@ -127,6 +125,16 @@ impl Default for Config {
 
         let sensor_logs :Vec<SensorLog> = Vec::new();
 
-        Config{id: "rand".to_string(), boot_time: 0, sensor_logs: sensor_logs, enable_automatic_updates: false, is_hvac_kit_installed: false, is_sensor_kit_installed: false, sensor_kit_config: None, power_type: "".to_string()}
+        let random_id: String = thread_rng().sample_iter(&Alphanumeric).take(100).map(char::from).collect();
+
+        let start = SystemTime::now();
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+
+        
+
+
+        Config{id: random_id, version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs: sensor_logs, enable_automatic_updates: false, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
     }
 }

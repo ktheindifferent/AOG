@@ -22,26 +22,66 @@ use savefile::prelude::*;
 extern crate savefile_derive;
 
 
-// Gpio uses BCM pin numbering. BCM GPIO 23 is tied to physical pin 16.
-const GPIO_LED: u8 = 23;
-
-
-
+const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
 
 fn main() {
 
     aog::cls();
 
+    aog::print_stats();
 
 
-
-    if !Path::new("/opt/aog/dat/").exists() {
+    if !Path::new("/opt/aog/").exists() {
 		setup::install();
-	} else {
-        // TODO - Print installed version and check for updates
+	}
 
+
+    // Does config file exist and is it valid?
+    // Config can become invalid with software updates
+    if Path::new("/opt/aog/").exists() {
+        let aog_config = load_file("/opt/aog/config.bin", 0);
+
+        if aog_config.is_ok() {
+            let cfg: aog::Config = aog_config.unwrap();
+            if cfg.version_installed != VERSION.unwrap_or("unknown").to_string(){
+                println!("An old A.O.G. install was detected.");
+                setup::update();
+            }
+        } else {
+            println!("A.O.G. config is corrupt....");
+            println!("Deleting config and re-initializing setup...");
+            setup::uninstall();
+            setup::install();
+        }
     }
+
+
+    // UV-Light thread
+    thread::spawn(|| {
+        loop{
+            // let aog_config = load_file("/opt/aog/config.bin", 0);
+            // if aog_config.is_ok() {
+    
+            // }
+        }
+
+    });
+    
+    // Secondary-Tank Water Pump Thread
+    thread::spawn(|| {
+        loop{
+            let raw = aog::sensors::get_arduino_raw();
+
+            if raw.contains("TOP_TANK_OVERFLOW: NONE"){
+                aog::command::run("gpio on 17".to_string());
+            } else {
+                aog::command::run("gpio off 17".to_string());
+            }
+ 
+        }
+
+    });
 
     // Retrieve the GPIO pin and configure it as an output.
     // let mut pin = Gpio::new()?.get(GPIO_LED)?.into_output();
