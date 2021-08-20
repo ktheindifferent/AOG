@@ -77,7 +77,7 @@ fn main() {
     // Switch to while true
     // Make thread killable by main Program
     // Wrap in a function for restarting the thread
-    thread::spawn(|| {
+    // thread::spawn(|| {
      
         
         loop {
@@ -107,7 +107,7 @@ fn main() {
 
         
 
-    });
+    // });
 
     // Retrieve the GPIO pin and configure it as an output.
     // let mut pin = Gpio::new()?.get(GPIO_LED)?.into_output();
