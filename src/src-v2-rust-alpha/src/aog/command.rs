@@ -16,8 +16,9 @@ use std::thread::sleep;
 // Gpio uses BCM pin numbering. BCM GPIO 23 is tied to physical pin 16.
 // const GPIO_LED: u8 = 23;
 
-pub fn run(command: String) -> Result<(), Box<dyn Error>>{
+pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
 
+    let command = cmd.clone();
 
     let split = command.split(" ");
     let split_vec = split.collect::<Vec<&str>>();
@@ -61,37 +62,7 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
     }
 
     
- 
-
-    // 0-21
-    if command.starts_with("gpio"){
-        if command == "gpio status".to_string(){
-            aog::gpio_status::init();
-        }
-
-        if command.contains("on"){
-            let selected_pin = split_vec[2].parse::<u8>().unwrap();
-            let mut pin = Gpio::new()?.get(selected_pin)?.into_output();
-            loop {
-                pin.set_low();
-                thread::sleep(Duration::from_millis(500));
-                break;
-            }
-        }
-
-        if command.contains("off"){
-            let selected_pin = split_vec[2].parse::<u8>().unwrap();
-            let mut pin = Gpio::new()?.get(selected_pin)?.into_output();
-            loop {
-                pin.set_high();
-                thread::sleep(Duration::from_millis(500));
-                break;
-            }
-        }
-    }
-
-
-    if command == "help".to_string(){
+    if command.clone() == "help".to_string(){
         println!("gpio status:                  prints status of the gpio bus");
         println!("gpio [on/off] [gpio_bdm]:     change state of a gpio pin");
         println!("clear/cls:                    clears screen");
@@ -112,6 +83,41 @@ pub fn run(command: String) -> Result<(), Box<dyn Error>>{
 
        }
     }
+
+    // 0-21
+    if command.starts_with("gpio"){
+        if command == "gpio status".to_string(){
+            aog::gpio_status::init();
+        }
+
+        if command.contains("on"){
+            thread::spawn(move|| {
+                let split = cmd.split(" ");
+                let split_vec = split.collect::<Vec<&str>>();
+                let selected_pin = split_vec[2].parse::<u8>().unwrap();
+                let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
+                loop {
+                    pin.set_low();
+                    thread::sleep(Duration::from_millis(500));
+                }
+            });
+        } else if command.contains("off"){
+            thread::spawn(move|| {
+                let split = cmd.split(" ");
+                let split_vec = split.collect::<Vec<&str>>();
+                let selected_pin = split_vec[2].parse::<u8>().unwrap();
+                let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
+                loop {
+                    pin.set_high();
+                    thread::sleep(Duration::from_millis(500));
+                    break;
+                }
+            });
+        }
+    }
+
+
+    
 
 
     Ok(())
