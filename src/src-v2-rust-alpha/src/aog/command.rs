@@ -71,24 +71,18 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
 
 
     if command == "test".to_string(){
+        let selected_pin = 17;
+        let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
+        loop {
+            let raw = aog::sensors::get_arduino_raw();
 
-       loop {
-           let raw = aog::sensors::get_arduino_raw();
+            if raw.contains("TOP_TANK_OVERFLOW: NONE"){
+                pin.set_low();
+            } else {
+                pin.set_high();
+            }
 
-           if raw.contains("TOP_TANK_OVERFLOW: NONE"){
-
-            let selected_pin = 17;
-            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
-            pin.set_low();
-            
-
-           } else {
-            let selected_pin = 17;
-            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
-            pin.set_high();
-           }
-
-       }
+        }
     }
 
     // 0-21
