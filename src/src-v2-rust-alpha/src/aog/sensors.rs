@@ -46,6 +46,8 @@ pub fn get_arduino_raw() -> String {
                         let mut serial_buf: Vec<u8> = vec![0; 1000];
                         match port.read(serial_buf.as_mut_slice()) {
                             Ok(t) => {
+
+                                tty_found = true;
     
                                 let pre_value = str::from_utf8(&serial_buf[..t]);
     
@@ -59,7 +61,9 @@ pub fn get_arduino_raw() -> String {
                          
                                 if response.len() > 500 {
                                     return response;
+                                    break;
                                 }
+                                
                                 
                             },
                             Err(e) => {},
