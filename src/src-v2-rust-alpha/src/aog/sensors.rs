@@ -31,6 +31,9 @@ pub fn get_arduino_raw() -> String {
         while tty_found == false && tty_port < tty_quit{
     
             let port_name = format!("/dev/ttyUSB{}", tty_port);
+
+            println!("checking: {}", port_name.clone());
+
             let baud_rate = 9600;
     
             let port = serialport::new(port_name.clone(), baud_rate)
@@ -42,6 +45,7 @@ pub fn get_arduino_raw() -> String {
     
             match port {
                 Ok(mut port) => {
+                    println!("found_arduino: {}", port_name.clone());
                     loop{
                         let mut serial_buf: Vec<u8> = vec![0; 1000];
                         match port.read(serial_buf.as_mut_slice()) {
