@@ -66,7 +66,7 @@ fn main() {
     
     
 
- 
+    aog::command::run("gpio on 27".to_string());
 
 
 

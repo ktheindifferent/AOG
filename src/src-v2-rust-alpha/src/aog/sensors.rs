@@ -68,10 +68,12 @@ pub fn get_arduino_raw() -> String {
                         }
                     }
                 },
-                Err(e) => {}
+                Err(ref e) => {}
     
                 
             }
+
+            std::mem::drop(port);
     
             tty_port += 1;
         }
