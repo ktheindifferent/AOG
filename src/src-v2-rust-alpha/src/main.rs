@@ -74,19 +74,19 @@ fn main() {
 
     
     // Secondary-Tank Water Pump Thread
-    thread::spawn(|| {
-        loop{
-            let raw = aog::sensors::get_arduino_raw();
+    // thread::spawn(|| {
+    //     loop{
+    //         let raw = aog::sensors::get_arduino_raw();
 
-            if raw.contains("TOP_TANK_OVERFLOW: NONE"){
-                aog::command::run("gpio on 17".to_string());
-            } else {
-                aog::command::run("gpio off 17".to_string());
-            }
+    //         if raw.contains("TOP_TANK_OVERFLOW: NONE"){
+    //             aog::command::run("gpio on 17".to_string());
+    //         } else {
+    //             aog::command::run("gpio off 17".to_string());
+    //         }
  
-        }
+    //     }
 
-    });
+    // });
 
     // Retrieve the GPIO pin and configure it as an output.
     // let mut pin = Gpio::new()?.get(GPIO_LED)?.into_output();
