@@ -64,12 +64,18 @@ pub fn get_arduino_raw() -> String {
                                 }
                                 
                          
-                                if response.len() > 100 {
-                                    return response;
-                                    break;
+                                if response.len() > 250 {
+                           
+
+                                    match sender.send(response.clone()) {
+                                        Ok(()) => {}, // everything good
+                                        Err(_) => {}, // we have been released, don't panic
+                                    }
+
+
                                 }
 
-                                println!("response: {}", response);
+                                println!("response: {}", response.clone());
                                 
                                 
                             },
