@@ -72,6 +72,8 @@ pub fn get_arduino_raw() -> String {
                                         Err(_) => {}, // we have been released, don't panic
                                     }
 
+                                    break;
+
 
                                 }
 
@@ -88,7 +90,7 @@ pub fn get_arduino_raw() -> String {
                 
             }
 
-            std::mem::drop(port);
+            // std::mem::drop(port);
     
             tty_port += 1;
         }
