@@ -80,30 +80,30 @@ fn main() {
     // thread::spawn(|| {
      
         
-        // loop {
+        loop {
 
-        //     let gpio = Gpio::new();
+            let gpio = Gpio::new();
 
-        //     if gpio.is_ok() {
-        //         let pin = gpio.unwrap().get(17);
-        //         if pin.is_ok(){
-        //             let mut pin_out = pin.unwrap().into_output();
+            if gpio.is_ok() {
+                let pin = gpio.unwrap().get(17);
+                if pin.is_ok(){
+                    let mut pin_out = pin.unwrap().into_output();
 
 
-        //             let raw = aog::sensors::get_arduino_raw();
-        //             if raw.contains("TOP_TANK_OVERFLOW: NONE"){
-        //                 pin_out.set_low();
-        //             } else {
-        //                 pin_out.set_high();
-        //             }
-        //         }
-        //     }
-
-      
+                    let raw = aog::sensors::get_arduino_raw();
+                    if raw.contains("TOP_TANK_OVERFLOW: NONE"){
+                        pin_out.set_low();
+                    } else {
+                        pin_out.set_high();
+                    }
+                }
+            }
 
       
 
-        // }
+      
+
+        }
 
         
 

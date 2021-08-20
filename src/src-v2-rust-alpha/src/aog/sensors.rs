@@ -77,7 +77,7 @@ pub fn get_arduino_raw() -> String {
 
                                 }
 
-                                println!("response: {}", response.clone());
+                                // println!("response: {}", response.clone());
                                 
                                 
                             },
