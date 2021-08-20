@@ -67,7 +67,7 @@ void loop() {
      */
     //sensor.writeBaseLine(0x847B);
     //delay cannot be less than measurement cycle
-    //delay(1000);
+    delay(500);
 
    //Read voltage
     int analogCO2SensorValue = analogRead(analogCO2SensorIn);

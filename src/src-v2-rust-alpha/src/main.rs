@@ -106,8 +106,10 @@ fn main() {
             s.pop();
         }
 
-        thread::spawn(|| {
-                aog::command::run(s);
+        thread::spawn(move || {
+            loop{
+                aog::command::run(s.clone());
+            }
         });
      
         
