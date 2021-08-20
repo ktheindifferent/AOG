@@ -30,7 +30,7 @@ const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
 fn main() {
 
-    aog::cls();
+    // aog::cls();
 
   
         // // Running on screen
