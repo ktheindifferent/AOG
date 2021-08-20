@@ -30,6 +30,9 @@ const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
 fn main() {
 
+
+    // CLS and below code has bugs with no TERM...aka headless reboot env
+
     // aog::cls();
 
   
@@ -72,9 +75,10 @@ fn main() {
     // Secondary-Tank Water Pump Thread
     thread::spawn(|| {
      
-        let selected_pin = 17;
-        let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
+        
         loop {
+            let mut pin = Gpio::new().unwrap().get(17).unwrap().into_output();
+
             let raw = aog::sensors::get_arduino_raw();
 
             if raw.contains("TOP_TANK_OVERFLOW: NONE"){
