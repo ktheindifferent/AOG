@@ -106,13 +106,9 @@ fn main() {
             s.pop();
         }
 
-        thread::spawn(move || {
-            loop{
-                aog::command::run(s.clone());
-            }
-        });
-     
-        
+  
+        aog::command::run(s.clone());
+       
 
         // if s.contains("Y") || s.contains("y") {
         //     aog_config.power_type = "solar";
