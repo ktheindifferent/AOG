@@ -51,7 +51,7 @@ pub fn get_arduino_raw() -> String {
                         match port.read(serial_buf.as_mut_slice()) {
                             Ok(t) => {
 
-                                println!("found_arduino: {}", port_name.clone());
+                                // println!("found_arduino: {}", port_name.clone());
                                 tty_found = true;
     
                                 let pre_value = str::from_utf8(&serial_buf[..t]);

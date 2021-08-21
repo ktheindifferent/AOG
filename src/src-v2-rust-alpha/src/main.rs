@@ -39,6 +39,10 @@ fn main() {
         // TODO - Check if this is disabled in the config first
         aog::command::run("top_tank_pump_start".to_string());
         aog::command::run("gpio on 27".to_string());
+        aog::command::run("gpio on 22".to_string());
+        loop {
+
+        }
     } else {
 
         // If no args are found assume this is an interactive console
