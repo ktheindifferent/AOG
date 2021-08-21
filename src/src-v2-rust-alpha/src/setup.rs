@@ -151,6 +151,53 @@ pub fn install() {
             .arg("mkdir /opt/aog/bak")
             .output()
             .expect("failed to execute process");
+
+            Command::new("sh")
+            .arg("-c")
+            .arg("mkdir /opt/aog/crt")
+            .output()
+            .expect("failed to execute process");
+        
+            Command::new("sh")
+            .arg("-c")
+            .arg("mkdir /opt/aog/crt/default")
+            .output()
+            .expect("failed to execute process");
+        
+            Command::new("sh")
+            .arg("-c")
+            .arg("mkdir /opt/aog/dat")
+            .output()
+            .expect("failed to execute process");
+        
+            let openssh = Command::new("/bin/bash")
+            .arg("-c")
+            .arg(" openssl req -x509 -out /opt/aog/crt/default/aog.local.cert -keyout /opt/aog/crt/default/aog.local.key \
+            -newkey rsa:2048 -nodes -sha256 \
+            -subj '/CN=localhost' -extensions EXT -config <( \
+             printf \"[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\")")
+            .output()
+            .expect("failed to execute process");
+            if openssh.status.success() {
+                println!("");
+            } else {
+                let er = String::from_utf8_lossy(&openssh.stderr);
+                println!("{}", er);
+            }
+        
+            let openssh_der = Command::new("/bin/bash")
+            .arg("-c")
+            .arg("openssl x509 -outform der -in /opt/aog/crt/default/aog.local.cert -out /opt/aog/crt/default/aog.local.der")
+            .output()
+            .expect("failed to execute process");
+            if openssh_der.status.success() {
+                println!("");
+            } else {
+                let er = String::from_utf8_lossy(&openssh_der.stderr);
+                println!("{}", er);
+            }
+        
+        
         
           
         

@@ -28,6 +28,30 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
         aog::cls();
     }
 
+
+    if command.starts_with("top_tank_pump_start") {
+        thread::spawn(|| {
+     
+            loop {
+    
+                let gpio = Gpio::new();
+    
+                if gpio.is_ok() {
+                    let pin = gpio.unwrap().get(17);
+                    if pin.is_ok(){
+                        let mut pin_out = pin.unwrap().into_output();
+                        if aog::sensors::get_arduino_raw().contains("TOP_TANK_OVERFLOW: NONE"){
+                            pin_out.set_low();
+                        } else {
+                            pin_out.set_high();
+                        }
+                    }
+                }
+            }
+    
+        });
+    }
+
     
     if command.starts_with("stats"){
         aog::print_stats();

@@ -30,112 +30,93 @@ const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
 fn main() {
 
+    let args: Vec<String> = env::args().collect();
 
-    // CLS and below code has bugs with no TERM...aka headless reboot env
-
-    // aog::cls();
-
-  
-        // // Running on screen
-        // aog::print_stats();
-
-
-        // if !Path::new("/opt/aog/").exists() {
-        //     setup::install();
-        // }
-    
-    
-        // // Does config file exist and is it valid?
-        // // Config can become invalid with software updates
-        // if Path::new("/opt/aog/").exists() {
-        //     let aog_config = load_file("/opt/aog/config.bin", 0);
-    
-        //     if aog_config.is_ok() {
-        //         let cfg: aog::Config = aog_config.unwrap();
-        //         if cfg.version_installed != VERSION.unwrap_or("unknown").to_string(){
-        //             println!("An old A.O.G. install was detected.");
-        //             setup::update();
-        //         }
-        //     } else {
-        //         println!("A.O.G. config is corrupt....");
-        //         println!("Deleting config and re-initializing setup...");
-        //         setup::uninstall();
-        //         setup::install();
-        //     }
-        // }
-    
-    
-
-    aog::command::run("gpio on 27".to_string());
-
-
-
-
-    
-    // Secondary-Tank Water Pump Thread
-    // Add safety to unwraps
-    // Switch to while true
-    // Make thread killable by main Program
-    // Wrap in a function for restarting the thread
-    // thread::spawn(|| {
-     
+    if args.len() > 1 {
         
+
+        // Secondary-Tank Water Pump Thread
+        // TODO - Check if this is disabled in the config first
+        aog::command::run("top_tank_pump_start".to_string());
+        aog::command::run("gpio on 27".to_string());
+    } else {
+
+        // If no args are found assume this is an interactive console
+
+
+
+
+        aog::cls();
+
+
+        // Running on screen
+        aog::print_stats();
+    
+    
+        if !Path::new("/opt/aog/").exists() {
+            setup::install();
+        }
+    
+    
+        // Does config file exist and is it valid?
+        // Config can become invalid with software updates
+        if Path::new("/opt/aog/").exists() {
+            let aog_config = load_file("/opt/aog/config.bin", 0);
+    
+            if aog_config.is_ok() {
+                let cfg: aog::Config = aog_config.unwrap();
+                if cfg.version_installed != VERSION.unwrap_or("unknown").to_string(){
+                    println!("An old A.O.G. install was detected.");
+                    setup::update();
+                }
+            } else {
+                println!("A.O.G. config is corrupt....");
+                println!("Deleting config and re-initializing setup...");
+                setup::uninstall();
+                setup::install();
+            }
+        }
+
         loop {
 
-            let gpio = Gpio::new();
-
-            if gpio.is_ok() {
-                let pin = gpio.unwrap().get(17);
-                if pin.is_ok(){
-                    let mut pin_out = pin.unwrap().into_output();
-                    if aog::sensors::get_arduino_raw().contains("TOP_TANK_OVERFLOW: NONE"){
-                        pin_out.set_low();
-                    } else {
-                        pin_out.set_high();
-                    }
-                }
+            let mut s=String::new();
+            print!("> ");
+            let _=stdout().flush();
+            stdin().read_line(&mut s).expect("Did not enter a correct string");
+            if let Some('\n')=s.chars().next_back() {
+                s.pop();
             }
-
+            if let Some('\r')=s.chars().next_back() {
+                s.pop();
+            }
+    
       
-
-      
-
-        }
-
+            aog::command::run(s.clone());
         
-
-    // });
-
-    // Retrieve the GPIO pin and configure it as an output.
-    // let mut pin = Gpio::new()?.get(GPIO_LED)?.into_output();
-
-    loop {
-        // pin.toggle();
-        // thread::sleep(Duration::from_millis(500));
-
-        let mut s=String::new();
-        print!("> ");
-        let _=stdout().flush();
-        stdin().read_line(&mut s).expect("Did not enter a correct string");
-        if let Some('\n')=s.chars().next_back() {
-            s.pop();
-        }
-        if let Some('\r')=s.chars().next_back() {
-            s.pop();
+    
+    
         }
 
-  
-        aog::command::run(s.clone());
-       
-
-        // if s.contains("Y") || s.contains("y") {
-        //     aog_config.power_type = "solar";
-        // } else {
-        //     aog_config.power_type = "grid";
-        // }
 
 
     }
+
+
+
+
+
+
+    
+
+
+
+
+    
+    
+  
+
+
+
 
 
 
