@@ -44,6 +44,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
                             pin_out.set_low();
                         } else {
                             pin_out.set_high();
+                            thread::sleep(Duration::from_millis(4000));
                         }
                     }
                 }
