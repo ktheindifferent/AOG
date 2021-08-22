@@ -82,7 +82,10 @@ fn main() {
                 setup::install();
             }
 
-            aog::web::init();
+            // Start Web Thread
+            thread::spawn(|| {
+                aog::web::init();
+            });
 
 
 
