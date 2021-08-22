@@ -1,6 +1,7 @@
 pub mod command;
 pub mod sensors;
 pub mod gpio_status;
+pub mod web;
 
 use std::io::Error;
 use std::io::{Write, stdin, stdout};
@@ -15,6 +16,11 @@ use shuteye::sleep;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use std::time::Duration;
+
+use std::sync::Mutex;
+
+
+use std::sync::Arc;
 
 use savefile::prelude::*;
 
@@ -67,7 +73,7 @@ pub fn print_logo(){
     println!(r"██   ██    ██    ██    ██    ██    ");
     println!(r"██   ██ ██  ██████  ██  ██████  ██ ");                      
     println!(r"----------------------------------------------------------------------------");
-    println!(r"v2.0.0-alpha");
+    println!(r"v0.2.0-alpha");
     println!(r"----------------------------------------------------------------------------");
 }
 
@@ -94,6 +100,7 @@ pub struct SensorLog {
 #[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
 pub struct Config {
     pub id: String,
+    pub encrypted_password: String,
     pub version_installed: String,
     pub boot_time: u64,
     pub enable_automatic_updates: bool,
@@ -135,6 +142,53 @@ impl Default for Config {
         
 
 
-        Config{id: random_id, version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs: sensor_logs, enable_automatic_updates: false, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
+        Config{id: random_id, encrypted_password: format!(""), version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs: sensor_logs, enable_automatic_updates: false, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
     }
+}
+
+
+#[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
+pub struct Sessions {
+    pub sessions: Vec<Session>,
+}
+
+#[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
+pub struct Session {
+    pub id: String,
+    pub delta: u8
+}
+
+
+pub fn load_config() -> Result<Config, SavefileError> {
+
+    if !Path::new("/opt/aog/config.bin").exists() {
+        let mut server_data = Config::default();
+        save_file("/opt/aog/config.bin", 0, &server_data).unwrap();
+    }
+
+    let result = load_file("/opt/aog/config.bin", 0);
+    if result.is_ok(){
+        Ok(result.unwrap())
+    } else {
+        let mut rng = rand::thread_rng();
+        let n1: u8 = rng.gen();
+        sleep(Duration::from_millis(n1.into()));
+        load_config()
+    }
+}
+
+pub fn load_sessions(config: Arc<Mutex<Config>>) -> Result<Sessions, SavefileError> {
+    // Result<T, SavefileError>
+    let result = load_file("/opt/aog/dat/sessions.bin", 0);
+    if format!("{:?}", result).contains("Err("){
+        let mut rng = rand::thread_rng();
+        let n1: u8 = rng.gen();
+        sleep(Duration::from_millis(n1.into()));
+        println!("error loading session file -- trying again...{}", format!("{:?}", result));
+        // Err(result.unwrap())
+        load_sessions(Arc::clone(&config))
+    } else {
+        Ok(result.unwrap())
+    }
+
 }

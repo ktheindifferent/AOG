@@ -52,6 +52,8 @@ fn main() {
 
         aog::cls();
 
+        
+
 
         // Running on screen
         aog::print_stats();
@@ -79,6 +81,11 @@ fn main() {
                 setup::uninstall();
                 setup::install();
             }
+
+            aog::web::init();
+
+
+
         }
 
         loop {
