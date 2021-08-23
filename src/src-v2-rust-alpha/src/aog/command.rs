@@ -139,12 +139,12 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
                 let split = cmd.split(" ");
                 let split_vec = split.collect::<Vec<&str>>();
                 let selected_pin = split_vec[2].parse::<u8>().unwrap();
-                let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
-                loop {
-                    pin.set_high();
-                    thread::sleep(Duration::from_millis(500));
-                    break;
-                }
+                let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_input();
+                // loop {
+                //     pin.set_high();
+                //     thread::sleep(Duration::from_millis(500));
+                //     break;
+                // }
             });
         }
     }
