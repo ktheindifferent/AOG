@@ -52,7 +52,14 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     
         });
     }
+    
+    if command.starts_with("install"){
+        crate::setup::install();
+    }
 
+    if command.starts_with("uninstall"){
+        crate::setup::uninstall();
+    }
     
     if command.starts_with("stats"){
         aog::print_stats();

@@ -128,7 +128,7 @@ pub fn init(){
     
                 // catchall regardless of auth status
                 if request.url() == "/login.html" || request.url().contains(".css") || request.url().contains(".js") || request.url().contains(".png") || request.url().contains(".jpg") || request.url().contains(".tff") || request.url().contains(".woff") || request.url().contains(".woff2") {
-                    let response = rouille::match_assets(&request, "./www/");
+                    let response = rouille::match_assets(&request, "/opt/aog/www/");
                     if response.is_success() {
                         return response.with_additional_header("Access-Control-Allow-Origin", "*").with_no_cache();
                     } else {
@@ -140,7 +140,7 @@ pub fn init(){
     
     
                 if session_authenticated{
-                    let response = rouille::match_assets(&request, "./www/");
+                    let response = rouille::match_assets(&request, "/opt/aog/www/");
                     if response.is_success() {
                         return response.with_additional_header("Access-Control-Allow-Origin", "*").with_no_cache();
                     } else {

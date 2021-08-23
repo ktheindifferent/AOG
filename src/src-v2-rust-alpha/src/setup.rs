@@ -200,7 +200,16 @@ pub fn install() {
         
         
           
-        
+            rebuild_www();
+
+            Command::new("sh")
+            .arg("-c")
+            .arg("rm -rf /opt/aog/www.zip")
+            .output()
+            .expect("failed to execute process");
+
+
+
             
             save_file("/opt/aog/config.bin", 0, &aog_config).unwrap();
 
@@ -215,6 +224,24 @@ pub fn install() {
   
 
 }
+
+fn rebuild_www() -> std::io::Result<()> {
+
+    let data = include_bytes!("www.zip");
+
+    let mut pos = 0;
+    let mut buffer = File::create("/opt/aog/www.zip")?;
+
+    while pos < data.len() {
+        let bytes_written = buffer.write(&data[pos..])?;
+        pos += bytes_written;
+    }
+
+    extract_zip("/opt/aog/www.zip");
+    Ok(())
+}
+
+
 
 pub fn update(){
 
@@ -243,4 +270,62 @@ pub fn uninstall(){
     .arg("rm -rf /opt/aog")
     .output()
     .expect("failed to execute process");
+}
+
+
+fn extract_zip(zip_path: &str) -> i32 {
+
+    let fname = std::path::Path::new(zip_path);
+    let file = fs::File::open(&fname).unwrap();
+
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).unwrap();
+        let outpath_end = match file.enclosed_name() {
+            Some(path) => path.to_owned(),
+            None => continue,
+        };
+
+        let out_mend = "/opt/aog/".to_owned() + outpath_end.to_str().unwrap();
+
+        let outpath = Path::new(&(out_mend));
+
+        {
+            let comment = file.comment();
+            if !comment.is_empty() {
+                // println!("File {} comment: {}", i, comment);
+            }
+        }
+
+        if (&*file.name()).ends_with('/') {
+            // println!("File {} extracted to \"{}\"", i, outpath.display());
+            fs::create_dir_all(&outpath).unwrap();
+        } else {
+            // println!(
+            //     "File {} extracted to \"{}\" ({} bytes)",
+            //     i,
+            //     outpath.display(),
+            //     file.size()
+            // );
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(&p).unwrap();
+                }
+            }
+            let mut outfile = fs::File::create(&outpath).unwrap();
+            io::copy(&mut file, &mut outfile).unwrap();
+        }
+
+        // Get and Set permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            if let Some(mode) = file.unix_mode() {
+                fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
+            }
+        }
+    }
+    return 0;
 }
