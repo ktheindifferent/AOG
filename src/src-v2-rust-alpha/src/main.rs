@@ -40,6 +40,31 @@ fn main() {
         aog::command::run("top_tank_pump_start".to_string());
         aog::command::run("gpio on 27".to_string());
         aog::command::run("gpio on 22".to_string());
+
+        if Path::new("/opt/aog/").exists() {
+
+            // Start video0 Thread
+            thread::spawn(|| {
+                aog::video::init(format!("video0"));
+            });
+
+            // Start video1 Thread
+            thread::spawn(|| {
+                aog::video::init(format!("video1"));
+            });
+
+            // Start video2 Thread
+            thread::spawn(|| {
+                aog::video::init(format!("video2"));
+            });
+
+            // Start Web Thread
+            thread::spawn(|| {
+                aog::web::init();
+            });
+        
+        }
+
         loop {
 
         }
@@ -82,12 +107,25 @@ fn main() {
                 setup::install();
             }
 
+            // Start video0 Thread
+            thread::spawn(|| {
+                aog::video::init(format!("video0"));
+            });
+
+            // Start video1 Thread
+            thread::spawn(|| {
+                aog::video::init(format!("video1"));
+            });
+
+            // Start video2 Thread
+            thread::spawn(|| {
+                aog::video::init(format!("video2"));
+            });
+
             // Start Web Thread
             thread::spawn(|| {
                 aog::web::init();
             });
-
-
 
         }
 

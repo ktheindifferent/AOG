@@ -1,6 +1,7 @@
 pub mod command;
 pub mod sensors;
 pub mod gpio_status;
+pub mod video;
 pub mod web;
 
 use std::io::Error;

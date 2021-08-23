@@ -10061,6 +10061,10 @@ a:focus {
   border-left: 0.25rem solid #1cc88a !important;
 }
 
+.border-left-gray-800 {
+  border-left: 0.25rem solid #5a5c69 !important;
+}
+
 .border-bottom-success {
   border-bottom: 0.25rem solid #1cc88a !important;
 }

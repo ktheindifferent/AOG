@@ -59,17 +59,7 @@ pub fn init(){
                     } 
                 }
     
-                // catchall regardless of auth status
-                if request.url() == "/login.html" || request.url().contains(".css") || request.url().contains(".js") || request.url().contains(".png") || request.url().contains(".jpg") || request.url().contains(".tff") || request.url().contains(".woff") || request.url().contains(".woff2") {
-                    let response = rouille::match_assets(&request, "./www/");
-                    if response.is_success() {
-                        return response.with_additional_header("Access-Control-Allow-Origin", "*").with_no_cache();
-                    } else {
-                        return Response::html("404 error").with_status_code(404).with_additional_header("Access-Control-Allow-Origin", "*");
-                    }
-                }
-    
-    
+ 
     
                 let mut edit_aog_config = &mut *config.lock().unwrap();
     
@@ -104,7 +94,21 @@ pub fn init(){
     
                 }
     
+
+                
     
+                if request.url().contains("/api/dat/"){
+
+
+                    if let Some(request) = request.remove_prefix("/api/dat/") {
+                        return rouille::match_assets(&request, "/opt/aog/dat").with_additional_header("Access-Control-Allow-Origin", "*").with_no_cache();
+                    } else {
+                        return Response::text("err".to_string())
+                            .with_additional_header("Access-Control-Allow-Origin", "*");
+                    }
+
+
+                }
     
                 if request.url() == "/api/stats"{
                     #[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
@@ -122,7 +126,17 @@ pub fn init(){
                 }
     
     
-         
+                // catchall regardless of auth status
+                if request.url() == "/login.html" || request.url().contains(".css") || request.url().contains(".js") || request.url().contains(".png") || request.url().contains(".jpg") || request.url().contains(".tff") || request.url().contains(".woff") || request.url().contains(".woff2") {
+                    let response = rouille::match_assets(&request, "./www/");
+                    if response.is_success() {
+                        return response.with_additional_header("Access-Control-Allow-Origin", "*").with_no_cache();
+                    } else {
+                        return Response::html("404 error").with_status_code(404).with_additional_header("Access-Control-Allow-Origin", "*");
+                    }
+                }
+            
+            
     
     
                 if session_authenticated{
