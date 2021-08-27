@@ -36,14 +36,11 @@ extern crate savefile_derive;
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
 
+use signal_hook::consts::TERM_SIGNALS;
 
 
 
 
-
-
-// TODO - handle SIGTERM by killing all threads and cleaning up gpio bus
-// https://stackoverflow.com/questions/26199926/how-to-terminate-or-suspend-a-rust-thread-from-another-thread
 
 fn main() -> Result<(), std::io::Error> {
 
@@ -52,7 +49,11 @@ fn main() -> Result<(), std::io::Error> {
 
     // Ask signal_hook to set the term variable to true
     // when the program receives a SIGTERM kill signal
-    flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
+	for sig in TERM_SIGNALS {
+        flag::register_conditional_shutdown(*sig, 1, Arc::clone(&term))?;
+        flag::register(*sig, Arc::clone(&term))?;
+    }
+
 
 
     let (tx, rx) = mpsc::channel();
@@ -69,8 +70,8 @@ fn main() -> Result<(), std::io::Error> {
         // Secondary-Tank Water Pump Thread
         // TODO - Check if this is disabled in the config first
         // aog::command::run("top_tank_pump_start".to_string());
-        // aog::command::run("gpio on 27".to_string());
-        // aog::command::run("gpio on 22".to_string());
+        aog::command::run("gpio on 27 nolock".to_string());
+        aog::command::run("gpio on 22 nolock".to_string());
         
 
         if Path::new("/opt/aog/").exists() {
@@ -114,7 +115,7 @@ fn main() -> Result<(), std::io::Error> {
 
             }
         } else {
-            
+
         }
     } else {
 
@@ -182,6 +183,7 @@ fn main() -> Result<(), std::io::Error> {
         while !term.load(Ordering::Relaxed) {
 
             let mut s=String::new();
+            println!("");
             print!("> ");
             let _=stdout().flush();
             stdin().read_line(&mut s).expect("Did not enter a correct string");
@@ -220,6 +222,9 @@ fn main() -> Result<(), std::io::Error> {
     // we got here, it's because the loop exited after
     // receiving SIGTERM
     println!("Received SIGTERM kill signal. Exiting...");
+
+    // Cleanup
+    aog::pump::stop(pump_thread.clone());
 
     return Ok(());
 
