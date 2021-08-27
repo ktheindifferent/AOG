@@ -45,13 +45,13 @@ use signal_hook::consts::TERM_SIGNALS;
 fn main() -> Result<(), std::io::Error> {
 
     // Declare bool, setting it to false
-    let term = Arc::new(AtomicBool::new(false));
+    let term_now = Arc::new(AtomicBool::new(false));
 
     // Ask signal_hook to set the term variable to true
     // when the program receives a SIGTERM kill signal
 	for sig in TERM_SIGNALS {
-        flag::register_conditional_shutdown(*sig, 1, Arc::clone(&term))?;
-        flag::register(*sig, Arc::clone(&term))?;
+        flag::register_conditional_shutdown(*sig, 1, Arc::clone(&term_now))?;
+        flag::register(*sig, Arc::clone(&term_now))?;
     }
 
 
@@ -60,7 +60,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut pump_thread = aog::pump::PumpThread::default();
     pump_thread.tx = tx;
     // aog::pump::start(pump_thread);
-    aog::pump::start(pump_thread.clone(), rx);
+    aog::pump::start(pump_thread.clone(), Arc::clone(&term_now), rx);
 
     let args: Vec<String> = env::args().collect();
 
@@ -102,7 +102,7 @@ fn main() -> Result<(), std::io::Error> {
             
          
 
-            while !term.load(Ordering::Relaxed) {
+            while !term_now.load(Ordering::Relaxed) {
 
             }
         } 
@@ -167,7 +167,7 @@ fn main() -> Result<(), std::io::Error> {
 
         }
 
-        while !term.load(Ordering::Relaxed) {
+        while !term_now.load(Ordering::Relaxed) {
 
             let mut s=String::new();
             println!("");
@@ -185,7 +185,7 @@ fn main() -> Result<(), std::io::Error> {
             if s.clone() == "pump start"{
                 let (tx, rx) = mpsc::channel();
                 pump_thread.tx = tx;
-                aog::pump::start(pump_thread.clone(), rx);
+                aog::pump::start(pump_thread.clone(), Arc::clone(&term_now), rx);
             } else {}
 
             if s.clone() == "pump stop"{

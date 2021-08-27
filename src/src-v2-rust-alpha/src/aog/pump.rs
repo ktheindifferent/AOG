@@ -37,7 +37,7 @@ impl Default for PumpThread {
     }
 }
 
-pub fn start(pump_thread: PumpThread, rx: std::sync::mpsc::Receiver<String>){
+pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
     thread::spawn(move || loop {
         let gpio = Gpio::new();
 
@@ -54,28 +54,37 @@ pub fn start(pump_thread: PumpThread, rx: std::sync::mpsc::Receiver<String>){
             }
         }
         thread::sleep(Duration::from_millis(500));
+
+        if term_now.load(Ordering::Relaxed){
+            halt_pump(pump_thread.clone());
+        }
+        
         match rx.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => {
-                println!("Terminating.");
-                let gpio = Gpio::new();
-
-                if gpio.is_ok() {
-                    let pin = gpio.unwrap().get(pump_thread.gpio_pin);
-                    if pin.is_ok(){
-                        let mut pin_out = pin.unwrap().into_output();
-                        pin_out.set_high();
-                        thread::sleep(Duration::from_millis(4000));
-                    }
-                }
-
-                crate::aog::command::run(format!("gpio off 17"));
-
+                
+                halt_pump(pump_thread.clone());
 
                 break;
             }
             Err(TryRecvError::Empty) => {}
         }
     });
+}
+
+pub fn halt_pump(pump_thread: PumpThread){
+    println!("Halting Pump Thread: {}", pump_thread.id);
+    let gpio = Gpio::new();
+
+    if gpio.is_ok() {
+        let pin = gpio.unwrap().get(pump_thread.gpio_pin);
+        if pin.is_ok(){
+            let mut pin_out = pin.unwrap().into_output();
+            pin_out.set_high();
+            thread::sleep(Duration::from_millis(4000));
+        }
+    }
+
+    crate::aog::command::run(format!("gpio off {}", pump_thread.gpio_pin));
 }
 
 pub fn stop(pump_thread: PumpThread){
