@@ -18,6 +18,9 @@ use shuteye::sleep;
 use std::env;
 
 
+use std::sync::mpsc::{self, TryRecvError};
+
+
 extern crate savefile;
 use savefile::prelude::*;
 
@@ -27,8 +30,17 @@ extern crate savefile_derive;
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
+// TODO - handle SIGTERM by killing all threads and cleaning up gpio bus
+// https://stackoverflow.com/questions/26199926/how-to-terminate-or-suspend-a-rust-thread-from-another-thread
 
 fn main() {
+
+
+    let (tx, rx) = mpsc::channel();
+    let mut pump_thread = aog::pump::PumpThread::default();
+    pump_thread.tx = tx;
+    // aog::pump::start(pump_thread);
+    aog::pump::start(pump_thread.clone(), rx);
 
     let args: Vec<String> = env::args().collect();
 
@@ -37,9 +49,10 @@ fn main() {
 
         // Secondary-Tank Water Pump Thread
         // TODO - Check if this is disabled in the config first
-        aog::command::run("top_tank_pump_start".to_string());
-        aog::command::run("gpio on 27".to_string());
-        aog::command::run("gpio on 22".to_string());
+        // aog::command::run("top_tank_pump_start".to_string());
+        // aog::command::run("gpio on 27".to_string());
+        // aog::command::run("gpio on 22".to_string());
+        
 
         if Path::new("/opt/aog/").exists() {
 
@@ -142,7 +155,17 @@ fn main() {
                 s.pop();
             }
     
-      
+
+            if s.clone() == "pump start"{
+                let (tx, rx) = mpsc::channel();
+                pump_thread.tx = tx;
+                aog::pump::start(pump_thread.clone(), rx);
+            }
+
+            if s.clone() == "pump stop"{
+                aog::pump::stop(pump_thread.clone());
+            }
+
             aog::command::run(s.clone());
         
     

@@ -2,6 +2,7 @@ pub mod command;
 pub mod sensors;
 pub mod gpio_status;
 pub mod video;
+pub mod pump;
 pub mod web;
 
 use std::io::Error;
@@ -28,6 +29,7 @@ use savefile::prelude::*;
 extern crate termion;
 
 use termion::{color, style};
+
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
@@ -97,6 +99,8 @@ pub struct SensorLog {
     pub is_tank_one_overflowed: bool,
     pub is_tank_two_overflowed: bool
 }
+
+
 
 #[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
 pub struct Config {

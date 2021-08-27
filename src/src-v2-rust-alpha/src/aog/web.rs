@@ -29,21 +29,18 @@ use std::time::Duration;
 extern crate savefile;
 use savefile::prelude::*;
 
+// Add Debug Flag and use ./www/ instead of installed dir
+
 pub fn init(){
 
 
     let mut config = Arc::new(Mutex::new(crate::aog::load_config().unwrap()));
-
-    
-
     let mut cert = std::fs::read("/opt/aog/crt/default/aog.local.cert").unwrap();
     let mut pkey = std::fs::read("/opt/aog/crt/default/aog.local.key").unwrap();
     
     rouille::Server::new_ssl("0.0.0.0:8043", move |request| {
         {
             session::session(request, "SID", 3600, |session| {
-    
-    
                 let session_id: &str = session.id();
                 let mut session_authenticated = false;
                 let mut sessions :Vec<crate::aog::Session> = Vec::new();

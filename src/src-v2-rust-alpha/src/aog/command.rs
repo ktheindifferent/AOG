@@ -12,6 +12,9 @@ use std::time::Duration;
 use sds011::{SDS011};
 use std::thread::sleep;
 
+use std::io::{self, BufRead};
+use std::sync::mpsc::{self, TryRecvError};
+
 
 // Gpio uses BCM pin numbering. BCM GPIO 23 is tied to physical pin 16.
 // const GPIO_LED: u8 = 23;
@@ -52,6 +55,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     
         });
     }
+    
     
     if command.starts_with("install"){
         crate::setup::install();
@@ -124,41 +128,56 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
         }
 
         if command.contains("on"){
-            thread::spawn(move|| {
-                let split = cmd.split(" ");
-                let split_vec = split.collect::<Vec<&str>>();
-                let selected_pin = split_vec[2].parse::<u8>().unwrap();
-                let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
-                loop {
-                    pin.set_low();
-                    thread::sleep(Duration::from_millis(500));
-                }
+            println!("Press enter to terminate the gpio on(set-low) thread");
+            let (tx, rx) = mpsc::channel();
+            let split = cmd.split(" ");
+            let split_vec = split.collect::<Vec<&str>>();
+            let selected_pin = split_vec[2].parse::<u8>().unwrap();
+            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
+            thread::spawn(move || loop {
+                pin.set_low();
+                thread::sleep(Duration::from_millis(500));
             });
+        
+            if !command.contains("nolock"){
+                let mut line = String::new();
+                let stdin = io::stdin();
+                let _ = stdin.lock().read_line(&mut line);
+                let _ = tx.send(());
+            }
+
         } else if command.contains("off"){
-            thread::spawn(move|| {
-                let split = cmd.split(" ");
-                let split_vec = split.collect::<Vec<&str>>();
-                let selected_pin = split_vec[2].parse::<u8>().unwrap();
-                let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_input();
-                // loop {
-                //     pin.set_high();
-                //     thread::sleep(Duration::from_millis(500));
-                //     break;
-                // }
-            });
+            let split = cmd.split(" ");
+            let split_vec = split.collect::<Vec<&str>>();
+            let selected_pin = split_vec[2].parse::<u8>().unwrap();
+            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_input();
         } else if command.contains("stress"){
-            thread::spawn(move|| {
-                let split = cmd.split(" ");
-                let split_vec = split.collect::<Vec<&str>>();
-                let selected_pin = split_vec[2].parse::<u8>().unwrap();
-                let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
-                loop {
+
+
+            println!("Press enter to terminate the gpio stress thread");
+            let (tx, rx) = mpsc::channel();
+            let split = cmd.split(" ");
+            let split_vec = split.collect::<Vec<&str>>();
+            let selected_pin = split_vec[2].parse::<u8>().unwrap();
+            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
+            thread::spawn(move || loop {
+
+  
                     pin.set_low();
                     thread::sleep(Duration::from_millis(2000));
                     pin.set_high();
                     thread::sleep(Duration::from_millis(2000));
-                }
+                
             });
+        
+            if !command.contains("nolock"){
+                let mut line = String::new();
+                let stdin = io::stdin();
+                let _ = stdin.lock().read_line(&mut line);
+                let _ = tx.send(());
+            }
+
+ 
         }
     }
 
