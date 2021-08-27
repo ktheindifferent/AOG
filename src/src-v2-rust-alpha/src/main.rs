@@ -80,16 +80,9 @@ fn main() -> Result<(), std::io::Error> {
             thread::spawn(|| {
                 aog::video::init(format!("video0"));
             });
-            let (tx, rx) = mpsc::channel();
-            let mut pump_thread = aog::pump::PumpThread::default();
-            pump_thread.tx = tx;
-            // aog::pump::start(pump_thread);
-            aog::pump::start(pump_thread.clone(), rx);
+
         
-            let args: Vec<String> = env::args().collect();
-        
-            if args.len() > 1 {
-                
+
         
                     // Secondary-Tank Water Pump Thread
                     // TODO - Check if this is disabled in the config first
@@ -107,16 +100,12 @@ fn main() -> Result<(), std::io::Error> {
                     aog::web::init();
                 });
             
-            } else {
-                
-            }
+         
 
             while !term.load(Ordering::Relaxed) {
 
             }
-        } else {
-
-        }
+        } 
     } else {
 
         // If no args are found assume this is an interactive console
@@ -135,8 +124,6 @@ fn main() -> Result<(), std::io::Error> {
     
         if !Path::new("/opt/aog/").exists() {
             setup::install();
-        } else {
-
         }
     
     
