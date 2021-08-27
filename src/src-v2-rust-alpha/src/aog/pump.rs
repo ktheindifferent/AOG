@@ -38,7 +38,7 @@ impl Default for PumpThread {
 }
 
 pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
-    thread::spawn(move || loop {
+    thread::spawn(move || while !term_now.load(Ordering::Relaxed) {
         let gpio = Gpio::new();
 
         if gpio.is_ok() {
@@ -57,22 +57,16 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
         } else {
             halt_pump(pump_thread.clone());
         }
-        thread::sleep(Duration::from_millis(500));
-
-        if term_now.load(Ordering::Relaxed){
-            halt_pump(pump_thread.clone());
-            break;
-        }
         
         match rx.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => {
-                
                 halt_pump(pump_thread.clone());
-
                 break;
             }
             Err(TryRecvError::Empty) => {}
         }
+
+        thread::sleep(Duration::from_millis(100));
     });
 }
 
