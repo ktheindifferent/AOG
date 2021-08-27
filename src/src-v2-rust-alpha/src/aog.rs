@@ -55,12 +55,14 @@ pub fn print_stats(){
     sensors_check_animation();
     println!("");
 
+    let arduino_raw = sensors::get_arduino_raw();
+
     println!("           PM2.5:    {}", sensors::get_pm25());
     println!("            PM10:    {}", sensors::get_pm10());
-    println!("             CO2:    {}", sensors::get_co2(sensors::get_arduino_raw()));
-    println!("            TVOC:    {}", sensors::get_tvoc(sensors::get_arduino_raw())); 
-    println!("        HUMIDITY:    {}", sensors::get_humidity(sensors::get_arduino_raw())); 
-    println!("     TEMPERATURE:    {}", sensors::get_temperature(sensors::get_arduino_raw()));
+    println!("             CO2:    {}", sensors::get_co2(arduino_raw.clone()));
+    println!("            TVOC:    {}", sensors::get_tvoc(arduino_raw.clone())); 
+    println!("        HUMIDITY:    {}", sensors::get_humidity(arduino_raw.clone())); 
+    println!("     TEMPERATURE:    {}", sensors::get_temperature(arduino_raw.clone()));
     
     
     println!("");

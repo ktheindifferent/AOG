@@ -21,7 +21,6 @@ void setup(void)
     Serial.begin(9600);
     /*Wait for the chip to be initialized completely, and then exit*/
     while(sensor.begin() != 0){
-        Serial.println("failed to init chip, please check if the chip connection is fine");
         delay(1000);
     }
 
@@ -51,8 +50,8 @@ void loop() {
   // delay(2000);
     if(sensor.checkDataReady() == true){
         float co2 = sensor.getCO2PPM();
-        Serial.print("S1CO2: ");
-        Serial.print(co2);
+//        Serial.print("S1CO2: ");
+//        Serial.print(co2);
         Serial.print("ppm\nS1TVOC: ");
         Serial.print(sensor.getTVOCPPB());
         Serial.println("ppb");
@@ -76,19 +75,19 @@ void loop() {
     float voltage = analogCO2SensorValue*(5000/1024.0);
     if(voltage == 0)
     {
-      Serial.println("Fault");
+//      Serial.println("Fault");
     }
     else if(voltage < 400)
     {
-      Serial.println("preheating");
+//      Serial.println("preheating");
     }
     else
     {
       int voltage_diference=voltage-400;
       float concentration=voltage_diference*50.0/16.0;
-      Serial.print("S2CO2: ");
-      Serial.print(concentration);
-      Serial.println("ppm");
+//      Serial.print("S2CO2: ");
+//      Serial.print(concentration);
+//      Serial.println("ppm");
       countCO2SensorsReporting = countCO2SensorsReporting + 1;
       totalCO2 = totalCO2 + concentration;
     }
@@ -100,7 +99,7 @@ void loop() {
     int chk = DHT.read11(DHT11_PIN);
     Serial.print("HUMIDITY: ");
     Serial.print(DHT.humidity);
-    Serial.print("%\n");
+    Serial.println("%\n");
     Serial.print("TEMPERATURE: ");
     Serial.print(DHT.temperature);
     Serial.println("C  ");
