@@ -47,9 +47,10 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                 let mut pin_out = pin.unwrap().into_output();
                 if crate::aog::sensors::get_arduino_raw().contains(&pump_thread.sensor_flag){
                     pin_out.set_low();
+                    thread::sleep(Duration::from_millis(500));
                 } else {
                     pin_out.set_high();
-                    thread::sleep(Duration::from_millis(4000));
+                    thread::sleep(Duration::from_millis(6000));
                 }
             }
         }
