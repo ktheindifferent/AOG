@@ -5,8 +5,8 @@
 dht DHT;
 #define DHT11_PIN 7
 
-#define TOP_TANK_FLOAT  2
-#define MAIN_TANK_FLOAT  4
+#define T1_OVF  2
+#define T2_OVF  4
 
 CCS811 sensor;
 
@@ -15,8 +15,8 @@ int countCO2SensorsReporting = 0;
 
 void setup(void)
 {
-    pinMode(TOP_TANK_FLOAT, INPUT_PULLUP);
-    pinMode(MAIN_TANK_FLOAT, INPUT_PULLUP);
+    pinMode(T1_OVF, INPUT_PULLUP);
+    pinMode(T2_OVF, INPUT_PULLUP);
 
     Serial.begin(9600);
     /*Wait for the chip to be initialized completely, and then exit*/
@@ -52,13 +52,13 @@ void loop() {
         float co2 = sensor.getCO2PPM();
 //        Serial.print("S1CO2: ");
 //        Serial.print(co2);
-        Serial.print("ppm\nS1TVOC: ");
+        Serial.print("TVOC: ");
         Serial.print(sensor.getTVOCPPB());
         Serial.println("ppb");
         countCO2SensorsReporting = countCO2SensorsReporting + 1;
         totalCO2 = totalCO2 + co2;
     } else {
-        Serial.println("Data is not ready!");
+        //Serial.println("Data is not ready!");
     }
     /*!
      * @brief Set baseline
@@ -92,30 +92,30 @@ void loop() {
       totalCO2 = totalCO2 + concentration;
     }
 
-    Serial.print("AVGCO2: ");
+    Serial.print("CO2: ");
     Serial.print(totalCO2/countCO2SensorsReporting);
     Serial.println("ppm");
 
     int chk = DHT.read11(DHT11_PIN);
-    Serial.print("HUMIDITY: ");
+    Serial.print("HUM: ");
     Serial.print(DHT.humidity);
-    Serial.println("%\n");
-    Serial.print("TEMPERATURE: ");
+    Serial.println("%");
+    Serial.print("TEMP: ");
     Serial.print(DHT.temperature);
-    Serial.println("C  ");
+    Serial.println("C");
 
-    int val = digitalRead(TOP_TANK_FLOAT);  // read input value
+    int val = digitalRead(T1_OVF);  // read input value
     if (val == LOW) {         // check if the input is HIGH (button released)
-      Serial.println("TOP_TANK_OVERFLOW: NONE");
+      Serial.println("T1_OVF: NONE");
     } else {
-      Serial.println("TOP_TANK_OVERFLOW: OVERFLOW");
+      Serial.println("T1_OVF: OVERFLOW");
     }
 
-    int val2 = digitalRead(MAIN_TANK_FLOAT);  // read input value
+    int val2 = digitalRead(T2_OVF);  // read input value
     if (val2 == LOW) {         // check if the input is HIGH (button released)
-      Serial.println("BARREL_WATER_OVERFLOW: NONE");
+      Serial.println("T2_OVF: NONE");
     } else {
-      Serial.println("BARREL_WATER_OVERFLOW: OVERFLOW");
+      Serial.println("T2_OVF: OVERFLOW");
     }
 
     // delay(2000);//Wait 1 seconds before accessing sensor again.

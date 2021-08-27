@@ -33,7 +33,7 @@ impl Default for PumpThread {
 
         let (tx, rx) = mpsc::channel();
 
-        PumpThread{id: random_id, gpio_pin: 17, sensor_flag: "TOP_TANK_OVERFLOW: NONE".to_string(), running: false, tx}
+        PumpThread{id: random_id, gpio_pin: 17, sensor_flag: "T1_OVF: NONE".to_string(), running: false, tx}
     }
 }
 
