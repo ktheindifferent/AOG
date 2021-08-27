@@ -65,7 +65,8 @@ pub fn get_arduino_raw() -> String {
                                 if pre_value.is_ok(){
                                     let value = pre_value.unwrap().to_string();
                                     if value.len() > 0{
-                                        response += &value;
+                                        let value_cleaned = str::replace(&value, "\r", "");
+                                        response += &value_cleaned;
                                     }    
                                 }
                                 
