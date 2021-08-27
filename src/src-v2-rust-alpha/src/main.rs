@@ -17,6 +17,11 @@ use shuteye::sleep;
 
 use std::env;
 
+use signal_hook::flag;
+
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use std::sync::mpsc::{self, TryRecvError};
 
@@ -30,10 +35,24 @@ extern crate savefile_derive;
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
+
+
+
+
+
+
+
 // TODO - handle SIGTERM by killing all threads and cleaning up gpio bus
 // https://stackoverflow.com/questions/26199926/how-to-terminate-or-suspend-a-rust-thread-from-another-thread
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
+
+    // Declare bool, setting it to false
+    let term = Arc::new(AtomicBool::new(false));
+
+    // Ask signal_hook to set the term variable to true
+    // when the program receives a SIGTERM kill signal
+    flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
 
 
     let (tx, rx) = mpsc::channel();
@@ -60,26 +79,42 @@ fn main() {
             thread::spawn(|| {
                 aog::video::init(format!("video0"));
             });
-
-            // Start video1 Thread
-            thread::spawn(|| {
-                aog::video::init(format!("video1"));
-            });
-
-            // Start video2 Thread
-            thread::spawn(|| {
-                aog::video::init(format!("video2"));
-            });
-
-            // Start Web Thread
-            thread::spawn(|| {
-                aog::web::init();
-            });
+            let (tx, rx) = mpsc::channel();
+            let mut pump_thread = aog::pump::PumpThread::default();
+            pump_thread.tx = tx;
+            // aog::pump::start(pump_thread);
+            aog::pump::start(pump_thread.clone(), rx);
         
-        }
+            let args: Vec<String> = env::args().collect();
+        
+            if args.len() > 1 {
+                
+        
+                    // Secondary-Tank Water Pump Thread
+                    // TODO - Check if this is disabled in the config first
+                    // aog::command::run("top_tank_pump_start".to_string());
+                    // aog::command::run("gpio on 27".to_string());
+                    // aog::command::run("gpio on 22".to_string());
+                    
+                // Start video2 Thread
+                thread::spawn(|| {
+                    aog::video::init(format!("video2"));
+                });
 
-        loop {
+                // Start Web Thread
+                thread::spawn(|| {
+                    aog::web::init();
+                });
+            
+            } else {
+                
+            }
 
+            while !term.load(Ordering::Relaxed) {
+
+            }
+        } else {
+            
         }
     } else {
 
@@ -99,6 +134,8 @@ fn main() {
     
         if !Path::new("/opt/aog/").exists() {
             setup::install();
+        } else {
+
         }
     
     
@@ -112,7 +149,7 @@ fn main() {
                 if cfg.version_installed != VERSION.unwrap_or("unknown").to_string(){
                     println!("An old A.O.G. install was detected.");
                     setup::update();
-                }
+                } else {}
             } else {
                 println!("A.O.G. config is corrupt....");
                 println!("Deleting config and re-initializing setup...");
@@ -142,7 +179,7 @@ fn main() {
 
         }
 
-        loop {
+        while !term.load(Ordering::Relaxed) {
 
             let mut s=String::new();
             print!("> ");
@@ -150,21 +187,21 @@ fn main() {
             stdin().read_line(&mut s).expect("Did not enter a correct string");
             if let Some('\n')=s.chars().next_back() {
                 s.pop();
-            }
+            } else {}
             if let Some('\r')=s.chars().next_back() {
                 s.pop();
-            }
+            } else {}
     
 
             if s.clone() == "pump start"{
                 let (tx, rx) = mpsc::channel();
                 pump_thread.tx = tx;
                 aog::pump::start(pump_thread.clone(), rx);
-            }
+            } else {}
 
             if s.clone() == "pump stop"{
                 aog::pump::stop(pump_thread.clone());
-            }
+            } else {}
 
             aog::command::run(s.clone());
         
@@ -175,6 +212,18 @@ fn main() {
 
 
     }
+    
+    
+
+    // Since our loop is basically an infinite loop,
+    // that only ends when we receive SIGTERM, if
+    // we got here, it's because the loop exited after
+    // receiving SIGTERM
+    println!("Received SIGTERM kill signal. Exiting...");
+
+    return Ok(());
+
+
 
 
 

@@ -57,6 +57,20 @@ pub fn start(pump_thread: PumpThread, rx: std::sync::mpsc::Receiver<String>){
         match rx.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => {
                 println!("Terminating.");
+                let gpio = Gpio::new();
+
+                if gpio.is_ok() {
+                    let pin = gpio.unwrap().get(pump_thread.gpio_pin);
+                    if pin.is_ok(){
+                        let mut pin_out = pin.unwrap().into_output();
+                        pin_out.set_high();
+                        thread::sleep(Duration::from_millis(4000));
+                    }
+                }
+
+                crate::aog::command::run(format!("gpio off 17"));
+
+
                 break;
             }
             Err(TryRecvError::Empty) => {}
