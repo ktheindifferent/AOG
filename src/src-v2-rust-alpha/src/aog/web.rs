@@ -24,6 +24,7 @@ use shuteye::sleep;
 use std::sync::atomic::{AtomicI64, AtomicBool, Ordering};
 use std::time::Duration;
 
+use crate::aog::sensors;
 
 
 extern crate savefile;
@@ -117,8 +118,8 @@ pub fn init(){
                         temp: String,
                         hum: String
                     }
-                    let arduino_response = crate::aog::sensors::get_arduino_raw();
-                    let response = Response::json(&WebApiStats { co2: crate::aog::sensors::get_co2(arduino_response.clone()), tvoc: crate::aog::sensors::get_tvoc(arduino_response.clone()), temp: crate::aog::sensors::get_temperature(arduino_response.clone()), hum: crate::aog::sensors::get_humidity(arduino_response.clone()), pm25: crate::aog::sensors::get_pm25(), pm10: crate::aog::sensors::get_pm10() });
+                    // let arduino_response = crate::aog::sensors::get_arduino_raw();
+                    let response = Response::json(&WebApiStats { co2: crate::aog::sensors::get_co2(sensors::get_arduino_raw()), tvoc: crate::aog::sensors::get_tvoc(sensors::get_arduino_raw()), temp: crate::aog::sensors::get_temperature(sensors::get_arduino_raw()), hum: crate::aog::sensors::get_humidity(sensors::get_arduino_raw()), pm25: crate::aog::sensors::get_pm25(), pm10: crate::aog::sensors::get_pm10() });
                     return response;
                 }
     
