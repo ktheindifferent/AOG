@@ -71,7 +71,7 @@ pub fn get_arduino_raw() -> String {
                                 }
                                 
                          
-                                if response.len() > 200 {
+                                if response.len() > 500 {
                            
 
                                     match sender.send(response.clone()) {

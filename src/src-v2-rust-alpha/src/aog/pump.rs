@@ -57,6 +57,7 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
 
         if term_now.load(Ordering::Relaxed){
             halt_pump(pump_thread.clone());
+            break;
         }
         
         match rx.try_recv() {

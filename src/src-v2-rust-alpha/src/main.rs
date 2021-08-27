@@ -208,7 +208,7 @@ fn main() -> Result<(), std::io::Error> {
     // that only ends when we receive SIGTERM, if
     // we got here, it's because the loop exited after
     // receiving SIGTERM
-    println!("Received SIGTERM kill signal. Exiting...");
+    println!("Exiting...");
 
     // Cleanup
     aog::pump::stop(pump_thread.clone());
