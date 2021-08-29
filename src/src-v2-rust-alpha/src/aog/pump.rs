@@ -39,7 +39,7 @@ impl Default for PumpThread {
 
 pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
 
-    // Ensure device has a valid GPIO bus before starting pump thread
+    // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
     if gpio.is_err() {
         return;
@@ -90,7 +90,7 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                 let mut rng = rand::thread_rng();
                 let n1: u8 = rng.gen();
                 let n2:u64 = n1.into();
-                let n3:u64 = n2 * 5000;
+                let n3:u64 = n2 * 100;
                 sleep(Duration::from_millis(n3));
 
             };
