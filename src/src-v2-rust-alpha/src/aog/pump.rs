@@ -71,7 +71,7 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                 // oscillating_state_safety protects against faulty connections to float sensor
                 let mut oscillating_state_safety = 0;
                 while ovf_sensor_pin.is_low(){
-                    if oscillating_state_safety > 5000{
+                    if oscillating_state_safety > 50000{
                         // pump on
                         pump_pin_out.set_low();
                     }
