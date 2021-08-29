@@ -92,9 +92,9 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                 pump_pin_out.set_high();
 
                 // this should make the pump pin available
-                drop(pump_pin_out);
+                // drop(pump_pin_out);
 
-                halt_physical_pump(pump_thread.clone());
+                // halt_physical_pump(pump_thread.clone());
         
                 // sleep for a random amount of time
                 // let mut rng = rand::thread_rng();
@@ -137,7 +137,7 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
             Err(TryRecvError::Empty) => {}
         }
 
-        thread::sleep(Duration::from_millis(100));
+        // thread::sleep(Duration::from_millis(100));
     });
 }
 
