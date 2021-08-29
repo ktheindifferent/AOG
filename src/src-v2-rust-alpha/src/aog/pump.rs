@@ -64,20 +64,24 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                 let mut pump_pin_out = pump_pin.unwrap().into_output();
                 let ovf_sensor_pin = sensor_pin.unwrap().into_input();
 
+                let mut oscillating_state_safety = 0;
                 while ovf_sensor_pin.is_low(){
                     //more water
-                    log::info!("Pump on");
-                    pump_pin_out.set_low();
+                    if oscillating_state_safety > 500{
+                        log::info!("Pump on");
+                        pump_pin_out.set_low();
+                        oscillating_state_safety += 1;
+                    }
+         
                 } 
 
-                if ovf_sensor_pin.is_high(){
-                    //stop water
-                    log::info!("Pump off");
-                    pump_pin_out.set_high();
-                    thread::sleep(Duration::from_millis(500));
-                }
+             
+                log::info!("Pump off");
+                pump_pin_out.set_high();
+                thread::sleep(Duration::from_millis(500));
+            
 
-                log::info!("ovf_sensor_pin: {}", ovf_sensor_pin.read());
+                //log::info!("ovf_sensor_pin: {}", ovf_sensor_pin.read());
            
             };
 
