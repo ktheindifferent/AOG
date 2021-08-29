@@ -45,29 +45,44 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
         return;
     }
 
+    log::info!("Starting pump thread: {}", pump_thread.id);
+
     thread::spawn(move || while !term_now.load(Ordering::Relaxed) {
         
 
 
-        log::info!("Starting pump thread: {}", pump_thread.id);
+        
 
         let gpio = Gpio::new();
 
         if gpio.is_ok() {
-            let pin = gpio.unwrap().get(pump_thread.gpio_pin);
-            if pin.is_ok(){
-                let mut pin_out = pin.unwrap().into_output();
-                if crate::aog::sensors::get_arduino_raw().contains(&pump_thread.sensor_flag){
-                    log::info!("Pump on");
-                    pin_out.set_low();
-                } else {
-                    log::info!("Pump off");
-                    pin_out.set_high();
-                    thread::sleep(Duration::from_millis(20000));
-                }
-            } else {
-                halt_pump(pump_thread.clone());
-            }
+            let sensor_pin = gpio.unwrap().get(16);
+                
+            if sensor_pin.is_ok(){
+                let ovf_sensor_pin = sensor_pin.unwrap().into_input_pullup();
+                log::info!("ovf_sensor_pin: {}", ovf_sensor_pin.read());
+           
+            };
+
+
+            //            let pin = gpio.unwrap().get(pump_thread.gpio_pin);
+            // if pin.is_ok(){
+            //     // let mut pin_out = pin.unwrap().into_output();
+            //     // if crate::aog::sensors::get_arduino_raw().contains(&pump_thread.sensor_flag){
+            //     //     log::info!("Pump on");
+            //     //     pin_out.set_low();
+            //     // } else {
+            //     //     log::info!("Pump off");
+            //     //     pin_out.set_high();
+            //     //     thread::sleep(Duration::from_millis(20000));
+            //     // }
+              
+           
+
+
+            // } else {
+            //     halt_pump(pump_thread.clone());
+            // }
         } else {
             halt_pump(pump_thread.clone());
         }
