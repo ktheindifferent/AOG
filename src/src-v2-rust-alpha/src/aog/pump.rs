@@ -62,7 +62,7 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                 
             if sensor_pin.is_ok(){
                 let mut pump_pin_out = pump_pin.unwrap().into_output();
-                let ovf_sensor_pin = sensor_pin.unwrap().into_input();
+                let ovf_sensor_pin = sensor_pin.unwrap().into_input_pullup();
 
                 // pump off
                 pump_pin_out.set_high();
