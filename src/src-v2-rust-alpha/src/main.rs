@@ -39,10 +39,35 @@ const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 use signal_hook::consts::TERM_SIGNALS;
 
 
-
+use simple_logger::SimpleLogger;
+// use chrono::Local;
+// use env_logger::Builder;
+// use log::LevelFilter;
 
 
 fn main() -> Result<(), std::io::Error> {
+
+
+    // Builder::new()
+    //     .format(|buf, record| {
+    //         writeln!(buf,
+    //             "{} [{}] - {}",
+    //             Local::now().format("%Y-%m-%dT%H:%M:%S"),
+    //             record.level(),
+    //             record.args()
+    //         )
+    //         println!("")
+    //     })
+    //     .filter(None, LevelFilter::Info)
+    //     .init();
+
+    aog::init_log(format!("/opt/aog/output.log"));
+    SimpleLogger::new().with_colors(true).with_output_file(format!("/opt/aog/output.log")).init().unwrap();
+
+
+
+
+
 
     // Declare bool, setting it to false
     let term_now = Arc::new(AtomicBool::new(false));
@@ -64,7 +89,10 @@ fn main() -> Result<(), std::io::Error> {
 
     let args: Vec<String> = env::args().collect();
 
+
     if args.len() > 1 {
+
+        log::info!("Flags detected. A.O.G. is running as a background service.");
         
 
         // Secondary-Tank Water Pump Thread

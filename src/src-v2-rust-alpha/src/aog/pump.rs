@@ -38,7 +38,19 @@ impl Default for PumpThread {
 }
 
 pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
+
+    // Ensure device has a valid GPIO bus before starting pump thread
+    let gpio = Gpio::new();
+    if gpio.is_err() {
+        return;
+    }
+
     thread::spawn(move || while !term_now.load(Ordering::Relaxed) {
+        
+
+
+        log::info!("Starting pump thread: {}", pump_thread.id);
+
         let gpio = Gpio::new();
 
         if gpio.is_ok() {
@@ -46,8 +58,10 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
             if pin.is_ok(){
                 let mut pin_out = pin.unwrap().into_output();
                 if crate::aog::sensors::get_arduino_raw().contains(&pump_thread.sensor_flag){
+                    log::info!("Pump on");
                     pin_out.set_low();
                 } else {
+                    log::info!("Pump off");
                     pin_out.set_high();
                     thread::sleep(Duration::from_millis(20000));
                 }
@@ -71,7 +85,10 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
 }
 
 pub fn halt_pump(pump_thread: PumpThread){
-    println!("Halting Pump Thread: {}", pump_thread.id);
+
+
+    log::warn!("Halting Pump Thread: {}", pump_thread.id);
+
     let gpio = Gpio::new();
 
     if gpio.is_ok() {
@@ -84,6 +101,7 @@ pub fn halt_pump(pump_thread: PumpThread){
     }
 
     crate::aog::command::run(format!("gpio off {}", pump_thread.gpio_pin));
+    stop(pump_thread);
 }
 
 pub fn stop(pump_thread: PumpThread){

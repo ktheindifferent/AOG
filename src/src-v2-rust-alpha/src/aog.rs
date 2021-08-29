@@ -1,6 +1,6 @@
 pub mod command;
 pub mod sensors;
-pub mod gpio_status;
+pub mod gpio;
 pub mod video;
 pub mod pump;
 pub mod web;
@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use std::sync::Mutex;
 
+use std::fs::File;
 
 use std::sync::Arc;
 
@@ -33,7 +34,11 @@ use termion::{color, style};
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
-
+pub fn init_log(path: String) -> Result<(), std::io::Error>{
+    let mut output = File::create(path.as_str())?;
+    write!(output, "")?;
+    Ok(())
+}
 
 pub fn sensors_check_animation(){
     let mut stdout = stdout();

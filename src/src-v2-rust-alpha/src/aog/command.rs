@@ -30,32 +30,6 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     if command.starts_with("cls") || command.starts_with("clear"){
         aog::cls();
     }
-
-
-    if command.starts_with("top_tank_pump_start") {
-        thread::spawn(|| {
-     
-            loop {
-    
-                let gpio = Gpio::new();
-    
-                if gpio.is_ok() {
-                    let pin = gpio.unwrap().get(17);
-                    if pin.is_ok(){
-                        let mut pin_out = pin.unwrap().into_output();
-                        if aog::sensors::get_arduino_raw().contains("TOP_TANK_OVERFLOW: NONE"){
-                            pin_out.set_low();
-                        } else {
-                            pin_out.set_high();
-                            thread::sleep(Duration::from_millis(4000));
-                        }
-                    }
-                }
-            }
-    
-        });
-    }
-    
     
     if command.starts_with("install"){
         crate::setup::install();
@@ -121,10 +95,14 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
         }
     }
 
+    if command == "stdout".to_string(){
+        println!("{}", get_stdout().unwrap());
+    }
+
     // 0-21
     if command.starts_with("gpio"){
         if command == "gpio status".to_string(){
-            aog::gpio_status::init();
+            aog::gpio::init();
         }
 
         if command.contains("on"){
@@ -133,11 +111,23 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
             let split = cmd.split(" ");
             let split_vec = split.collect::<Vec<&str>>();
             let selected_pin = split_vec[2].parse::<u8>().unwrap();
-            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
-            thread::spawn(move || loop {
-                pin.set_low();
-                thread::sleep(Duration::from_millis(500));
-            });
+
+            let gpio = Gpio::new();
+            if gpio.is_ok() {
+                let gpio_pin = gpio.unwrap().get(selected_pin);
+                if gpio_pin.is_ok() {
+                    let mut pin = gpio_pin.unwrap().into_output();
+                    thread::spawn(move || loop {
+                        pin.set_low();
+                        thread::sleep(Duration::from_millis(500));
+                    });
+                } else {
+                    log::warn!("Command '{}' failed. GPIO pin is unavailable.", command);
+                }
+            } else {
+                log::warn!("Command '{}' failed. GPIO is unavailable.", command);
+            }
+
         
             if !command.contains("nolock"){
                 let mut line = String::new();
@@ -150,7 +140,24 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
             let split = cmd.split(" ");
             let split_vec = split.collect::<Vec<&str>>();
             let selected_pin = split_vec[2].parse::<u8>().unwrap();
-            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_input();
+
+
+            let gpio = Gpio::new();
+            if gpio.is_ok() {
+                let gpio_pin = gpio.unwrap().get(selected_pin);
+                if gpio_pin.is_ok() {
+                    gpio_pin.unwrap().into_input();
+                } else {
+                    log::warn!("Command '{}' failed. GPIO pin is unavailable.", command);
+                }
+            } else {
+                log::warn!("Command '{}' failed. GPIO is unavailable.", command);
+            }
+            
+
+
+
+
         } else if command.contains("stress"){
 
 
@@ -159,17 +166,28 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
             let split = cmd.split(" ");
             let split_vec = split.collect::<Vec<&str>>();
             let selected_pin = split_vec[2].parse::<u8>().unwrap();
-            let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
-            thread::spawn(move || loop {
 
-  
-                    pin.set_low();
-                    thread::sleep(Duration::from_millis(2000));
-                    pin.set_high();
-                    thread::sleep(Duration::from_millis(2000));
-                
-            });
-        
+
+
+            let gpio = Gpio::new();
+            if gpio.is_ok() {
+                let gpio_pin = gpio.unwrap().get(selected_pin);
+                if gpio_pin.is_ok() {
+                    let mut pin = gpio_pin.unwrap().into_output();
+                    thread::spawn(move || loop {
+                            pin.set_low();
+                            thread::sleep(Duration::from_millis(2000));
+                            pin.set_high();
+                            thread::sleep(Duration::from_millis(2000));
+                    });
+                } else {
+                    log::warn!("Command '{}' failed. GPIO pin is unavailable.", command);
+                }
+            } else {
+                log::warn!("Command '{}' failed. GPIO is unavailable.", command);
+            }
+
+
             if !command.contains("nolock"){
                 let mut line = String::new();
                 let stdin = io::stdin();
@@ -186,4 +204,15 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
 
 
     Ok(())
+}
+
+// use std::io::{self, Write};
+
+fn get_stdout() -> io::Result<String> {
+    let stdout = io::stdout();
+    // let mut handle = stdout.lock();
+
+    // handle.write_all(b"hello world")?;
+
+    Ok(format!("{:?}", stdout))
 }
