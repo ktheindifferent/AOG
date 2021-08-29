@@ -71,7 +71,7 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                 // oscillating_state_safety protects against faulty connections to float sensor
                 let mut oscillating_state_safety = 0;
                 while ovf_sensor_pin.is_low(){
-                    if oscillating_state_safety > 50000{
+                    if oscillating_state_safety > 500000{
                         // pump on
                         pump_pin_out.set_low();
                     }
@@ -82,9 +82,9 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                 pump_pin_out.set_high();
 
                 // this should make the pump pin available
-                // drop(pump_pin_out);
+                drop(pump_pin_out);
 
-                // halt_physical_pump(pump_thread.clone());
+                halt_physical_pump(pump_thread.clone());
         
                 // sleep for a random amount of time
                 // let mut rng = rand::thread_rng();
