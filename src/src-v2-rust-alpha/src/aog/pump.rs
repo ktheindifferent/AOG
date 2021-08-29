@@ -81,11 +81,11 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                 //     oscillating_state_safety += 1;
                 // } 
 
-                if ovf_sensor_pin.is_high() {
+                while ovf_sensor_pin.is_high() {
                     log::info!("high");
-                } else {
-                    log::info!("low");
-                }
+                } 
+                log::info!("low");
+                
 
 
                 // pump off
