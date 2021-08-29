@@ -70,8 +70,9 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
                     if oscillating_state_safety > 500{
                         log::info!("Pump on");
                         pump_pin_out.set_low();
-                        oscillating_state_safety += 1;
+                        
                     }
+                    oscillating_state_safety += 1;
          
                 } 
 
