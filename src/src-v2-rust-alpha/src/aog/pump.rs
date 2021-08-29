@@ -57,37 +57,42 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
 
         if gpio.is_ok() {
             let u_gpio = gpio.unwrap();
-            let pump_pin = u_gpio.get(pump_thread.gpio_pin);
+            let pump_pin = u_gpio.get(pump_thread.clone().gpio_pin);
             let sensor_pin = u_gpio.get(16);
                 
             if sensor_pin.is_ok(){
                 let mut pump_pin_out = pump_pin.unwrap().into_output();
                 let ovf_sensor_pin = sensor_pin.unwrap().into_input();
 
+                // pump off
+                pump_pin_out.set_high();
+
+                // need more water?
+                // oscillating_state_safety protects against faulty connections to float sensor
                 let mut oscillating_state_safety = 0;
                 while ovf_sensor_pin.is_low(){
-                    //more water
                     if oscillating_state_safety > 500{
-                        // log::info!("Pump on");
+                        // pump on
                         pump_pin_out.set_low();
-                        
                     }
                     oscillating_state_safety += 1;
-         
                 } 
 
-             
-                // log::info!("Pump off");
+                // pump off
                 pump_pin_out.set_high();
+
+                // this should make the pump pin available
+                drop(pump_pin_out);
+
+                halt_physical_pump(pump_thread.clone());
         
+                // sleep for a random amount of time
                 let mut rng = rand::thread_rng();
                 let n1: u8 = rng.gen();
                 let n2:u64 = n1.into();
-                let n3:u64 = n2 * 3000;
+                let n3:u64 = n2 * 5000;
                 sleep(Duration::from_millis(n3));
 
-                //log::info!("ovf_sensor_pin: {}", ovf_sensor_pin.read());
-           
             };
 
 
@@ -126,12 +131,13 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
 }
 
 pub fn halt_pump(pump_thread: PumpThread){
-
-
     log::warn!("Halting Pump Thread: {}", pump_thread.id);
+    halt_physical_pump(pump_thread.clone());
+    stop(pump_thread.clone());
+}
 
+pub fn halt_physical_pump(pump_thread: PumpThread){
     let gpio = Gpio::new();
-
     if gpio.is_ok() {
         let pin = gpio.unwrap().get(pump_thread.gpio_pin);
         if pin.is_ok(){
@@ -140,9 +146,7 @@ pub fn halt_pump(pump_thread: PumpThread){
             thread::sleep(Duration::from_millis(4000));
         }
     }
-
     crate::aog::command::run(format!("gpio off {}", pump_thread.gpio_pin));
-    stop(pump_thread);
 }
 
 pub fn stop(pump_thread: PumpThread){
