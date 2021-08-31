@@ -230,25 +230,33 @@ fn main() -> Result<(), std::io::Error> {
             // Air Start Command
             // ----------------------------------------------------------------
             if s.clone() == "air start"{
+                let (tx_27_low, rx_27_low) = mpsc::channel();
+                gpio_27_thread.set_low_tx = tx_27_low;
                 aog::gpio::thread::set_low(gpio_27_thread.clone(), Arc::clone(&term_now), rx_27_low);
             }
 
             // Air Stop Command
             // ----------------------------------------------------------------
             if s.clone() == "air stop"{
+                let (tx_27_high, rx_27_high) = mpsc::channel();
+                gpio_27_thread.set_high_tx = tx_27_high;
                 aog::gpio::thread::set_high(gpio_27_thread.clone(), Arc::clone(&term_now), rx_27_high);
             }
 
             // Air Start Command
             // ----------------------------------------------------------------
             if s.clone() == "uv start"{
-                aog::gpio::thread::set_low(gpio_27_thread.clone(), Arc::clone(&term_now), rx_22_low);
+                let (tx_22_low, rx_22_low) = mpsc::channel();
+                gpio_22_thread.set_low_tx = tx_22_low;
+                aog::gpio::thread::set_low(gpio_22_thread.clone(), Arc::clone(&term_now), rx_22_low);
             }
 
             // Air Stop Command
             // ----------------------------------------------------------------
             if s.clone() == "uv stop"{
-                aog::gpio::thread::set_high(gpio_27_thread.clone(), Arc::clone(&term_now), rx_22_high);
+                let (tx_22_high, rx_22_high) = mpsc::channel();
+                gpio_22_thread.set_high_tx = tx_22_high;
+                aog::gpio::thread::set_low(gpio_22_thread.clone(), Arc::clone(&term_now), rx_22_high);
             }
 
             aog::command::run(s.clone());
