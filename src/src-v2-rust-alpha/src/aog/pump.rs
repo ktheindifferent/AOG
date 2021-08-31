@@ -162,9 +162,9 @@ pub fn stop_physical_pump(pump_thread: PumpThread){
             pin_out.set_high();
         }
     }
-    crate::aog::command::run(format!("gpio off {}", pump_thread.gpio_pin));
+    let _ = crate::aog::command::run(format!("gpio off {}", pump_thread.gpio_pin));
 }
 
 pub fn stop(pump_thread: PumpThread){
-    pump_thread.tx.send("stop".to_string());
+    let _ = pump_thread.tx.send("stop".to_string());
 }

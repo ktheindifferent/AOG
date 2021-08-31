@@ -70,8 +70,12 @@ fn main() -> Result<(), std::io::Error> {
     // Setup a logfile if A.O.G. is installed. Clears old log on boot.
     // ----------------------------------------------------------------
     if Path::new("/opt/aog/").exists() {
-        aog::init_log("/opt/aog/output.log".to_string());
-        SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
+        let init_log_status = aog::init_log("/opt/aog/output.log".to_string());
+        if init_log_status.is_ok() {
+            SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
+        } else {
+            SimpleLogger::new().with_colors(true).init().unwrap();
+        }
     } else {
         SimpleLogger::new().with_colors(true).init().unwrap();
     }
@@ -263,7 +267,7 @@ fn main() -> Result<(), std::io::Error> {
                 aog::gpio::thread::set_high(gpio_22_thread.clone(), Arc::clone(&term_now), rx_22_high);
             }
 
-            aog::command::run(s.clone());
+            let _ = aog::command::run(s.clone());
         
     
     

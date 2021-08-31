@@ -24,7 +24,6 @@
 use std::process::Command;
 use std::io::{Write, stdin, stdout};
 use std::path::{Path};
-use std::io::prelude::*;
 use std::fs::File;
 use std::fs;
 use std::io;
@@ -222,13 +221,15 @@ pub fn install() {
         
         
           
-            rebuild_www();
+            let www_build = rebuild_www();
 
-            Command::new("sh")
-            .arg("-c")
-            .arg("rm -rf /opt/aog/www.zip")
-            .output()
-            .expect("failed to execute process");
+            if www_build.is_ok() {
+                Command::new("sh")
+                .arg("-c")
+                .arg("rm -rf /opt/aog/www.zip")
+                .output()
+                .expect("failed to execute process");    
+            }
 
 
 

@@ -200,12 +200,10 @@ pub fn get_humidity(raw: String) -> String {
 pub fn get_pm25() -> String {
     let mut tty_port = 0;
     let tty_quit = 25;
-    let mut tty_found = false;
-    while !tty_found && tty_port < tty_quit{
+    while tty_port < tty_quit{
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
                 sensor.set_work_period(5).unwrap();
-                tty_found = true;
                 if let Ok(m) = sensor.query() {
                     return format!("{}", m.pm25);
                 } else {
@@ -223,12 +221,10 @@ pub fn get_pm25() -> String {
 pub fn get_pm10() -> String {
     let mut tty_port = 0;
     let tty_quit = 25;
-    let mut tty_found = false;
-    while !tty_found && tty_port < tty_quit{
+    while tty_port < tty_quit{
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
                 sensor.set_work_period(5).unwrap();
-                tty_found = true;
                 if let Ok(m) = sensor.query() {
                     return format!("{}", m.pm10);
                 } else {

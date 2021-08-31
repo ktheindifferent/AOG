@@ -64,7 +64,7 @@ impl Default for GPIOThread {
 
 pub fn set_low(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
 
-    stop_high(gpio_thread.clone());
+    let _ = stop_high(gpio_thread.clone());
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
@@ -108,7 +108,7 @@ pub fn set_low(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::sync
 
 pub fn set_high(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
 
-    stop_low(gpio_thread.clone());
+    let _ = stop_low(gpio_thread.clone());
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
@@ -152,14 +152,14 @@ pub fn set_high(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::syn
 
 
 pub fn stop(gpio_thread: GPIOThread){
-    gpio_thread.set_low_tx.send("stop".to_string());
-    gpio_thread.set_high_tx.send("stop".to_string());
+    let _ = stop_low(gpio_thread.clone());
+    let _ = stop_high(gpio_thread.clone());
 }
 
-pub fn stop_low(gpio_thread: GPIOThread){
-    gpio_thread.set_low_tx.send("stop".to_string());
+pub fn stop_low(gpio_thread: GPIOThread) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
+    return gpio_thread.set_low_tx.send("stop".to_string());
 }
 
-pub fn stop_high(gpio_thread: GPIOThread){
-    gpio_thread.set_high_tx.send("stop".to_string());
+pub fn stop_high(gpio_thread: GPIOThread) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
+    return gpio_thread.set_high_tx.send("stop".to_string());
 }

@@ -124,7 +124,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     // 0-21
     if command.starts_with("gpio"){
         if command == *"gpio status"{
-            aog::gpio::status::print();
+            let _ = aog::gpio::status::print();
         }
 
         if command.contains("on"){

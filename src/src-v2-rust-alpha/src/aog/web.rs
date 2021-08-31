@@ -87,10 +87,10 @@ pub fn init(){
                 if request.url() == "/authenticate"{
                 
                     let input = try_or_400!(post_input!(request, {
-                        inputUsername: String,
-                        inputPassword: String,
+                        input_username: String,
+                        input_password: String,
                     }));
-                    if input.inputUsername == *"admin" && input.inputPassword == edit_aog_config.encrypted_password {
+                    if input.input_username == *"admin" && input.input_password == edit_aog_config.encrypted_password {
                                             let session = crate::aog::Session {
                                                 id: session_id.to_string(),
                                                 delta: 0
