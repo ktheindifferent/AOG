@@ -256,7 +256,7 @@ fn main() -> Result<(), std::io::Error> {
             if s.clone() == "uv stop"{
                 let (tx_22_high, rx_22_high) = mpsc::channel();
                 gpio_22_thread.set_high_tx = tx_22_high;
-                aog::gpio::thread::set_low(gpio_22_thread.clone(), Arc::clone(&term_now), rx_22_high);
+                aog::gpio::thread::set_high(gpio_22_thread.clone(), Arc::clone(&term_now), rx_22_high);
             }
 
             aog::command::run(s.clone());
