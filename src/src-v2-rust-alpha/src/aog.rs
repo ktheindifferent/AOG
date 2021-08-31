@@ -27,8 +27,8 @@ pub mod video;
 pub mod pump;
 pub mod web;
 
-use std::io::Error;
-use std::io::{Write, stdin, stdout};
+
+use std::io::{Write, stdout};
 use std::path::{Path};
 
 use rand::distributions::Alphanumeric;
@@ -51,7 +51,7 @@ use savefile::prelude::*;
 
 extern crate termion;
 
-use termion::{color, style};
+
 
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
@@ -78,9 +78,9 @@ pub fn sensors_check_animation(){
 
 
 pub fn print_stats(){
-    println!("");
+    println!();
     sensors_check_animation();
-    println!("");
+    println!();
 
     let arduino_raw = sensors::get_arduino_raw();
 
@@ -89,10 +89,10 @@ pub fn print_stats(){
     println!("             CO2:    {}", sensors::get_co2(arduino_raw.clone()));
     println!("            TVOC:    {}", sensors::get_tvoc(arduino_raw.clone())); 
     println!("        HUMIDITY:    {}", sensors::get_humidity(arduino_raw.clone())); 
-    println!("     TEMPERATURE:    {}", sensors::get_temperature(arduino_raw.clone()));
+    println!("     TEMPERATURE:    {}", sensors::get_temperature(arduino_raw));
     
     
-    println!("");
+    println!();
 }
 
 pub fn print_logo(){
@@ -174,7 +174,7 @@ impl Default for Config {
         
 
 
-        Config{id: random_id, encrypted_password: format!(""), version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs: sensor_logs, enable_automatic_updates: false, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
+        Config{id: random_id, encrypted_password: format!(""), version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs, enable_automatic_updates: false, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
     }
 }
 
@@ -194,7 +194,7 @@ pub struct Session {
 pub fn load_config() -> Result<Config, SavefileError> {
 
     if !Path::new("/opt/aog/config.bin").exists() {
-        let mut server_data = Config::default();
+        let server_data = Config::default();
         save_file("/opt/aog/config.bin", 0, &server_data).unwrap();
     }
 

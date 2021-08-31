@@ -21,14 +21,14 @@
 // DEALINGS IN THE SOFTWARE.
 
 use sds011::{SDS011};
-use std::thread::sleep;
 
-use std::io::{self, Write};
+
+
 use std::time::Duration;
 
 use std::str;
 
-use std::net;
+
 use std::thread;
 use std::sync::mpsc;
 
@@ -51,11 +51,11 @@ use std::sync::mpsc;
 pub fn get_arduino_raw() -> String {
 
     let (sender, receiver) = mpsc::channel();
-    let t = thread::spawn(move || {
+    let _t = thread::spawn(move || {
         let mut tty_port = 0;
-        let mut tty_quit = 25;
+        let tty_quit = 25;
         let mut tty_found = false;
-        while tty_found == false && tty_port < tty_quit{
+        while !tty_found && tty_port < tty_quit{
     
             let port_name = format!("/dev/ttyUSB{}", tty_port);
 
@@ -85,7 +85,7 @@ pub fn get_arduino_raw() -> String {
     
                                 if pre_value.is_ok(){
                                     let value = pre_value.unwrap().to_string();
-                                    if value.len() > 0{
+                                    if !value.is_empty(){
                                         let value_cleaned = str::replace(&value, "\r", "");
                                         response += &value_cleaned;
                                     }    
@@ -109,11 +109,11 @@ pub fn get_arduino_raw() -> String {
                                 
                                 
                             },
-                            Err(e) => {},
+                            Err(_e) => {},
                         }
                     }
                 },
-                Err(ref e) => {}
+                Err(ref _e) => {}
     
                 
             }
@@ -123,15 +123,15 @@ pub fn get_arduino_raw() -> String {
             tty_port += 1;
         }
     
-        return format!("N/A");
+        "N/A".to_string()
     });
 
     let value = receiver.recv_timeout(Duration::from_millis(3000));
 
     if value.is_ok(){
-        return value.unwrap();
+        value.unwrap()
     } else {
-        return format!("N/A");
+        "N/A".to_string()
     }
 
 
@@ -140,7 +140,7 @@ pub fn get_arduino_raw() -> String {
 }
 
 pub fn get_co2(raw: String) -> String {
-    let split = raw.split("\n");
+    let split = raw.split('\n');
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
         if line.contains("CO2:") {
@@ -150,11 +150,11 @@ pub fn get_co2(raw: String) -> String {
         }
     }
 
-    return "N/A".to_string();
+    "N/A".to_string()
 }
 
 pub fn get_tvoc(raw: String) -> String {
-    let split = raw.split("\n");
+    let split = raw.split('\n');
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
         if line.contains("TVOC:") {
@@ -164,11 +164,11 @@ pub fn get_tvoc(raw: String) -> String {
         }
     }
 
-    return "N/A".to_string();
+    "N/A".to_string()
 }
 
 pub fn get_temperature(raw: String) -> String {
-    let split = raw.split("\n");
+    let split = raw.split('\n');
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
         if line.contains("TEMP:") {
@@ -178,11 +178,11 @@ pub fn get_temperature(raw: String) -> String {
         }
     }
 
-    return "N/A".to_string();
+    "N/A".to_string()
 }
 
 pub fn get_humidity(raw: String) -> String {
-    let split = raw.split("\n");
+    let split = raw.split('\n');
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
         if line.contains("HUM:") {
@@ -192,16 +192,16 @@ pub fn get_humidity(raw: String) -> String {
         }
     }
 
-    return "N/A".to_string();
+    "N/A".to_string()
 }
 
 
 
 pub fn get_pm25() -> String {
     let mut tty_port = 0;
-    let mut tty_quit = 25;
+    let tty_quit = 25;
     let mut tty_found = false;
-    while tty_found == false && tty_port < tty_quit{
+    while !tty_found && tty_port < tty_quit{
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
                 sensor.set_work_period(5).unwrap();
@@ -212,19 +212,19 @@ pub fn get_pm25() -> String {
                     return format!("");
                 }
             },
-            Err(e) => {
+            Err(_e) => {
                 tty_port += 1;
             }
         };
     }
-    return format!("N/A");
+    "N/A".to_string()
 }
 
 pub fn get_pm10() -> String {
     let mut tty_port = 0;
-    let mut tty_quit = 25;
+    let tty_quit = 25;
     let mut tty_found = false;
-    while tty_found == false && tty_port < tty_quit{
+    while !tty_found && tty_port < tty_quit{
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
                 sensor.set_work_period(5).unwrap();
@@ -235,10 +235,10 @@ pub fn get_pm10() -> String {
                     return format!("");
                 }
             },
-            Err(e) => {
+            Err(_e) => {
                 tty_port += 1
             }
         };
     }
-    return format!("N/A");
+    "N/A".to_string()
 }

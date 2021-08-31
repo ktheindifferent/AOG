@@ -24,21 +24,21 @@
 // TODO - Add photo_cycle bool flag and photo_cycle_start, photo_cycle_end
 // TODO - Add safty_gpio_pin intger
 
-use std::sync::mpsc::{self, Sender, Receiver, TryRecvError};
-use std::io::{self, BufRead};
+use std::sync::mpsc::{self, TryRecvError};
+
 
 use rppal::gpio::Gpio;
 
-use std::error::Error;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
-use std::thread::sleep;
+
 
 #[derive(Debug, Clone)]
 pub struct PumpThread {
@@ -57,7 +57,7 @@ impl Default for PumpThread {
 
         let random_id: String = thread_rng().sample_iter(&Alphanumeric).take(100).map(char::from).collect();
 
-        let (tx, rx) = mpsc::channel();
+        let (tx, _rx) = mpsc::channel();
 
         PumpThread{id: random_id, gpio_pin: 17, sensor_flag: "T1_OVF: NONE".to_string(), running: false, tx}
     }
@@ -139,7 +139,7 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
         // If thread recieves stop signal terminate the thread immediately
         match rx.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => {
-                stop_pump_thread(pump_thread.clone());
+                stop_pump_thread(pump_thread);
                 break;
             }
             Err(TryRecvError::Empty) => {}
@@ -150,7 +150,7 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
 pub fn stop_pump_thread(pump_thread: PumpThread){
     log::warn!("Halting Pump Thread: {}", pump_thread.id);
     stop_physical_pump(pump_thread.clone());
-    stop(pump_thread.clone());
+    stop(pump_thread);
 }
 
 pub fn stop_physical_pump(pump_thread: PumpThread){
@@ -166,5 +166,5 @@ pub fn stop_physical_pump(pump_thread: PumpThread){
 }
 
 pub fn stop(pump_thread: PumpThread){
-    pump_thread.tx.send(("stop".to_string()));
+    pump_thread.tx.send("stop".to_string());
 }

@@ -26,16 +26,16 @@ use crate::aog;
 use rppal::gpio::Gpio;
 
 use std::error::Error;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+
+
 use std::thread;
 use std::time::Duration;
 
-use sds011::{SDS011};
-use std::thread::sleep;
+
+
 
 use std::io::{self, BufRead};
-use std::sync::mpsc::{self, TryRecvError};
+use std::sync::mpsc::{self};
 
 
 // Gpio uses BCM pin numbering. BCM GPIO 23 is tied to physical pin 16.
@@ -45,8 +45,8 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
 
     let command = cmd.clone();
 
-    let split = command.split(" ");
-    let split_vec = split.collect::<Vec<&str>>();
+    let split = command.split(' ');
+    let _split_vec = split.collect::<Vec<&str>>();
 
 
     if command.starts_with("cls") || command.starts_with("clear"){
@@ -94,7 +94,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     }
 
     
-    if command.clone() == "help".to_string(){
+    if command.clone() == *"help"{
         println!("gpio status:                  prints status of the gpio bus");
         println!("gpio [on/off] [gpio_bdm]:     change state of a gpio pin");
         println!("clear/cls:                    clears screen");
@@ -102,7 +102,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     }
 
 
-    if command == "test".to_string(){
+    if command == *"test"{
         let selected_pin = 17;
         let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
         loop {
@@ -117,20 +117,20 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
         }
     }
 
-    if command == "stdout".to_string(){
+    if command == *"stdout"{
         println!("{}", get_stdout().unwrap());
     }
 
     // 0-21
     if command.starts_with("gpio"){
-        if command == "gpio status".to_string(){
+        if command == *"gpio status"{
             aog::gpio::status::print();
         }
 
         if command.contains("on"){
             println!("Press enter to terminate the gpio on(set-low) thread");
-            let (tx, rx) = mpsc::channel();
-            let split = cmd.split(" ");
+            let (tx, _rx) = mpsc::channel();
+            let split = cmd.split(' ');
             let split_vec = split.collect::<Vec<&str>>();
             let selected_pin = split_vec[2].parse::<u8>().unwrap();
 
@@ -159,7 +159,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
             }
 
         } else if command.contains("off"){
-            let split = cmd.split(" ");
+            let split = cmd.split(' ');
             let split_vec = split.collect::<Vec<&str>>();
             let selected_pin = split_vec[2].parse::<u8>().unwrap();
 
@@ -184,8 +184,8 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
 
 
             println!("Press enter to terminate the gpio stress thread");
-            let (tx, rx) = mpsc::channel();
-            let split = cmd.split(" ");
+            let (tx, _rx) = mpsc::channel();
+            let split = cmd.split(' ');
             let split_vec = split.collect::<Vec<&str>>();
             let selected_pin = split_vec[2].parse::<u8>().unwrap();
 

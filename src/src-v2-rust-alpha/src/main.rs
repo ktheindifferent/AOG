@@ -24,18 +24,18 @@ pub mod setup;
 pub mod aog;
 
 
-use std::error::Error;
+
 use std::thread;
-use std::time::Duration;
+
 
 use std::io::{stdin,stdout,Write};
 
 use std::path::{Path};
 
-use rppal::gpio::Gpio;
 
-use serde::{Serialize, Deserialize};
-use shuteye::sleep;
+
+
+
 
 use std::env;
 
@@ -45,7 +45,7 @@ use signal_hook::flag;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use std::sync::mpsc::{self, TryRecvError};
+use std::sync::mpsc::{self};
 
 
 extern crate savefile;
@@ -70,8 +70,8 @@ fn main() -> Result<(), std::io::Error> {
     // Setup a logfile if A.O.G. is installed. Clears old log on boot.
     // ----------------------------------------------------------------
     if Path::new("/opt/aog/").exists() {
-        aog::init_log(format!("/opt/aog/output.log"));
-        SimpleLogger::new().with_colors(true).with_output_file(format!("/opt/aog/output.log")).init().unwrap();
+        aog::init_log("/opt/aog/output.log".to_string());
+        SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
     } else {
         SimpleLogger::new().with_colors(true).init().unwrap();
     }
@@ -102,7 +102,7 @@ fn main() -> Result<(), std::io::Error> {
     // Init GPIO 27 thread and set low(relay-on)
     // ----------------------------------------------------------------
     let (tx_27_low, rx_27_low) = mpsc::channel();
-    let (tx_27_high, rx_27_high) = mpsc::channel();
+    let (tx_27_high, _rx_27_high) = mpsc::channel();
     let mut gpio_27_thread = aog::gpio::thread::GPIOThread::default();
     gpio_27_thread.gpio_pin = 27;
     gpio_27_thread.set_low_tx = tx_27_low;
@@ -113,7 +113,7 @@ fn main() -> Result<(), std::io::Error> {
     // Init GPIO 22 thread and set low(relay-on)
     // ----------------------------------------------------------------
     let (tx_22_low, rx_22_low) = mpsc::channel();
-    let (tx_22_high, rx_22_high) = mpsc::channel();
+    let (tx_22_high, _rx_22_high) = mpsc::channel();
     let mut gpio_22_thread = aog::gpio::thread::GPIOThread::default();
     gpio_22_thread.gpio_pin = 22;
     gpio_22_thread.set_low_tx = tx_22_low;
@@ -123,13 +123,13 @@ fn main() -> Result<(), std::io::Error> {
 
     // Collect command line arguments
     // ----------------------------------------------------------------
-    let args: Vec<String> = env::args().collect();
+    
 
 
     // No ars triggers an interactive A.O.G. command line interface for debugging.
     // Any arguments means this is running in the background on the unit.
     // ----------------------------------------------------------------
-    if args.len() > 1 {
+    if env::args().count() > 1 {
 
         log::info!("Flags detected. A.O.G. is running as a background service.");
 
@@ -174,7 +174,7 @@ fn main() -> Result<(), std::io::Error> {
     
             if aog_config.is_ok() {
                 let cfg: aog::Config = aog_config.unwrap();
-                if cfg.version_installed != VERSION.unwrap_or("unknown").to_string(){
+                if cfg.version_installed != *VERSION.unwrap_or("unknown"){
                     println!("An old A.O.G. install was detected.");
                     setup::update();
                 } else {}
@@ -280,9 +280,9 @@ fn main() -> Result<(), std::io::Error> {
     println!("Exiting...");
 
     // Cleanup
-    aog::pump::stop(pump_thread.clone());
-    aog::gpio::thread::stop(gpio_27_thread.clone());
-    aog::gpio::thread::stop(gpio_22_thread.clone());
+    aog::pump::stop(pump_thread);
+    aog::gpio::thread::stop(gpio_27_thread);
+    aog::gpio::thread::stop(gpio_22_thread);
 
-    return Ok(());
+    Ok(())
 }

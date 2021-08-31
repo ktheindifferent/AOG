@@ -28,17 +28,17 @@ use std::thread;
 pub fn init_all(){
     // Start video0 Thread
     thread::spawn(|| {
-        init(format!("video0"));
+        init("video0".to_string());
     });
 
     // Start video1 Thread
     thread::spawn(|| {
-        init(format!("video1"));
+        init("video1".to_string());
     });
 
     // Start video2 Thread
     thread::spawn(|| {
-        init(format!("video2"));
+        init("video2".to_string());
     });
 }
 

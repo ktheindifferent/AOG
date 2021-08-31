@@ -20,7 +20,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::env;
+
 use std::process::Command;
 use std::io::{Write, stdin, stdout};
 use std::path::{Path};
@@ -49,7 +49,7 @@ pub fn install() {
         if let Some('\r')=s.chars().next_back() {
             s.pop();
         }
-        if s.contains("Y") || s.contains("y") {
+        if s.contains('Y') || s.contains('y') {
             abort_install = false;
         } else {
             println!("Skipping Setup...")
@@ -71,7 +71,7 @@ pub fn install() {
             if let Some('\r')=s.chars().next_back() {
                 s.pop();
             }
-            if s.contains("Y") || s.contains("y") {
+            if s.contains('Y') || s.contains('y') {
                 aog_config.enable_automatic_updates = true;
             }
 
@@ -87,7 +87,7 @@ pub fn install() {
             if let Some('\r')=s.chars().next_back() {
                 s.pop();
             }
-            if s.contains("Y") || s.contains("y") {
+            if s.contains('Y') || s.contains('y') {
                 aog_config.is_hvac_kit_installed = true;
             }
 
@@ -101,7 +101,7 @@ pub fn install() {
             if let Some('\r')=s.chars().next_back() {
                 s.pop();
             }
-            if s.contains("Y") || s.contains("y") {
+            if s.contains('Y') || s.contains('y') {
                 aog_config.is_sensor_kit_installed = true;
 
                 // TODO collect sensor pinout config from user and flash arduino
@@ -118,7 +118,7 @@ pub fn install() {
             if let Some('\r')=s.chars().next_back() {
                 s.pop();
             }
-            if s.contains("Y") || s.contains("y") {
+            if s.contains('Y') || s.contains('y') {
                 aog_config.power_type = "solar".to_string();
             } else {
                 aog_config.power_type = "grid".to_string();
@@ -138,7 +138,7 @@ pub fn install() {
             .output()
             .expect("failed to execute process");
             if step1.status.success() {
-                println!("");
+                println!();
             } else {
                 let er = String::from_utf8_lossy(&step1.stderr);
                 println!("{}", er);
@@ -150,7 +150,7 @@ pub fn install() {
             .output()
             .expect("failed to execute process");
             if step2.status.success() {
-                println!("");
+                println!();
             } else {
                 let er = String::from_utf8_lossy(&step2.stderr);
                 println!("{}", er);
@@ -162,7 +162,7 @@ pub fn install() {
             .output()
             .expect("failed to execute process");
             if step3.status.success() {
-                println!("");
+                println!();
             } else {
                 let er = String::from_utf8_lossy(&step3.stderr);
                 println!("{}", er);
@@ -201,7 +201,7 @@ pub fn install() {
             .output()
             .expect("failed to execute process");
             if openssh.status.success() {
-                println!("");
+                println!();
             } else {
                 let er = String::from_utf8_lossy(&openssh.stderr);
                 println!("{}", er);
@@ -213,7 +213,7 @@ pub fn install() {
             .output()
             .expect("failed to execute process");
             if openssh_der.status.success() {
-                println!("");
+                println!();
             } else {
                 let er = String::from_utf8_lossy(&openssh_der.stderr);
                 println!("{}", er);
@@ -277,7 +277,7 @@ pub fn update(){
     if let Some('\r')=s.chars().next_back() {
         s.pop();
     }
-    if s.contains("Y") || s.contains("y") {
+    if s.contains('Y') || s.contains('y') {
         uninstall();
         install();
     } else {
@@ -349,5 +349,5 @@ fn extract_zip(zip_path: &str) -> i32 {
             }
         }
     }
-    return 0;
+    0
 }

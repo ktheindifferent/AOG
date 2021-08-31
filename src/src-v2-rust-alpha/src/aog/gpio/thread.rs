@@ -24,21 +24,21 @@
 // TODO - Add photo_cycle bool flag and photo_cycle_start, photo_cycle_end
 // TODO - Add safty_gpio_pin intger
 
-use std::sync::mpsc::{self, Sender, Receiver, TryRecvError};
-use std::io::{self, BufRead};
+use std::sync::mpsc::{self, TryRecvError};
+
 
 use rppal::gpio::Gpio;
 
-use std::error::Error;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
-use std::thread::sleep;
+
 
 #[derive(Debug, Clone)]
 pub struct GPIOThread {
@@ -55,8 +55,8 @@ impl Default for GPIOThread {
 
         let random_id: String = thread_rng().sample_iter(&Alphanumeric).take(100).map(char::from).collect();
 
-        let (set_low_tx, rx) = mpsc::channel();
-        let (set_high_tx, rx) = mpsc::channel();
+        let (set_low_tx, _rx) = mpsc::channel();
+        let (set_high_tx, _rx) = mpsc::channel();
 
         GPIOThread{id: random_id, gpio_pin: 0, set_low_tx, set_high_tx}
     }
@@ -82,7 +82,7 @@ pub fn set_low(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::sync
 
     if gpio.is_ok() {
         let u_gpio = gpio.unwrap();
-        let gpio_pin = u_gpio.get(gpio_thread.clone().gpio_pin);
+        let gpio_pin = u_gpio.get(gpio_thread.gpio_pin);
         
 
         if gpio_pin.is_ok() {
@@ -126,7 +126,7 @@ pub fn set_high(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::syn
 
     if gpio.is_ok() {
         let u_gpio = gpio.unwrap();
-        let gpio_pin = u_gpio.get(gpio_thread.clone().gpio_pin);
+        let gpio_pin = u_gpio.get(gpio_thread.gpio_pin);
         
 
         if gpio_pin.is_ok() {
@@ -152,14 +152,14 @@ pub fn set_high(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::syn
 
 
 pub fn stop(gpio_thread: GPIOThread){
-    gpio_thread.set_low_tx.send(("stop".to_string()));
-    gpio_thread.set_high_tx.send(("stop".to_string()));
+    gpio_thread.set_low_tx.send("stop".to_string());
+    gpio_thread.set_high_tx.send("stop".to_string());
 }
 
 pub fn stop_low(gpio_thread: GPIOThread){
-    gpio_thread.set_low_tx.send(("stop".to_string()));
+    gpio_thread.set_low_tx.send("stop".to_string());
 }
 
 pub fn stop_high(gpio_thread: GPIOThread){
-    gpio_thread.set_high_tx.send(("stop".to_string()));
+    gpio_thread.set_high_tx.send("stop".to_string());
 }
