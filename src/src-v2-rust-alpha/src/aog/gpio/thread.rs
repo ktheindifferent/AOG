@@ -117,7 +117,7 @@ pub fn set_high(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::syn
         return;
     }
 
-    log::info!("Starting gpio-set-low thread: {}", gpio_thread.id);
+    log::info!("Starting gpio-set-high thread: {}", gpio_thread.id);
 
 
     let gpio = Gpio::new();
