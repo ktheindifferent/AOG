@@ -107,11 +107,11 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, term_now: Arc<AtomicBool>, rx:
                 while ovf_sensor_pin.is_high(){
                     if oscillating_state_safety > 10 && ovf_sensor_pin.is_high(){
                         // pump on
-                        log::warn!("Pump On");
+                        // log::warn!("Pump On");
                         pump_pin_out.set_low();
                     } else {
                         // pump off
-                        log::warn!("Pump Off");
+                        // log::warn!("Pump Off");
                         pump_pin_out.set_high();
                         oscillating_state_safety += 1;
                     }

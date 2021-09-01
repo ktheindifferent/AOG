@@ -218,8 +218,7 @@ fn main() -> Result<(), std::io::Error> {
         // A.O.G. Terminal Interface Loop
         // ----------------------------------------------------------------
         while !term_now.load(Ordering::Relaxed) {
-
-            setup::install();
+            
 
             let mut s=String::new();
             print!("> ");
