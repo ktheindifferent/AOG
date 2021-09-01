@@ -83,7 +83,10 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, term_now: Arc<AtomicBool>, rx:
 
     std::mem::drop(pump_thread_lock);
 
-    thread::spawn(move || while !term_now.load(Ordering::Relaxed) {
+    thread::spawn(move || loop {
+
+        // while !term_now.load(Ordering::Relaxed)
+
 
         let mut pump_thread_lock = pump_thread.lock().unwrap();
 
