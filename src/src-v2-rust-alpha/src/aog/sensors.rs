@@ -231,7 +231,7 @@ pub fn get_pm10() -> String {
                     return format!("");
                 }
             },
-            Err(_e) => {
+            Err(e) => {
                 tty_port += 1
             }
         };

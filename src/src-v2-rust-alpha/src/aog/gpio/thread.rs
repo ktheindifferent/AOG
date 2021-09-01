@@ -77,6 +77,7 @@ pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, r
         std::mem::drop(gpio_thread_lock);
         return;
     }
+    std::mem::drop(gpio);
 
     log::info!("Starting gpio-set-low thread: {}", gpio_thread_lock.id);
 
@@ -105,9 +106,19 @@ pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, r
                     Err(TryRecvError::Empty) => {}
                 }
             });
+        } else {
+            match gpio_pin {
+                Ok(v) => {},
+                Err(e) => log::error!("{:?}", e),
+            }
         }
  
 
+    } else {
+        match gpio {
+            Ok(v) => {},
+            Err(e) => log::error!("{:?}", e),
+        }
     }
 }
 
@@ -152,9 +163,19 @@ pub fn set_high(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, 
                     Err(TryRecvError::Empty) => {}
                 }
             });
+        } else {
+            match gpio_pin {
+                Ok(v) => {},
+                Err(e) => log::error!("{:?}", e),
+            }
         }
  
 
+    } else {
+        match gpio {
+            Ok(v) => {},
+            Err(e) => log::error!("{:?}", e),
+        }
     }
 }
 

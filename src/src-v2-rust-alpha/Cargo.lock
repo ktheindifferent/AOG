@@ -3,6 +3,30 @@
 version = 3
 
 [[package]]
+name = "AOG"
+version = "0.2.0"
+dependencies = [
+ "log",
+ "rand 0.8.4",
+ "reqwest",
+ "rouille",
+ "rppal",
+ "rscam",
+ "savefile",
+ "savefile-derive",
+ "sds011",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serialport 4.0.1",
+ "shuteye",
+ "signal-hook",
+ "simple_logger",
+ "termion",
+ "zip",
+]
+
+[[package]]
 name = "CoreFoundation-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -60,30 +84,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
 dependencies = [
  "winapi",
-]
-
-[[package]]
-name = "aog"
-version = "0.2.0"
-dependencies = [
- "log",
- "rand 0.8.4",
- "reqwest",
- "rouille",
- "rppal",
- "rscam",
- "savefile",
- "savefile-derive",
- "sds011",
- "serde",
- "serde_derive",
- "serde_json",
- "serialport 4.0.1",
- "shuteye",
- "signal-hook",
- "simple_logger",
- "termion",
- "zip",
 ]
 
 [[package]]

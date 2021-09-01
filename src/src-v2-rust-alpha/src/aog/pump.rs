@@ -74,8 +74,10 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, term_now: Arc<AtomicBool>, rx:
     let gpio = Gpio::new();
     if gpio.is_err() {
         log::warn!("No GIOS bus found. Halting pump thread: {}", pump_thread_lock.id);
+        std::mem::drop(pump_thread_lock);
         return;
     }
+    std::mem::drop(gpio);
 
     log::info!("Starting pump thread: {}", pump_thread_lock.id);
 
@@ -92,7 +94,7 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, term_now: Arc<AtomicBool>, rx:
             let pump_pin = u_gpio.get(pump_thread_lock.gpio_pin);
             let sensor_pin = u_gpio.get(16);
                 
-            if sensor_pin.is_ok(){
+            if sensor_pin.is_ok() && pump_pin.is_ok() {
                 let mut pump_pin_out = pump_pin.unwrap().into_output();
                 let ovf_sensor_pin = sensor_pin.unwrap().into_input();
 
@@ -107,11 +109,11 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, term_now: Arc<AtomicBool>, rx:
                 while ovf_sensor_pin.is_high(){
                     if oscillating_state_safety > 10 && ovf_sensor_pin.is_high(){
                         // pump on
-                        log::warn!("Pump On");
+                        log::debug!("Pump On");
                         pump_pin_out.set_low();
                     } else {
                         // pump off
-                        log::warn!("Pump Off");
+                        log::debug!("Pump Off");
                         pump_pin_out.set_high();
                         oscillating_state_safety += 1;
                     }
@@ -135,12 +137,26 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, term_now: Arc<AtomicBool>, rx:
                 // sleep(Duration::from_millis(n3));
                 //sleep(Duration::from_millis(2000))
 
-            };
+            } else {
+                match sensor_pin {
+                    Ok(v) => {},
+                    Err(e) => log::error!("{:?}", e),
+                }
+                match pump_pin {
+                    Ok(v) => {},
+                    Err(e) => log::error!("{:?}", e),
+                }
+            }
 
 
           
       
         } else {
+            match gpio {
+                Ok(v) => {},
+                Err(e) => log::error!("{:?}", e),
+            }
+
             // If we can't communicate with the GPIO bus...stop the pump...try again
             stop_physical_pump(Arc::clone(&pump_thread));
         }
