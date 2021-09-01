@@ -89,12 +89,12 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, term_now: Arc<AtomicBool>, rx:
 
         if gpio.is_ok() {
             let u_gpio = gpio.unwrap();
-            let pump_pin = u_gpio.get(pump_thread_lock.gpio_pin.clone());
+            let pump_pin = u_gpio.get(pump_thread_lock.gpio_pin);
             let sensor_pin = u_gpio.get(16);
                 
             if sensor_pin.is_ok(){
                 let mut pump_pin_out = pump_pin.unwrap().into_output();
-                let ovf_sensor_pin = sensor_pin.unwrap().into_input_pullup();
+                let ovf_sensor_pin = sensor_pin.unwrap().into_input();
 
                
 
