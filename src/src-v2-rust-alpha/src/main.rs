@@ -219,6 +219,8 @@ fn main() -> Result<(), std::io::Error> {
         // ----------------------------------------------------------------
         while !term_now.load(Ordering::Relaxed) {
 
+            setup::install();
+
             let mut s=String::new();
             print!("> ");
             let _=stdout().flush();
