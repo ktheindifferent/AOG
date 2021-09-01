@@ -47,6 +47,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use std::sync::mpsc::{self};
 
+use std::sync::Mutex;
 
 extern crate savefile;
 use savefile::prelude::*;
@@ -63,7 +64,7 @@ use signal_hook::consts::TERM_SIGNALS;
 
 use simple_logger::SimpleLogger;
 
-
+use log::LevelFilter;
 
 fn main() -> Result<(), std::io::Error> {
 
@@ -72,12 +73,14 @@ fn main() -> Result<(), std::io::Error> {
     if Path::new("/opt/aog/").exists() {
         let init_log_status = aog::init_log("/opt/aog/output.log".to_string());
         if init_log_status.is_ok() {
-            SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
+
+            
+            SimpleLogger::new().with_colors(true).with_level(LevelFilter::Info).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
         } else {
-            SimpleLogger::new().with_colors(true).init().unwrap();
+            SimpleLogger::new().with_colors(true).with_level(LevelFilter::Info).init().unwrap();
         }
     } else {
-        SimpleLogger::new().with_colors(true).init().unwrap();
+        SimpleLogger::new().with_colors(true).with_level(LevelFilter::Info).init().unwrap();
     }
 
     // Term now will be true when its time to terminate the software...
@@ -97,37 +100,65 @@ fn main() -> Result<(), std::io::Error> {
     // Init pump thread and start
     // ----------------------------------------------------------------
     let (tx, rx) = mpsc::channel();
-    let mut pump_thread = aog::pump::PumpThread::default();
-    pump_thread.tx = tx;
+    let mut pump_thread = Arc::new(Mutex::new(aog::pump::PumpThread::default()));
+    let mut pump_thread_lock = pump_thread.lock().unwrap();
+    pump_thread_lock.tx = tx;
+    std::mem::drop(pump_thread_lock);
     // TODO - Check if this is disabled in the config first
-    aog::pump::start(pump_thread.clone(), Arc::clone(&term_now), rx);
+    aog::pump::start(Arc::clone(&pump_thread), Arc::clone(&term_now), rx);
 
 
+    
+    
+    // Air Pump Relay
     // Init GPIO 27 thread and set low(relay-on)
     // ----------------------------------------------------------------
     let (tx_27_low, rx_27_low) = mpsc::channel();
     let (tx_27_high, _rx_27_high) = mpsc::channel();
-    let mut gpio_27_thread = aog::gpio::thread::GPIOThread::default();
-    gpio_27_thread.gpio_pin = 27;
-    gpio_27_thread.set_low_tx = tx_27_low;
-    gpio_27_thread.set_high_tx = tx_27_high;
-    // TODO - Check if this is disabled in the config first
-    aog::gpio::thread::set_low(gpio_27_thread.clone(), Arc::clone(&term_now), rx_27_low);
+    let mut gpio_27_thread = Arc::new(Mutex::new(aog::gpio::thread::GPIOThread::default()));
 
+    let mut gpio_27_thread_lock = gpio_27_thread.lock().unwrap();
+    gpio_27_thread_lock.gpio_pin = 27;
+    gpio_27_thread_lock.set_low_tx = tx_27_low;
+    gpio_27_thread_lock.set_high_tx = tx_27_high;
+    std::mem::drop(gpio_27_thread_lock);
+
+    // TODO - Check if this is disabled in the config first
+    aog::gpio::thread::set_low(Arc::clone(&gpio_27_thread), Arc::clone(&term_now), rx_27_low);
+
+
+    // UV Light Relay
     // Init GPIO 22 thread and set low(relay-on)
     // ----------------------------------------------------------------
     let (tx_22_low, rx_22_low) = mpsc::channel();
     let (tx_22_high, _rx_22_high) = mpsc::channel();
-    let mut gpio_22_thread = aog::gpio::thread::GPIOThread::default();
-    gpio_22_thread.gpio_pin = 22;
-    gpio_22_thread.set_low_tx = tx_22_low;
-    gpio_27_thread.set_high_tx = tx_22_high;
+    let mut gpio_22_thread = Arc::new(Mutex::new(aog::gpio::thread::GPIOThread::default()));
+    let mut gpio_22_thread_lock = gpio_22_thread.lock().unwrap();
+    gpio_22_thread_lock.gpio_pin = 22;
+    gpio_22_thread_lock.set_low_tx = tx_22_low;
+    gpio_22_thread_lock.set_high_tx = tx_22_high;
+    std::mem::drop(gpio_22_thread_lock);
     // TODO - Check if this is disabled in the config first
-    aog::gpio::thread::set_low(gpio_22_thread.clone(), Arc::clone(&term_now), rx_22_low);
+    aog::gpio::thread::set_low(Arc::clone(&gpio_22_thread), Arc::clone(&term_now), rx_22_low);
 
-    // Collect command line arguments
-    // ----------------------------------------------------------------
-    
+
+    // Start Web Thread
+    let uv_arc = Arc::clone(&gpio_22_thread);
+    let air_arc = Arc::clone(&gpio_27_thread);
+    thread::spawn(|| {
+        aog::web::init(uv_arc, air_arc);
+    });
+
+
+    let uv_arc2 = Arc::clone(&gpio_22_thread);
+    let air_arc2 = Arc::clone(&gpio_27_thread);
+    let tn = Arc::clone(&term_now);
+    thread::spawn(|| {
+        aog::web::init_command_api(uv_arc2, air_arc2, tn);
+    });
+
+    // Start video thread(s)
+    aog::video::init_all();
 
 
     // No ars triggers an interactive A.O.G. command line interface for debugging.
@@ -138,14 +169,6 @@ fn main() -> Result<(), std::io::Error> {
         log::info!("Flags detected. A.O.G. is running as a background service.");
 
         if Path::new("/opt/aog/").exists() {
-
-            aog::video::init_all();
-
-            // Start Web Thread
-            thread::spawn(|| {
-                aog::web::init();
-            });
-        
             while !term_now.load(Ordering::Relaxed) {
 
             }
@@ -189,14 +212,7 @@ fn main() -> Result<(), std::io::Error> {
                 setup::install();
             }
 
-            // Start video thread(s)
-            aog::video::init_all();
-
-            // Start Web Thread
-            thread::spawn(|| {
-                aog::web::init();
-            });
-
+      
         }
 
         // A.O.G. Terminal Interface Loop
@@ -217,57 +233,93 @@ fn main() -> Result<(), std::io::Error> {
             // Note: Some commands need to be on the main loop for now.
             // ----------------------------------------------------------------
 
-            // Pump Start Command
-            // ----------------------------------------------------------------
-            if s.clone() == "pump start"{
-                let (tx, rx) = mpsc::channel();
-                pump_thread.tx = tx;
-                aog::pump::start(pump_thread.clone(), Arc::clone(&term_now), rx);
-            } 
 
-             // Pump Stop Command
-             // ----------------------------------------------------------------
-            if s.clone() == "pump stop"{
-                aog::pump::stop(pump_thread.clone());
-            }
 
-            // Air Start Command
-            // ----------------------------------------------------------------
-            if s.clone() == "air start"{
-                aog::gpio::thread::stop(gpio_27_thread.clone());
-                let (tx_27_low, rx_27_low) = mpsc::channel();
-                gpio_27_thread.set_low_tx = tx_27_low;
-                aog::gpio::thread::set_low(gpio_27_thread.clone(), Arc::clone(&term_now), rx_27_low);
-            }
+            // TODO
+            // If localhost:9443 is available then notify that their is a running background instance.
+            // Forward all commands to localhost:8443
 
-            // Air Stop Command
-            // ----------------------------------------------------------------
-            if s.clone() == "air stop"{
-                aog::gpio::thread::stop(gpio_27_thread.clone());
-                let (tx_27_high, rx_27_high) = mpsc::channel();
-                gpio_27_thread.set_high_tx = tx_27_high;
-                aog::gpio::thread::set_high(gpio_27_thread.clone(), Arc::clone(&term_now), rx_27_high);
-            }
+            let params = [("input_command", s)];
+            // let client = reqwest::Client::new();
+            let der = std::fs::read("/opt/aog/crt/default/aog.local.der").unwrap();
+            let cert = reqwest::Certificate::from_der(&der).unwrap();
+    
+            let res = reqwest::blocking::Client::builder()
+            .add_root_certificate(cert)
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap()
+            .post(format!("https://localhost:9443").as_str())
+            .form(&params)
+            .send()
+            .unwrap();
 
-            // Air Start Command
-            // ----------------------------------------------------------------
-            if s.clone() == "uv start"{
-                aog::gpio::thread::stop(gpio_22_thread.clone());
-                let (tx_22_low, rx_22_low) = mpsc::channel();
-                gpio_22_thread.set_low_tx = tx_22_low;
-                aog::gpio::thread::set_low(gpio_22_thread.clone(), Arc::clone(&term_now), rx_22_low);
-            }
 
-            // Air Stop Command
-            // ----------------------------------------------------------------
-            if s.clone() == "uv stop"{
-                aog::gpio::thread::stop(gpio_22_thread.clone());
-                let (tx_22_high, rx_22_high) = mpsc::channel();
-                gpio_22_thread.set_high_tx = tx_22_high;
-                aog::gpio::thread::set_high(gpio_22_thread.clone(), Arc::clone(&term_now), rx_22_high);
-            }
+            let body = res.text().unwrap();
 
-            let _ = aog::command::run(s.clone());
+
+
+            // // Pump Start Command
+            // // ----------------------------------------------------------------
+            // if s.clone() == "pump start"{
+            //     let (tx, rx) = mpsc::channel();
+            //     let mut pump_thread_lock = pump_thread.lock().unwrap();
+            //     pump_thread_lock.tx = tx;
+            //     std::mem::drop(pump_thread_lock);
+            //     aog::pump::start(Arc::clone(&pump_thread), Arc::clone(&term_now), rx);
+            // } 
+
+            //  // Pump Stop Command
+            //  // ----------------------------------------------------------------
+            // if s.clone() == "pump stop"{
+            //     aog::pump::stop(Arc::clone(&pump_thread));
+            // }
+
+            // // Air Start Command
+            // // ----------------------------------------------------------------
+            // if s.clone() == "air start"{
+            //     aog::gpio::thread::stop(Arc::clone(&gpio_27_thread));
+            //     let mut gpio_27_thread_lock = gpio_27_thread.lock().unwrap();
+            //     let (tx_27_low, rx_27_low) = mpsc::channel();
+            //     gpio_27_thread_lock.set_low_tx = tx_27_low;
+            //     std::mem::drop(gpio_27_thread_lock);
+            //     aog::gpio::thread::set_low(Arc::clone(&gpio_27_thread), Arc::clone(&term_now), rx_27_low);
+            // }
+
+            // // Air Stop Command
+            // // ----------------------------------------------------------------
+            // if s.clone() == "air stop"{
+            //     aog::gpio::thread::stop(Arc::clone(&gpio_27_thread));
+            //     let mut gpio_27_thread_lock = gpio_27_thread.lock().unwrap();
+            //     let (tx_27_high, rx_27_high) = mpsc::channel();
+            //     gpio_27_thread_lock.set_high_tx = tx_27_high;
+            //     std::mem::drop(gpio_27_thread_lock);
+            //     aog::gpio::thread::set_high(Arc::clone(&gpio_27_thread), Arc::clone(&term_now), rx_27_high);
+            // }
+
+            // // Air Start Command
+            // // ----------------------------------------------------------------
+            // if s.clone() == "uv start"{
+            //     aog::gpio::thread::stop(Arc::clone(&gpio_22_thread));
+            //     let mut gpio_22_thread_lock = gpio_22_thread.lock().unwrap();
+            //     let (tx_22_low, rx_22_low) = mpsc::channel();
+            //     gpio_22_thread_lock.set_low_tx = tx_22_low;
+            //     std::mem::drop(gpio_22_thread_lock);
+            //     aog::gpio::thread::set_low(Arc::clone(&gpio_22_thread), Arc::clone(&term_now), rx_22_low);
+            // }
+
+            // // Air Stop Command
+            // // ----------------------------------------------------------------
+            // if s.clone() == "uv stop"{
+            //     aog::gpio::thread::stop(Arc::clone(&gpio_22_thread));
+            //     let mut gpio_22_thread_lock = gpio_22_thread.lock().unwrap();
+            //     let (tx_22_high, rx_22_high) = mpsc::channel();
+            //     gpio_22_thread_lock.set_high_tx = tx_22_high;
+            //     std::mem::drop(gpio_22_thread_lock);
+            //     aog::gpio::thread::set_high(Arc::clone(&gpio_22_thread), Arc::clone(&term_now), rx_22_high);
+            // }
+
+            // let _ = aog::command::run(s.clone());
         
     
     
@@ -284,9 +336,9 @@ fn main() -> Result<(), std::io::Error> {
     println!("Exiting...");
 
     // Cleanup
-    aog::pump::stop(pump_thread);
-    aog::gpio::thread::stop(gpio_27_thread);
-    aog::gpio::thread::stop(gpio_22_thread);
+    aog::pump::stop(Arc::clone(&pump_thread));
+    aog::gpio::thread::stop(Arc::clone(&gpio_27_thread));
+    aog::gpio::thread::stop(Arc::clone(&gpio_22_thread));
 
     Ok(())
 }

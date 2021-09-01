@@ -50,7 +50,7 @@
                     <ul class="navbar-nav ml-auto">
 
 
-                        <img style="position: fixed;left: 0;top: -10px;" class="float-left" width="150px" src='/img/logo.png'></img>
+                        <img style="position: absolute;left: 0;top: -10px;" class="float-left" width="150px" src='/img/logo.png'></img>
                         
                         
                         
@@ -121,7 +121,7 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-gray-800 text-uppercase mb-1">
                                                 PM2.5</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><div class="loader loader-default">Loading...</div></div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><span id="pm25_stat"><div class="loader loader-default">Loading...</div></span></div>
                                         </div>
                                         <!-- <div class="col-auto">
                                             <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
@@ -139,7 +139,7 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-gray-800 text-uppercase mb-1">
                                                 PM10</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><div class="loader loader-default">Loading...</div></div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><span id="pm10_stat"><div class="loader loader-default">Loading...</div></span></div>
                                         </div>
                                         <!-- <div class="col-auto">
                                             <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
@@ -157,7 +157,7 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-gray-800 text-uppercase mb-1">
                                                 CO2</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><div class="loader loader-default">Loading...</div></div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><span id="co2_stat"><div class="loader loader-default">Loading...</div></span></div>
                                         </div>
                                         <!-- <div class="col-auto">
                                             <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
@@ -174,7 +174,7 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-gray-800 text-uppercase mb-1">
                                                 TVOC</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><div class="loader loader-default">Loading...</div></div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><span id="tvoc_stat"><div class="loader loader-default">Loading...</div></span></div>
                                         </div>
                                         <!-- <div class="col-auto">
                                             <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
@@ -191,7 +191,7 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-gray-800 text-uppercase mb-1">
                                                 Temperature</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><div class="loader loader-default">Loading...</div></div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><span id="temp_stat"><div class="loader loader-default">Loading...</div></span></div>
                                         </div>
                                         <!-- <div class="col-auto">
                                             <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
@@ -208,7 +208,7 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-gray-800 text-uppercase mb-1">
                                                 Humidity</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><div class="loader loader-default">Loading...</div></div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><span id="hum_stat"><div class="loader loader-default">Loading...</div></span></div>
                                         </div>
                                         <!-- <div class="col-auto">
                                             <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
@@ -220,8 +220,8 @@
                     </div>
 
 
-                    <div class="row">
-                        <div class="col-xl-6 col-md-12 mb-4">
+                    <div class="row" id="video_feeds_containers">
+                        <!-- <div class="col-xl-6 col-md-12 mb-4">
                             <div class="card border-left-gray-800 shadow h-100 py-2">
                                 <div class="card-body">
                                     <div class="row no-gutters align-items-center">
@@ -247,7 +247,7 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </div> -->
                     </div>
                 </div>
            
@@ -302,6 +302,8 @@
     <!-- Page level custom scripts -->
     <script src="js/demo/chart-area-demo.js"></script>
     <script src="js/demo/chart-pie-demo.js"></script>
+
+    <script src="js/aog/index.js"></script>
 
 </body>
 

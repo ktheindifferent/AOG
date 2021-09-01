@@ -34,6 +34,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
+use std::sync::Mutex;
+
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -62,18 +64,21 @@ impl Default for GPIOThread {
     }
 }
 
-pub fn set_low(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
+pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
 
-    let _ = stop_high(gpio_thread.clone());
+    let _ = stop_high(Arc::clone(&gpio_thread));
+    
+    let mut gpio_thread_lock = gpio_thread.lock().unwrap();
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
     if gpio.is_err() {
-        log::warn!("No GIOS bus found. Halting gpio thread: {}", gpio_thread.id);
+        log::warn!("No GIOS bus found. Halting gpio thread: {}", gpio_thread_lock.id);
+        std::mem::drop(gpio_thread_lock);
         return;
     }
 
-    log::info!("Starting gpio-set-low thread: {}", gpio_thread.id);
+    log::info!("Starting gpio-set-low thread: {}", gpio_thread_lock.id);
 
 
     let gpio = Gpio::new();
@@ -82,7 +87,7 @@ pub fn set_low(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::sync
 
     if gpio.is_ok() {
         let u_gpio = gpio.unwrap();
-        let gpio_pin = u_gpio.get(gpio_thread.gpio_pin);
+        let gpio_pin = u_gpio.get(gpio_thread_lock.gpio_pin);
         
 
         if gpio_pin.is_ok() {
@@ -106,18 +111,21 @@ pub fn set_low(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::sync
     }
 }
 
-pub fn set_high(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
+pub fn set_high(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
 
-    let _ = stop_low(gpio_thread.clone());
+    let _ = stop_low(Arc::clone(&gpio_thread));
+
+    let mut gpio_thread_lock = gpio_thread.lock().unwrap();
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
     if gpio.is_err() {
-        log::warn!("No GIOS bus found. Halting gpio thread: {}", gpio_thread.id);
+        log::warn!("No GIOS bus found. Halting gpio thread: {}", gpio_thread_lock.id);
+        std::mem::drop(gpio_thread_lock);
         return;
     }
 
-    log::info!("Starting gpio-set-high thread: {}", gpio_thread.id);
+    log::info!("Starting gpio-set-high thread: {}", gpio_thread_lock.id);
 
 
     let gpio = Gpio::new();
@@ -126,7 +134,7 @@ pub fn set_high(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::syn
 
     if gpio.is_ok() {
         let u_gpio = gpio.unwrap();
-        let gpio_pin = u_gpio.get(gpio_thread.gpio_pin);
+        let gpio_pin = u_gpio.get(gpio_thread_lock.gpio_pin);
         
 
         if gpio_pin.is_ok() {
@@ -151,15 +159,21 @@ pub fn set_high(gpio_thread: GPIOThread, term_now: Arc<AtomicBool>, rx: std::syn
 }
 
 
-pub fn stop(gpio_thread: GPIOThread){
-    let _ = stop_low(gpio_thread.clone());
-    let _ = stop_high(gpio_thread.clone());
+pub fn stop(gpio_thread: Arc<Mutex<GPIOThread>>){
+    let _ = stop_low(Arc::clone(&gpio_thread));
+    let _ = stop_high(Arc::clone(&gpio_thread));
 }
 
-pub fn stop_low(gpio_thread: GPIOThread) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
-    return gpio_thread.set_low_tx.send("stop".to_string());
+pub fn stop_low(gpio_thread: Arc<Mutex<GPIOThread>>) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
+    let mut gpio_thread_lock = gpio_thread.lock().unwrap();
+    let vv =  gpio_thread_lock.set_low_tx.send("stop".to_string());
+    std::mem::drop(gpio_thread_lock);
+    return vv;
 }
 
-pub fn stop_high(gpio_thread: GPIOThread) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
-    return gpio_thread.set_high_tx.send("stop".to_string());
+pub fn stop_high(gpio_thread: Arc<Mutex<GPIOThread>>) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
+    let mut gpio_thread_lock = gpio_thread.lock().unwrap();
+    let vv = gpio_thread_lock.set_high_tx.send("stop".to_string());
+    std::mem::drop(gpio_thread_lock);
+    return vv;
 }

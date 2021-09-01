@@ -29,6 +29,8 @@ use std::sync::mpsc::{self, TryRecvError};
 
 use rppal::gpio::Gpio;
 
+use std::sync::Mutex;
+
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -63,24 +65,31 @@ impl Default for PumpThread {
     }
 }
 
-pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
+pub fn start(pump_thread: Arc<Mutex<PumpThread>>, term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
+
+    let mut pump_thread_lock = pump_thread.lock().unwrap();
+
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
     if gpio.is_err() {
-        log::warn!("No GIOS bus found. Halting pump thread: {}", pump_thread.id);
+        log::warn!("No GIOS bus found. Halting pump thread: {}", pump_thread_lock.id);
         return;
     }
 
-    log::info!("Starting pump thread: {}", pump_thread.id);
+    log::info!("Starting pump thread: {}", pump_thread_lock.id);
+
+    std::mem::drop(pump_thread_lock);
 
     thread::spawn(move || while !term_now.load(Ordering::Relaxed) {
+
+        let mut pump_thread_lock = pump_thread.lock().unwrap();
 
         let gpio = Gpio::new();
 
         if gpio.is_ok() {
             let u_gpio = gpio.unwrap();
-            let pump_pin = u_gpio.get(pump_thread.clone().gpio_pin);
+            let pump_pin = u_gpio.get(pump_thread_lock.gpio_pin.clone());
             let sensor_pin = u_gpio.get(16);
                 
             if sensor_pin.is_ok(){
@@ -116,7 +125,7 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
 
                 // TODO - test speed
                 // TODO - Make sure inbetween state doesn't disturb oscillating_state_safety
-                stop_physical_pump(pump_thread.clone());
+                stop_physical_pump(Arc::clone(&pump_thread));
         
                 // sleep for a random amount of time
                 // let mut rng = rand::thread_rng();
@@ -133,38 +142,46 @@ pub fn start(pump_thread: PumpThread, term_now: Arc<AtomicBool>, rx: std::sync::
       
         } else {
             // If we can't communicate with the GPIO bus...stop the pump...try again
-            stop_physical_pump(pump_thread.clone());
+            stop_physical_pump(Arc::clone(&pump_thread));
         }
         
         // If thread recieves stop signal terminate the thread immediately
         match rx.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => {
-                stop_pump_thread(pump_thread);
+                stop_pump_thread(Arc::clone(&pump_thread));
                 break;
             }
             Err(TryRecvError::Empty) => {}
         }
+
+        std::mem::drop(pump_thread_lock);
     });
 }
 
-pub fn stop_pump_thread(pump_thread: PumpThread){
-    log::warn!("Halting Pump Thread: {}", pump_thread.id);
-    stop_physical_pump(pump_thread.clone());
-    stop(pump_thread);
+pub fn stop_pump_thread(pump_thread: Arc<Mutex<PumpThread>>){
+    let mut pump_thread_lock = pump_thread.lock().unwrap();
+    log::warn!("Halting Pump Thread: {}", pump_thread_lock.id);
+    std::mem::drop(pump_thread_lock);
+    stop_physical_pump(Arc::clone(&pump_thread));
+    stop(Arc::clone(&pump_thread));
 }
 
-pub fn stop_physical_pump(pump_thread: PumpThread){
+pub fn stop_physical_pump(pump_thread: Arc<Mutex<PumpThread>>){
+    let mut pump_thread_lock = pump_thread.lock().unwrap();
     let gpio = Gpio::new();
     if gpio.is_ok() {
-        let pin = gpio.unwrap().get(pump_thread.gpio_pin);
+        let pin = gpio.unwrap().get(pump_thread_lock.gpio_pin);
         if pin.is_ok(){
             let mut pin_out = pin.unwrap().into_output();
             pin_out.set_high();
         }
     }
-    let _ = crate::aog::command::run(format!("gpio off {}", pump_thread.gpio_pin));
+    let _ = crate::aog::command::run(format!("gpio off {}", pump_thread_lock.gpio_pin));
+    std::mem::drop(pump_thread_lock);
 }
 
-pub fn stop(pump_thread: PumpThread){
-    let _ = pump_thread.tx.send("stop".to_string());
+pub fn stop(pump_thread: Arc<Mutex<PumpThread>>){
+    let mut pump_thread_lock = pump_thread.lock().unwrap();
+    let _ = pump_thread_lock.tx.send("stop".to_string());
+    std::mem::drop(pump_thread_lock);
 }

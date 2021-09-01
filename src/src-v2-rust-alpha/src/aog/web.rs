@@ -35,15 +35,16 @@ use std::sync::Mutex;
 
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-
+use std::sync::mpsc::{self};
 
 
 
 use serde::{Serialize, Deserialize};
 
 
-
+use crate::aog;
 
 
 
@@ -53,14 +54,14 @@ use savefile::prelude::*;
 
 // Add Debug Flag and use ./www/ instead of installed dir
 
-pub fn init(){
+pub fn init(uv_gpio_thread: Arc<Mutex<crate::aog::gpio::thread::GPIOThread>>, air_gpio_thread: Arc<Mutex<crate::aog::gpio::thread::GPIOThread>>){
 
 
     let config = Arc::new(Mutex::new(crate::aog::load_config().unwrap()));
     let cert = std::fs::read("/opt/aog/crt/default/aog.local.cert").unwrap();
     let pkey = std::fs::read("/opt/aog/crt/default/aog.local.key").unwrap();
     
-    rouille::Server::new_ssl("0.0.0.0:8043", move |request| {
+    rouille::Server::new_ssl("0.0.0.0:8443", move |request| {
         {
             session::session(request, "SID", 3600, |session| {
                 let session_id: &str = session.id();
@@ -175,6 +176,87 @@ pub fn init(){
             })
     
     
+        }
+    }, cert, pkey).unwrap().run();
+    
+}
+
+
+// TODO - Add Security flag to only allow connections from localhost
+pub fn init_command_api(uv_gpio_thread: Arc<Mutex<crate::aog::gpio::thread::GPIOThread>>, air_gpio_thread: Arc<Mutex<crate::aog::gpio::thread::GPIOThread>>, term_now: Arc<AtomicBool>){
+
+
+
+    let config = Arc::new(Mutex::new(crate::aog::load_config().unwrap()));
+    let cert = std::fs::read("/opt/aog/crt/default/aog.local.cert").unwrap();
+    let pkey = std::fs::read("/opt/aog/crt/default/aog.local.key").unwrap();
+    
+    rouille::Server::new_ssl("0.0.0.0:9443", move |request| {
+        {
+       
+            let input = try_or_400!(post_input!(request, {
+                input_command: String,
+            }));
+            if input.input_command == *"admin" {
+                
+            }
+
+            // Air Start Command
+            // ----------------------------------------------------------------
+            if input.input_command == *"air start"{
+                aog::gpio::thread::stop(Arc::clone(&air_gpio_thread));
+                let mut gpio_27_thread_lock = air_gpio_thread.lock().unwrap();
+                let (tx_27_low, rx_27_low) = mpsc::channel();
+                gpio_27_thread_lock.set_low_tx = tx_27_low;
+                std::mem::drop(gpio_27_thread_lock);
+                aog::gpio::thread::set_low(Arc::clone(&air_gpio_thread), Arc::clone(&term_now), rx_27_low);
+            }
+
+            // Air Stop Command
+            // ----------------------------------------------------------------
+            if input.input_command == *"air stop"{
+                aog::gpio::thread::stop(Arc::clone(&air_gpio_thread));
+                let mut gpio_27_thread_lock = air_gpio_thread.lock().unwrap();
+                let (tx_27_high, rx_27_high) = mpsc::channel();
+                gpio_27_thread_lock.set_high_tx = tx_27_high;
+                std::mem::drop(gpio_27_thread_lock);
+                aog::gpio::thread::set_high(Arc::clone(&air_gpio_thread), Arc::clone(&term_now), rx_27_high);
+            }
+
+            // Air Start Command
+            // ----------------------------------------------------------------
+            if input.input_command == *"uv start"{
+                aog::gpio::thread::stop(Arc::clone(&uv_gpio_thread));
+                let mut gpio_22_thread_lock = uv_gpio_thread.lock().unwrap();
+                let (tx_22_low, rx_22_low) = mpsc::channel();
+                gpio_22_thread_lock.set_low_tx = tx_22_low;
+                std::mem::drop(gpio_22_thread_lock);
+                aog::gpio::thread::set_low(Arc::clone(&uv_gpio_thread), Arc::clone(&term_now), rx_22_low);
+            }
+
+            // Air Stop Command
+            // ----------------------------------------------------------------
+            if input.input_command == *"uv stop"{
+                aog::gpio::thread::stop(Arc::clone(&uv_gpio_thread));
+                let mut gpio_22_thread_lock = uv_gpio_thread.lock().unwrap();
+                let (tx_22_high, rx_22_high) = mpsc::channel();
+                gpio_22_thread_lock.set_high_tx = tx_22_high;
+                std::mem::drop(gpio_22_thread_lock);
+                aog::gpio::thread::set_high(Arc::clone(&uv_gpio_thread), Arc::clone(&term_now), rx_22_high);
+            }
+
+            let _ = aog::command::run(input.input_command);
+
+
+            #[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
+            struct CommandStatus {
+                status: String
+            }
+            let arduino_response = crate::aog::sensors::get_arduino_raw();
+            let response = Response::json(&CommandStatus { status: "success".to_string() });
+            return response;
+
+
         }
     }, cert, pkey).unwrap().run();
     
