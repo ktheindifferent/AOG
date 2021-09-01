@@ -75,12 +75,12 @@ fn main() -> Result<(), std::io::Error> {
         if init_log_status.is_ok() {
 
             
-            SimpleLogger::new().with_colors(true).with_level(LevelFilter::Info).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
+            SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
         } else {
-            SimpleLogger::new().with_colors(true).with_level(LevelFilter::Info).init().unwrap();
+            SimpleLogger::new().with_colors(true).init().unwrap();
         }
     } else {
-        SimpleLogger::new().with_colors(true).with_level(LevelFilter::Info).init().unwrap();
+        SimpleLogger::new().with_colors(true).init().unwrap();
     }
 
     // Term now will be true when its time to terminate the software...
