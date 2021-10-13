@@ -42,3 +42,13 @@ HVAC Kit (Optional):
 * 1x Y HVAC Splitter
 
 ## build instructions coming soon....
+
+
+
+AC_RELAY_BOTTOM_BOARD:
+[LIGHTS]    [TANK1-2 PUMP]  [HVAC IN]   [HVAC OUT]
+[4]         [3]             [2]         [1]
+
+AC_RELAY_TOP_BOARD:
+[ADD_P]    [ADD_N]  [DRAIN SOILINOID]   [FILL SOILINOID]
+[4]        [3]      [2]                 [1]

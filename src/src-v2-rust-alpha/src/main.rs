@@ -211,8 +211,6 @@ fn main() -> Result<(), std::io::Error> {
                 setup::uninstall();
                 setup::install();
             }
-
-      
         }
 
         // A.O.G. Terminal Interface Loop
