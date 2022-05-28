@@ -30,7 +30,7 @@ pub fn set_lcd(mut screen: Screen) -> Result<Screen, LinuxI2CError>{
     thread::sleep(Duration::from_secs(1));
 
     // Set backlight to bright white
-    screen.change_backlight(255, 255, 255)?;
+    // screen.change_backlight(255, 255, 255)?;
 
     // Clear the screen
     screen.clear()?;
