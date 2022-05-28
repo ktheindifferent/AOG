@@ -41,19 +41,19 @@ pub fn init(){
             screen.move_cursor(1,0).unwrap();
         
             // Print text
-            screen.print(format!("CO2: {}ppm  TVOC: {}ppb", 0,0).as_str()).unwrap();
+            screen.print(format!("CO2: {}ppm", 0).as_str()).unwrap();
 
             // Move to the next line
             screen.move_cursor(2,0).unwrap();
 
             // Print text
-            screen.print(format!("PM2.5: {}  PM10: {}", 0,0).as_str()).unwrap();
+            screen.print(format!("PM2.5: {}", 0).as_str()).unwrap();
 
             // Move to the next line
             screen.move_cursor(3,0).unwrap();
 
             // Print text
-            screen.print(format!("HUM: {}%  TEMP: {}C", 0,0).as_str()).unwrap();
+            screen.print(format!("Status: 001").as_str()).unwrap();
 
             // Sleep
             thread::sleep(Duration::from_millis(500));
