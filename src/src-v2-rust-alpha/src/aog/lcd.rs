@@ -11,8 +11,8 @@ pub fn init(){
         let mut config = ScreenConfig::default();
 
         // Uncomment and modify the values below to use different screen sizes
-        // config.max_rows = 2;
-        // config.max_columns = 16;
+        config.max_rows = 4;
+        config.max_columns = 20;
     
         // Default Qwiic address is 0x72
         let mut screen = Screen::new(config, "/dev/i2c-1", 0x72).expect("Could not init device");
@@ -35,7 +35,7 @@ pub fn init(){
             let ip = machine_ip::get().unwrap();
         
             // Print text
-            screen.print(format!("{}", ip.to_string()).as_str()).unwrap();
+            let p1 = screen.print(format!("{}", ip.to_string()).as_str()).unwrap();
         
             // Move to the next line
             screen.move_cursor(1,0).unwrap();
