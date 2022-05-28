@@ -7,7 +7,12 @@ use i2cdev::linux::{LinuxI2CDevice, LinuxI2CError};
 
 pub fn init(){
 
-    thread::spawn(|| loop {
+    // Fetch IP Address
+    let ip = machine_ip::get().unwrap();
+
+    thread::spawn(move || loop {
+
+       
 
         // Default LCDSize is 4x20
         let mut config = ScreenConfig::default();
@@ -15,8 +20,7 @@ pub fn init(){
         // Default Qwiic address is 0x72
         let mut screen = Screen::new(config, "/dev/i2c-1", 0x72).expect("Could not init device");
     
-
-        let default = set_lcd(screen);
+        let set_lcd_status = set_lcd(screen, ip.to_string());
 
         thread::sleep(Duration::from_secs(2));
 
@@ -24,10 +28,10 @@ pub fn init(){
 
 }
 
-pub fn set_lcd(mut screen: Screen) -> Result<Screen, LinuxI2CError>{
+pub fn set_lcd(mut screen: Screen, ip: String) -> Result<Screen, LinuxI2CError>{
     // Set backlight to green and wait 1 second
     screen.change_backlight(0, 255, 0)?;
-    thread::sleep(Duration::from_secs(1));
+    // thread::sleep(Duration::from_secs(1));
 
     // Set backlight to bright white
     // screen.change_backlight(255, 255, 255)?;
@@ -38,24 +42,22 @@ pub fn set_lcd(mut screen: Screen) -> Result<Screen, LinuxI2CError>{
     // Move the cursor to 0,0
     screen.move_cursor(0,0)?;
 
-
-    // Fetch IP Address
-    let ip = machine_ip::get().unwrap();
-
     // Print text
-    let p1 = screen.print(format!("{}", ip.to_string()).as_str())?;
+    screen.print(format!("{}", ip).as_str())?;
 
     // Move to the next line
     screen.move_cursor(1,0)?;
 
+    let arduino_raw = crate::aog::sensors::get_arduino_raw();
+
     // Print text
-    screen.print(format!("CO2: {}ppm", 0).as_str())?;
+    screen.print(format!("CO2: {}", crate::aog::sensors::get_co2(arduino_raw)).as_str())?;
 
     // Move to the next line
     screen.move_cursor(2,0)?;
 
     // Print text
-    screen.print(format!("PM2.5: {}", 0).as_str())?;
+    screen.print(format!("PM2.5: {}", crate::aog::sensors::get_pm25()).as_str())?;
 
     // Move to the next line
     screen.move_cursor(3,0)?;
