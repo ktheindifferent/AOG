@@ -109,11 +109,15 @@ pub fn get_arduino_raw() -> String {
                                 
                                 
                             },
-                            Err(_e) => {},
+                            Err(_e) => {
+                                break;
+                            },
                         }
                     }
                 },
-                Err(ref _e) => {}
+                Err(ref _e) => {
+                    break;
+                }
     
                 
             }
