@@ -23,6 +23,7 @@
 pub mod command;
 pub mod sensors;
 pub mod gpio;
+pub mod lcd;
 pub mod video;
 pub mod pump;
 pub mod web;
