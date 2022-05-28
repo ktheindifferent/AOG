@@ -59,7 +59,7 @@ pub fn get_arduino_raw() -> String {
     
             let port_name = format!("/dev/ttyUSB{}", tty_port);
 
-            // println!("checking: {}", port_name.clone());
+            println!("checking: {}", port_name.clone());
 
             let baud_rate = 9600;
     
@@ -110,7 +110,7 @@ pub fn get_arduino_raw() -> String {
                                 
                             },
                             Err(_e) => {
-                                break;
+                                // break;
                             },
                         }
                     }
@@ -130,7 +130,7 @@ pub fn get_arduino_raw() -> String {
         "N/A".to_string()
     });
 
-    let value = receiver.recv_timeout(Duration::from_millis(3000));
+    let value = receiver.recv_timeout(Duration::from_millis(10000));
 
     if value.is_ok(){
         value.unwrap()
