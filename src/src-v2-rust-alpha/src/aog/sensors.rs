@@ -247,7 +247,7 @@ pub fn fetch_arduino() -> String {
                 match port.read(serial_buf.as_mut_slice()) {
                     Ok(t) => {
 
-                        // log::info!("found_arduino: {}", port_name.clone());
+                        log::info!("found_arduino: {}", port_name.clone());
                         tty_found = true;
 
                         let pre_value = str::from_utf8(&serial_buf[..t]);
@@ -259,13 +259,13 @@ pub fn fetch_arduino() -> String {
                                 response += &value_cleaned;
                             }    
                         }
-                        
+                        log::info!("response: {}", response.clone());
+                
+                
                         return response;
                 
 
-                        // log::info!("response: {}", response.clone());
-                        
-                        
+                
                     },
                     Err(_e) => {
                         // break;
