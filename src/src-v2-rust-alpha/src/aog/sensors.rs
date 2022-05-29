@@ -368,7 +368,7 @@ pub fn fetch_arduino() -> String {
     
             let port_name = format!("/dev/ttyUSB{}", tty_port);
 
-            println!("checking: {}", port_name.clone());
+            // println!("checking: {}", port_name.clone());
 
             let baud_rate = 9600;
     
@@ -387,7 +387,7 @@ pub fn fetch_arduino() -> String {
                         match port.read(serial_buf.as_mut_slice()) {
                             Ok(t) => {
 
-                                println!("found_arduino: {}", port_name.clone());
+                                // println!("found_arduino: {}", port_name.clone());
                                 tty_found = true;
     
                                 let pre_value = str::from_utf8(&serial_buf[..t]);
@@ -414,7 +414,7 @@ pub fn fetch_arduino() -> String {
 
                                 }
 
-                                println!("response: {}", response.clone());
+                                // println!("response: {}", response.clone());
                                 
                                 
                             },
@@ -436,7 +436,7 @@ pub fn fetch_arduino() -> String {
             tty_port += 1;
         }
     
-        "N/A".to_string()
+        "".to_string()
     });
 
     let value = receiver.recv_timeout(Duration::from_millis(10000));
