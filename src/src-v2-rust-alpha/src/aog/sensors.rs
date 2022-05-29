@@ -218,75 +218,75 @@ pub fn parse_arduino_humidity(raw: String) -> String {
 
 
 
-pub fn fetch_arduino() -> String {
+// pub fn fetch_arduino() -> String {
 
   
-    let mut tty_port = 0;
-    let tty_quit = 25;
-    let mut tty_found = false;
-    while !tty_found && tty_port < tty_quit{
+//     let mut tty_port = 0;
+//     let tty_quit = 25;
+//     let mut tty_found = false;
+//     while !tty_found && tty_port < tty_quit{
 
-        let port_name = format!("/dev/ttyUSB{}", tty_port);
+//         let port_name = format!("/dev/ttyUSB{}", tty_port);
 
-        log::info!("checking: {}", port_name.clone());
+//         log::info!("checking: {}", port_name.clone());
 
-        let baud_rate = 9600;
+//         let baud_rate = 9600;
 
-        let port = serialport::new(port_name.clone(), baud_rate)
-            .timeout(Duration::from_millis(100))
-            .open();
+//         let port = serialport::new(port_name.clone(), baud_rate)
+//             .timeout(Duration::from_millis(100))
+//             .open();
 
 
-        let mut response = String::new();
+//         let mut response = String::new();
 
-        match port {
-            Ok(mut port) => {
+//         match port {
+//             Ok(mut port) => {
                 
     
-                let mut serial_buf: Vec<u8> = vec![0; 1000];
-                match port.read(serial_buf.as_mut_slice()) {
-                    Ok(t) => {
+//                 let mut serial_buf: Vec<u8> = vec![0; 1000];
+//                 match port.read(serial_buf.as_mut_slice()) {
+//                     Ok(t) => {
 
-                        log::info!("found_arduino: {}", port_name.clone());
-                        tty_found = true;
+//                         log::info!("found_arduino: {}", port_name.clone());
+//                         tty_found = true;
 
-                        let pre_value = str::from_utf8(&serial_buf[..t]);
+//                         let pre_value = str::from_utf8(&serial_buf[..t]);
 
-                        if pre_value.is_ok(){
-                            let value = pre_value.unwrap().to_string();
-                            if !value.is_empty(){
-                                let value_cleaned = str::replace(&value, "\r", "");
-                                response += &value_cleaned;
-                            }    
-                        }
-                        log::info!("response: {}", response.clone());
+//                         if pre_value.is_ok(){
+//                             let value = pre_value.unwrap().to_string();
+//                             if !value.is_empty(){
+//                                 let value_cleaned = str::replace(&value, "\r", "");
+//                                 response += &value_cleaned;
+//                             }    
+//                         }
+//                         log::info!("response: {}", response.clone());
                 
                 
-                        return response;
+//                         return response;
                 
 
                 
-                    },
-                    Err(_e) => {
-                        // break;
-                    },
-                }
+//                     },
+//                     Err(_e) => {
+//                         // break;
+//                     },
+//                 }
             
-            },
-            Err(ref _e) => {
-                // break;
-            }
+//             },
+//             Err(ref _e) => {
+//                 // break;
+//             }
 
             
-        }
+//         }
 
-        // std::mem::drop(port);
+//         // std::mem::drop(port);
 
-        tty_port += 1;
-    }
+//         tty_port += 1;
+//     }
 
-    return "".to_string();
-}
+//     return "".to_string();
+// }
 
 pub fn get_co2() -> String {
     if Path::new("/opt/aog/sensors/co2").exists(){
@@ -357,97 +357,97 @@ pub fn get_pm10() -> String {
     }
 }
 
-// pub fn get_arduino_raw() -> String {
+pub fn fetch_arduino() -> String {
 
-//     let (sender, receiver) = mpsc::channel();
-//     let _t = thread::spawn(move || {
-//         let mut tty_port = 0;
-//         let tty_quit = 25;
-//         let mut tty_found = false;
-//         while !tty_found && tty_port < tty_quit{
+    let (sender, receiver) = mpsc::channel();
+    let _t = thread::spawn(move || {
+        let mut tty_port = 0;
+        let tty_quit = 25;
+        let mut tty_found = false;
+        while !tty_found && tty_port < tty_quit{
     
-//             let port_name = format!("/dev/ttyUSB{}", tty_port);
+            let port_name = format!("/dev/ttyUSB{}", tty_port);
 
-//             println!("checking: {}", port_name.clone());
+            println!("checking: {}", port_name.clone());
 
-//             let baud_rate = 9600;
+            let baud_rate = 9600;
     
-//             let port = serialport::new(port_name.clone(), baud_rate)
-//                 .timeout(Duration::from_millis(100))
-//                 .open();
+            let port = serialport::new(port_name.clone(), baud_rate)
+                .timeout(Duration::from_millis(100))
+                .open();
     
     
-//             let mut response = String::new();
+            let mut response = String::new();
     
-//             match port {
-//                 Ok(mut port) => {
+            match port {
+                Ok(mut port) => {
                     
-//                     loop{
-//                         let mut serial_buf: Vec<u8> = vec![0; 1000];
-//                         match port.read(serial_buf.as_mut_slice()) {
-//                             Ok(t) => {
+                    loop{
+                        let mut serial_buf: Vec<u8> = vec![0; 1000];
+                        match port.read(serial_buf.as_mut_slice()) {
+                            Ok(t) => {
 
-//                                 println!("found_arduino: {}", port_name.clone());
-//                                 tty_found = true;
+                                println!("found_arduino: {}", port_name.clone());
+                                tty_found = true;
     
-//                                 let pre_value = str::from_utf8(&serial_buf[..t]);
+                                let pre_value = str::from_utf8(&serial_buf[..t]);
     
-//                                 if pre_value.is_ok(){
-//                                     let value = pre_value.unwrap().to_string();
-//                                     if !value.is_empty(){
-//                                         let value_cleaned = str::replace(&value, "\r", "");
-//                                         response += &value_cleaned;
-//                                     }    
-//                                 }
+                                if pre_value.is_ok(){
+                                    let value = pre_value.unwrap().to_string();
+                                    if !value.is_empty(){
+                                        let value_cleaned = str::replace(&value, "\r", "");
+                                        response += &value_cleaned;
+                                    }    
+                                }
                                 
                          
-//                                 if response.len() > 100 {
+                                if response.len() > 100 {
                            
 
-//                                     match sender.send(response.clone()) {
-//                                         Ok(()) => {}, // everything good
-//                                         Err(_) => {}, // we have been released, don't panic
-//                                     }
+                                    match sender.send(response.clone()) {
+                                        Ok(()) => {}, // everything good
+                                        Err(_) => {}, // we have been released, don't panic
+                                    }
 
-//                                     break;
+                                    break;
 
 
-//                                 }
+                                }
 
-//                                 println!("response: {}", response.clone());
+                                println!("response: {}", response.clone());
                                 
                                 
-//                             },
-//                             Err(_e) => {
-//                                 // break;
-//                             },
-//                         }
-//                     }
-//                 },
-//                 Err(ref _e) => {
-//                     // break;
-//                 }
+                            },
+                            Err(_e) => {
+                                // break;
+                            },
+                        }
+                    }
+                },
+                Err(ref _e) => {
+                    // break;
+                }
     
                 
-//             }
+            }
 
-//             // std::mem::drop(port);
+            // std::mem::drop(port);
     
-//             tty_port += 1;
-//         }
+            tty_port += 1;
+        }
     
-//         "N/A".to_string()
-//     });
+        "N/A".to_string()
+    });
 
-//     let value = receiver.recv_timeout(Duration::from_millis(10000));
+    let value = receiver.recv_timeout(Duration::from_millis(10000));
 
-//     if value.is_ok(){
-//         value.unwrap()
-//     } else {
-//         "N/A".to_string()
-//     }
+    if value.is_ok(){
+        value.unwrap()
+    } else {
+        "".to_string()
+    }
 
 
   
 
-// }
+}
