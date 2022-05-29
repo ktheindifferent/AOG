@@ -22,7 +22,7 @@
 
 use crate::aog;
 
-
+use qwiic_relay_rs::*;
 use rppal::gpio::Gpio;
 
 use std::error::Error;
@@ -88,6 +88,40 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
 
     if command.starts_with("pm10"){
         println!("{}", aog::sensors::get_pm10());
+    }
+
+    if command.starts_with("relay"){
+
+        let qwiic_relay_config = QwiicRelayConfig::default();
+        let mut qwiic_relay = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", 0x08).expect("Could not init device");
+
+     
+    
+        if command.contains("off"){
+            if command.contains("2"){
+                qwiic_relay.set_relay_off(Some(2)).unwrap();
+            }
+            if command.contains("3"){
+                qwiic_relay.set_relay_off(Some(3)).unwrap();
+            }
+            if command.contains("4"){
+                qwiic_relay.set_relay_off(Some(4)).unwrap();
+            }
+        }
+
+        if command.contains("on"){
+            if command.contains("2"){
+                qwiic_relay.set_relay_on(Some(2)).unwrap();
+            }
+            if command.contains("3"){
+                qwiic_relay.set_relay_on(Some(3)).unwrap();
+            }
+            if command.contains("4"){
+                qwiic_relay.set_relay_on(Some(4)).unwrap();
+            }
+        }
+
+
     }
 
     
