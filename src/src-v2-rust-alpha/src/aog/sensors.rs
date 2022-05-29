@@ -57,9 +57,28 @@ use std::io::Read;
 pub fn init(){
 
     thread::Builder::new().name("thread1".to_string()).spawn(move || loop {
-        let raw_arduino = fetch_arduino();
+        let raw_arduino = fetch_arduino(format!("SENSORKIT_MK1"));
         let pm10 = fetch_pm10();
         let pm25 = fetch_pm25();
+        let raw_arduino_ovf = fetch_arduino(format!("DUAL_OVF_SENSOR"));
+
+        if raw_arduino_ovf.len() > 5{
+
+            let t1_ovf = parse_arduino_t1_ovf(raw_arduino_ovf.clone());
+            if t1_ovf.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/t1_ovf").expect("Unable to create file");
+                f.write_all(t1_ovf.as_bytes()).expect("Unable to write data");
+            }
+
+            let t2_ovf = parse_arduino_t2_ovf(raw_arduino_ovf.clone());
+            if t2_ovf.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/t2_ovf").expect("Unable to create file");
+                f.write_all(t2_ovf.as_bytes()).expect("Unable to write data");
+            }
+    
+        }
+
+
         if raw_arduino.len() > 5{
 
             // Parse co2 reading from arduino serial string
@@ -120,11 +139,17 @@ pub fn fetch_pm25() -> String {
     while tty_port < tty_quit{
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
-                sensor.set_work_period(10).unwrap();
-                if let Ok(m) = sensor.query() {
-                    return format!("{}", m.pm25);
-                } else {
-                    return format!("");
+                match sensor.set_work_period(10){
+                    Ok(wp) => {
+                        if let Ok(m) = sensor.query() {
+                            return format!("{}", m.pm25);
+                        } else {
+                            return format!("");
+                        }
+                    },
+                    Err(err) => {
+                        
+                    }
                 }
             },
             Err(_e) => {
@@ -141,12 +166,19 @@ pub fn fetch_pm10() -> String {
     while tty_port < tty_quit{
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
-                sensor.set_work_period(10).unwrap();
-                if let Ok(m) = sensor.query() {
-                    return format!("{}", m.pm10);
-                } else {
-                    return format!("");
+                match sensor.set_work_period(10){
+                    Ok(wp) => {
+                        if let Ok(m) = sensor.query() {
+                            return format!("{}", m.pm10);
+                        } else {
+                            return format!("");
+                        }
+                    },
+                    Err(err) => {
+
+                    }
                 }
+     
             },
             Err(e) => {
                 tty_port += 1
@@ -166,7 +198,11 @@ pub fn parse_arduino_co2(raw: String) -> String {
         if line.contains("CO2:") {
             let split2 = line.split(": ");
             let split2_vec = split2.collect::<Vec<&str>>();
-            return split2_vec[1].to_string();
+            if split2_vec.len() > 1{
+                return split2_vec[1].to_string();
+            } else {
+                return "".to_string();
+            }
         }
     }
 
@@ -180,11 +216,52 @@ pub fn parse_arduino_tvoc(raw: String) -> String {
         if line.contains("TVOC:") {
             let split2 = line.split(": ");
             let split2_vec = split2.collect::<Vec<&str>>();
-            return split2_vec[1].to_string();
+            if split2_vec.len() > 1{
+                return split2_vec[1].to_string();
+            } else {
+                return "".to_string();
+            }
         }
     }
 
     "".to_string()
+}
+
+pub fn parse_arduino_t1_ovf(raw: String) -> String {
+    let split = raw.split('\n');
+    let split_vec = split.collect::<Vec<&str>>();
+    for line in split_vec {
+        if line.contains("T1_OVF:") {
+            let split2 = line.split(": ");
+            let split2_vec = split2.collect::<Vec<&str>>();
+            if split2_vec.len() > 1{
+                return split2_vec[1].to_string();
+            } else {
+                return "OVERFLOW".to_string();
+            }
+
+        }
+    }
+
+    return "OVERFLOW".to_string();
+}
+
+pub fn parse_arduino_t2_ovf(raw: String) -> String {
+    let split = raw.split('\n');
+    let split_vec = split.collect::<Vec<&str>>();
+    for line in split_vec {
+        if line.contains("T2_OVF:") {
+            let split2 = line.split(": ");
+            let split2_vec = split2.collect::<Vec<&str>>();
+            if split2_vec.len() > 1{
+                return split2_vec[1].to_string();
+            } else {
+                return "OVERFLOW".to_string();
+            }
+        }
+    }
+
+    return "OVERFLOW".to_string();
 }
 
 pub fn parse_arduino_temperature(raw: String) -> String {
@@ -194,7 +271,11 @@ pub fn parse_arduino_temperature(raw: String) -> String {
         if line.contains("TEMP:") {
             let split2 = line.split(": ");
             let split2_vec = split2.collect::<Vec<&str>>();
-            return split2_vec[1].to_string();
+            if split2_vec.len() > 1{
+                return split2_vec[1].to_string();
+            } else {
+                return "".to_string();
+            }
         }
     }
 
@@ -208,85 +289,17 @@ pub fn parse_arduino_humidity(raw: String) -> String {
         if line.contains("HUM:") {
             let split2 = line.split(": ");
             let split2_vec = split2.collect::<Vec<&str>>();
-            return split2_vec[1].to_string();
+            if split2_vec.len() > 1{
+                return split2_vec[1].to_string();
+            } else {
+                return "".to_string();
+            }
         }
     }
 
     "".to_string()
 }
 
-
-
-
-// pub fn fetch_arduino() -> String {
-
-  
-//     let mut tty_port = 0;
-//     let tty_quit = 10;
-//     let mut tty_found = false;
-//     while !tty_found && tty_port < tty_quit{
-
-//         let port_name = format!("/dev/ttyUSB{}", tty_port);
-
-//         log::info!("checking: {}", port_name.clone());
-
-//         let baud_rate = 9600;
-
-//         let port = serialport::new(port_name.clone(), baud_rate)
-//             .timeout(Duration::from_millis(100))
-//             .open();
-
-
-//         let mut response = String::new();
-
-//         match port {
-//             Ok(mut port) => {
-                
-    
-//                 let mut serial_buf: Vec<u8> = vec![0; 1000];
-//                 match port.read(serial_buf.as_mut_slice()) {
-//                     Ok(t) => {
-
-//                         log::info!("found_arduino: {}", port_name.clone());
-//                         tty_found = true;
-
-//                         let pre_value = str::from_utf8(&serial_buf[..t]);
-
-//                         if pre_value.is_ok(){
-//                             let value = pre_value.unwrap().to_string();
-//                             if !value.is_empty(){
-//                                 let value_cleaned = str::replace(&value, "\r", "");
-//                                 response += &value_cleaned;
-//                             }    
-//                         }
-//                         log::info!("response: {}", response.clone());
-                
-                
-//                         return response;
-                
-
-                
-//                     },
-//                     Err(_e) => {
-//                         // break;
-//                     },
-//                 }
-            
-//             },
-//             Err(ref _e) => {
-//                 // break;
-//             }
-
-            
-//         }
-
-//         // std::mem::drop(port);
-
-//         tty_port += 1;
-//     }
-
-//     return "".to_string();
-// }
 
 pub fn get_co2() -> String {
     if Path::new("/opt/aog/sensors/co2").exists(){
@@ -357,7 +370,8 @@ pub fn get_pm10() -> String {
     }
 }
 
-pub fn fetch_arduino() -> String {
+// device_type: DUAL_OVF_SENSOR, SENSORKIT_MK1
+pub fn fetch_arduino(device_type: String) -> String {
 
     let (sender, receiver) = mpsc::channel();
     let _t = thread::spawn(move || {
@@ -370,68 +384,84 @@ pub fn fetch_arduino() -> String {
 
             // println!("checking: {}", port_name.clone());
 
-            let baud_rate = 9600;
+            let baud_rate = 74880;
     
             let port = serialport::new(port_name.clone(), baud_rate)
-                .timeout(Duration::from_millis(100))
+                .timeout(Duration::from_millis(1500))
                 .open();
     
     
-            let mut response = String::new();
-    
+        
             match port {
                 Ok(mut port) => {
                     
-                    loop{
-                        let mut serial_buf: Vec<u8> = vec![0; 1000];
-                        match port.read(serial_buf.as_mut_slice()) {
-                            Ok(t) => {
-
-                                // println!("found_arduino: {}", port_name.clone());
-                                tty_found = true;
+              
+                        let mut serial_buf: Vec<u8> = vec![0; 2000];
+                        let mut response = String::new();
     
-                                let pre_value = str::from_utf8(&serial_buf[..t]);
-    
-                                if pre_value.is_ok(){
-                                    let value = pre_value.unwrap().to_string();
-                                    if !value.is_empty(){
-                                        let value_cleaned = str::replace(&value, "\r", "");
-                                        response += &value_cleaned;
-                                    }    
-                                }
-                                
-                         
-                                if response.len() > 100 {
-                           
+                        loop {
+                            match port.read(serial_buf.as_mut_slice()) {
+                                Ok(t) => {
 
-                                    match sender.send(response.clone()) {
-                                        Ok(()) => {}, // everything good
-                                        Err(_) => {}, // we have been released, don't panic
+                                    // println!("found_arduino: {}", port_name.clone());
+                    
+                                    let pre_value = str::from_utf8(&serial_buf[..t]);
+        
+                                    if pre_value.is_ok(){
+                                        let value = pre_value.unwrap().to_string();
+                                        if !value.is_empty(){
+                                            response += &value;
+                                        }    
+                                    }
+                                    println!("response: {}", response.clone());
+                            
+                                    if response.len() > 200 && response.contains("DEVICE_ID: ") && response.contains(device_type.as_str()) {
+                                        tty_found = true;
+
+                                        println!("tty_found: YIP");
+                            
+        
+                                        match sender.send(response.clone()) {
+                                            Ok(()) => {}, // everything good
+                                            Err(_) => {}, // we have been released, don't panic
+                                        }
+
+                                        break;
+
+                                    } else {
+                                        if device_type.contains("DUAL_OVF_SENSOR") && response.contains("SENSORKIT_MK1"){
+                                            // Wrong sensor, break loop
+                                            break;
+                                        }
+                                        if device_type.contains("SENSORKIT_MK1") && response.contains("DUAL_OVF_SENSOR"){
+                                            // Wrong sensor, break loop
+                                            break;
+                                        }
+
+                                        
                                     }
 
+                                    
+                                    
+                        
+                                },
+                                Err(_e) => {
+                        
                                     break;
-
-
-                                }
-
-                                // println!("response: {}", response.clone());
-                                
-                                
-                            },
-                            Err(_e) => {
-                                // break;
-                            },
+                                },
+                            }
                         }
-                    }
+                    
                 },
                 Err(ref _e) => {
+              
                     // break;
                 }
     
                 
             }
 
-            // std::mem::drop(port);
+          
     
             tty_port += 1;
         }
@@ -439,7 +469,7 @@ pub fn fetch_arduino() -> String {
         "".to_string()
     });
 
-    let value = receiver.recv_timeout(Duration::from_millis(10000));
+    let value = receiver.recv_timeout(Duration::from_millis(1000));
 
     if value.is_ok(){
         value.unwrap()

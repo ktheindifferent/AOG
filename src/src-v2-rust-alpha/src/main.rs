@@ -102,21 +102,28 @@ fn main() -> Result<(), std::io::Error> {
 
     // Turn off all relays
     let qwiic_relay_config = QwiicRelayConfig::default();
-    let mut qwiic_relay = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", 0x08).expect("Could not init device");
-    let qwiic_relay_version = qwiic_relay.get_version();
-    match qwiic_relay_version {
-        Ok(v) => {
-            log::info!("Qwiic Relay Firmware Version: {}", v);
-
-            qwiic_relay.set_all_relays_off().unwrap();
-            thread::sleep(Duration::from_secs(2));
-
-        },
+    let mut qwiic_relay_d = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", 0x08);
+    match qwiic_relay_d{
+        Ok(mut qwiic_relay) => {
+            let qwiic_relay_version = qwiic_relay.get_version();
+            match qwiic_relay_version {
+                Ok(v) => {
+                    log::info!("Qwiic Relay Firmware Version: {}", v);
+        
+                    qwiic_relay.set_all_relays_off().unwrap();
+                    thread::sleep(Duration::from_secs(2));
+        
+                },
+                Err(err) => {
+                    log::error!("{}", err);
+                }
+            }        
+        }, 
         Err(err) => {
-            log::error!("{}", err);
+
         }
     }
- 
+
 
 
 

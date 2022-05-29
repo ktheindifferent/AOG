@@ -41,7 +41,7 @@ void setup(void)
     pinMode(T1_OVF, INPUT_PULLUP);
     pinMode(T2_OVF, INPUT_PULLUP);
 
-    Serial.begin(9600);
+    Serial.begin(74880);
     /*Wait for the chip to be initialized completely, and then exit*/
     while(sensor.begin() != 0){
         delay(1000);
@@ -68,6 +68,11 @@ void setup(void)
     analogReference(DEFAULT);
 }
 void loop() {
+
+  Serial.println("DEVICE_ID: SENSORKIT_MK1");
+  Serial.println("FIRMWARE_VERSION: 001");
+
+
   float totalCO2 = 0.00;
   countCO2SensorsReporting = 0;
   // delay(2000);
