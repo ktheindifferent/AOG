@@ -129,18 +129,18 @@ pub fn init(uv_gpio_thread: Arc<Mutex<crate::aog::gpio::thread::GPIOThread>>, ai
                 }
     
                 if request.url() == "/api/stats"{
-                    #[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
-                    struct WebApiStats {
-                        pm25: String,
-                        pm10: String,
-                        co2: String,
-                        tvoc: String,
-                        temp: String,
-                        hum: String
-                    }
-                    let arduino_response = crate::aog::sensors::get_arduino_raw();
-                    let response = Response::json(&WebApiStats { co2: crate::aog::sensors::get_co2(arduino_response.clone()), tvoc: crate::aog::sensors::get_tvoc(arduino_response.clone()), temp: crate::aog::sensors::get_temperature(arduino_response.clone()), hum: crate::aog::sensors::get_humidity(arduino_response), pm25: crate::aog::sensors::get_pm25(), pm10: crate::aog::sensors::get_pm10() });
-                    return response;
+                    // #[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
+                    // struct WebApiStats {
+                    //     pm25: String,
+                    //     pm10: String,
+                    //     co2: String,
+                    //     tvoc: String,
+                    //     temp: String,
+                    //     hum: String
+                    // }
+                    // let arduino_response = crate::aog::sensors::get_arduino_raw();
+                    // let response = Response::json(&WebApiStats { co2: crate::aog::sensors::get_co2(arduino_response.clone()), tvoc: crate::aog::sensors::get_tvoc(arduino_response.clone()), temp: crate::aog::sensors::get_temperature(arduino_response.clone()), hum: crate::aog::sensors::get_humidity(arduino_response), pm25: crate::aog::sensors::get_pm25(), pm10: crate::aog::sensors::get_pm10() });
+                    // return response;
                 }
     
     

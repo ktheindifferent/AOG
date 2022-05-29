@@ -21,8 +21,8 @@ pub fn init(){
         let mut screen = Screen::new(config, "/dev/i2c-1", 0x72).expect("Could not init device");
 
 
-        let arduino_raw = crate::aog::sensors::get_arduino_raw();
-        let co2 = crate::aog::sensors::get_co2(arduino_raw);
+        // let arduino_raw = crate::aog::sensors::get_arduino_raw();
+        let co2 = crate::aog::sensors::get_co2();
         let pm25 = crate::aog::sensors::get_pm25();
 
         let set_lcd_status = set_lcd(screen, ip.to_string(), co2, pm25);

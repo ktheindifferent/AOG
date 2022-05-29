@@ -66,31 +66,31 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     }
 
     if command.starts_with("tvoc"){
-        println!("{}", aog::sensors::get_tvoc(aog::sensors::get_arduino_raw()));
+        // println!("{}", aog::sensors::get_tvoc(aog::sensors::get_arduino_raw()));
     }
 
     if command.starts_with("temp"){
-        println!("{}", aog::sensors::get_temperature(aog::sensors::get_arduino_raw()));
+        // println!("{}", aog::sensors::get_temperature(aog::sensors::get_arduino_raw()));
     }
 
     if command.starts_with("hum"){
-        println!("{}", aog::sensors::get_humidity(aog::sensors::get_arduino_raw()));
+        // println!("{}", aog::sensors::get_humidity(aog::sensors::get_arduino_raw()));
     }
 
     if command.starts_with("co2"){
-        println!("{}", aog::sensors::get_co2(aog::sensors::get_arduino_raw()));
+        // println!("{}", aog::sensors::get_co2(aog::sensors::get_arduino_raw()));
     }
 
     if command.starts_with("pm25"){
-        println!("{}", aog::sensors::get_pm25());
+        // println!("{}", aog::sensors::get_pm25());
     }
 
     if command.starts_with("pm10"){
-        println!("{}", aog::sensors::get_pm10());
+        // println!("{}", aog::sensors::get_pm10());
     }
 
     if command.starts_with("arduino"){
-        println!("{}", aog::sensors::get_arduino_raw());
+        // println!("{}", aog::sensors::get_arduino_raw());
     }
 
     
@@ -106,13 +106,13 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
         let selected_pin = 17;
         let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
         loop {
-            let raw = aog::sensors::get_arduino_raw();
+            // let raw = aog::sensors::get_arduino_raw();
 
-            if raw.contains("TOP_TANK_OVERFLOW: NONE"){
-                pin.set_low();
-            } else {
-                pin.set_high();
-            }
+            // if raw.contains("TOP_TANK_OVERFLOW: NONE"){
+            //     pin.set_low();
+            // } else {
+            //     pin.set_high();
+            // }
 
         }
     }

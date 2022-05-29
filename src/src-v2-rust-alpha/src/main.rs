@@ -196,7 +196,7 @@ fn main() -> Result<(), std::io::Error> {
     
         // Print banner
         // ----------------------------------------------------------------
-        // aog::print_stats();
+        aog::print_stats();
     
     
         // If A.O.G. has never been installed ask user to install.
