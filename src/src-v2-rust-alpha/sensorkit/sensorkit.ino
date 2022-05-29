@@ -38,9 +38,7 @@ int countCO2SensorsReporting = 0;
 
 void setup(void)
 {
-    pinMode(T1_OVF, INPUT_PULLUP);
-    pinMode(T2_OVF, INPUT_PULLUP);
-
+ 
     Serial.begin(74880);
     /*Wait for the chip to be initialized completely, and then exit*/
     while(sensor.begin() != 0){
@@ -132,19 +130,6 @@ void loop() {
     Serial.print(DHT.temperature);
     Serial.println("C");
 
-    int val = digitalRead(T1_OVF);  // read input value
-    if (val == LOW) {         // check if the input is HIGH (button released)
-      Serial.println("T1_OVF: NONE");
-    } else {
-      Serial.println("T1_OVF: OVERFLOW");
-    }
 
-    int val2 = digitalRead(T2_OVF);  // read input value
-    if (val2 == LOW) {         // check if the input is HIGH (button released)
-      Serial.println("T2_OVF: NONE");
-    } else {
-      Serial.println("T2_OVF: OVERFLOW");
-    }
-
-    // delay(2000);//Wait 1 seconds before accessing sensor again.
+    delay(200);//Wait 1 seconds before accessing sensor again.
 }
