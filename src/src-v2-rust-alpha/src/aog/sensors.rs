@@ -31,6 +31,7 @@ use std::str;
 
 use std::thread;
 use std::sync::mpsc;
+use std::fs;
 
 
 // TODO - ADD PH Sensor
@@ -48,10 +49,171 @@ use std::sync::mpsc;
 // BARREL_WATER_OVERFLOW: NONE
 
 
+use std::fs::File;
+use std::io::Write;
+
 pub fn init(){
 
-    fetch_arduino();
+    thread::Builder::new().name("thread1".to_string()).spawn(move || loop {
+        let raw_arduino = fetch_arduino();
+        let pm10 = fetch_pm10();
+        let pm25 = fetch_pm25();
+        if raw_arduino.len() > 5{
+
+            // Parse co2 reading from arduino serial string
+            let co2 = parse_arduino_co2(raw_arduino.clone());
+
+            if co2.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/co2").expect("Unable to create file");
+                f.write_all(co2.as_bytes()).expect("Unable to write data");
+            }
+    
+
+            // Parse tvoc reading from arduino serial string
+            let tvoc = parse_arduino_tvoc(raw_arduino.clone());
+
+            if tvoc.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/tvoc").expect("Unable to create file");
+                f.write_all(tvoc.as_bytes()).expect("Unable to write data");
+            }
+    
+
+            // Parse temperature reading from arduino serial string
+            let temp = parse_arduino_temperature(raw_arduino.clone());
+
+            if temp.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/temp").expect("Unable to create file");
+                f.write_all(temp.as_bytes()).expect("Unable to write data");
+            }
+
+            // Parse humidity reading from arduino serial string
+            let hum = parse_arduino_humidity(raw_arduino.clone());
+
+            if hum.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/hum").expect("Unable to create file");
+                f.write_all(hum.as_bytes()).expect("Unable to write data");
+            }
+
+
+        }
+
+
+        if pm10.len() > 0 {
+            let mut f = File::create("/opt/aog/sensors/pm10").expect("Unable to create file");
+            f.write_all(pm10.as_bytes()).expect("Unable to write data");
+        }
+
+        if pm25.len() > 0 {
+            let mut f = File::create("/opt/aog/sensors/pm25").expect("Unable to create file");
+            f.write_all(pm25.as_bytes()).expect("Unable to write data");
+        }
+
+    });
+  
 }
+
+pub fn fetch_pm25() -> String {
+    let mut tty_port = 0;
+    let tty_quit = 25;
+    while tty_port < tty_quit{
+        match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
+            Ok(mut sensor) => {
+                sensor.set_work_period(5).unwrap();
+                if let Ok(m) = sensor.query() {
+                    return format!("{}", m.pm25);
+                } else {
+                    return format!("");
+                }
+            },
+            Err(_e) => {
+                tty_port += 1;
+            }
+        };
+    }
+    "".to_string()
+}
+
+pub fn fetch_pm10() -> String {
+    let mut tty_port = 0;
+    let tty_quit = 25;
+    while tty_port < tty_quit{
+        match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
+            Ok(mut sensor) => {
+                sensor.set_work_period(5).unwrap();
+                if let Ok(m) = sensor.query() {
+                    return format!("{}", m.pm10);
+                } else {
+                    return format!("");
+                }
+            },
+            Err(e) => {
+                tty_port += 1
+            }
+        };
+    }
+    "".to_string()
+}
+
+
+
+
+pub fn parse_arduino_co2(raw: String) -> String {
+    let split = raw.split('\n');
+    let split_vec = split.collect::<Vec<&str>>();
+    for line in split_vec {
+        if line.contains("CO2:") {
+            let split2 = line.split(": ");
+            let split2_vec = split2.collect::<Vec<&str>>();
+            return split2_vec[1].to_string();
+        }
+    }
+
+    "N/A".to_string()
+}
+
+pub fn parse_arduino_tvoc(raw: String) -> String {
+    let split = raw.split('\n');
+    let split_vec = split.collect::<Vec<&str>>();
+    for line in split_vec {
+        if line.contains("TVOC:") {
+            let split2 = line.split(": ");
+            let split2_vec = split2.collect::<Vec<&str>>();
+            return split2_vec[1].to_string();
+        }
+    }
+
+    "N/A".to_string()
+}
+
+pub fn parse_arduino_temperature(raw: String) -> String {
+    let split = raw.split('\n');
+    let split_vec = split.collect::<Vec<&str>>();
+    for line in split_vec {
+        if line.contains("TEMP:") {
+            let split2 = line.split(": ");
+            let split2_vec = split2.collect::<Vec<&str>>();
+            return split2_vec[1].to_string();
+        }
+    }
+
+    "N/A".to_string()
+}
+
+pub fn parse_arduino_humidity(raw: String) -> String {
+    let split = raw.split('\n');
+    let split_vec = split.collect::<Vec<&str>>();
+    for line in split_vec {
+        if line.contains("HUM:") {
+            let split2 = line.split(": ");
+            let split2_vec = split2.collect::<Vec<&str>>();
+            return split2_vec[1].to_string();
+        }
+    }
+
+    "N/A".to_string()
+}
+
+
 
 
 pub fn fetch_arduino() -> String {
@@ -64,7 +226,7 @@ pub fn fetch_arduino() -> String {
 
         let port_name = format!("/dev/ttyUSB{}", tty_port);
 
-        log::info!("checking: {}", port_name.clone());
+        // log::info!("checking: {}", port_name.clone());
 
         let baud_rate = 9600;
 
@@ -83,7 +245,7 @@ pub fn fetch_arduino() -> String {
                 match port.read(serial_buf.as_mut_slice()) {
                     Ok(t) => {
 
-                        log::info!("found_arduino: {}", port_name.clone());
+                        // log::info!("found_arduino: {}", port_name.clone());
                         tty_found = true;
 
                         let pre_value = str::from_utf8(&serial_buf[..t]);
@@ -96,10 +258,10 @@ pub fn fetch_arduino() -> String {
                             }    
                         }
                         
-                    
+                        return response;
                 
 
-                        log::info!("response: {}", response.clone());
+                        // log::info!("response: {}", response.clone());
                         
                         
                     },
