@@ -228,7 +228,7 @@ pub fn fetch_arduino() -> String {
 
         let port_name = format!("/dev/ttyUSB{}", tty_port);
 
-        // log::info!("checking: {}", port_name.clone());
+        log::info!("checking: {}", port_name.clone());
 
         let baud_rate = 9600;
 
