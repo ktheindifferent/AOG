@@ -116,11 +116,11 @@ pub fn init(){
 
 pub fn fetch_pm25() -> String {
     let mut tty_port = 0;
-    let tty_quit = 25;
+    let tty_quit = 10;
     while tty_port < tty_quit{
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
-                sensor.set_work_period(5).unwrap();
+                sensor.set_work_period(10).unwrap();
                 if let Ok(m) = sensor.query() {
                     return format!("{}", m.pm25);
                 } else {
@@ -132,16 +132,16 @@ pub fn fetch_pm25() -> String {
             }
         };
     }
-    "".to_string()
+    fetch_pm25()
 }
 
 pub fn fetch_pm10() -> String {
     let mut tty_port = 0;
-    let tty_quit = 25;
+    let tty_quit = 10;
     while tty_port < tty_quit{
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
-                sensor.set_work_period(5).unwrap();
+                sensor.set_work_period(10).unwrap();
                 if let Ok(m) = sensor.query() {
                     return format!("{}", m.pm10);
                 } else {
@@ -153,7 +153,7 @@ pub fn fetch_pm10() -> String {
             }
         };
     }
-    "".to_string()
+    fetch_pm10()
 }
 
 
@@ -222,7 +222,7 @@ pub fn parse_arduino_humidity(raw: String) -> String {
 
   
 //     let mut tty_port = 0;
-//     let tty_quit = 25;
+//     let tty_quit = 10;
 //     let mut tty_found = false;
 //     while !tty_found && tty_port < tty_quit{
 
@@ -362,7 +362,7 @@ pub fn fetch_arduino() -> String {
     let (sender, receiver) = mpsc::channel();
     let _t = thread::spawn(move || {
         let mut tty_port = 0;
-        let tty_quit = 25;
+        let tty_quit = 10;
         let mut tty_found = false;
         while !tty_found && tty_port < tty_quit{
     
