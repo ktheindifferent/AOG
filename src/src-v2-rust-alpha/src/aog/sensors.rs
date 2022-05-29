@@ -132,7 +132,7 @@ pub fn fetch_pm25() -> String {
             }
         };
     }
-    fetch_pm25()
+    return format!("");
 }
 
 pub fn fetch_pm10() -> String {
@@ -153,7 +153,7 @@ pub fn fetch_pm10() -> String {
             }
         };
     }
-    fetch_pm10()
+    return format!("");
 }
 
 

@@ -10,6 +10,7 @@ dependencies = [
  "log",
  "machine-ip",
  "qwiic-lcd-rs",
+ "qwiic-relay-rs",
  "rand 0.8.4",
  "reqwest",
  "rouille",
@@ -1161,6 +1162,16 @@ name = "qwiic-lcd-rs"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27b86267076241b951a355cb81ba2830907931754afe5645630ae23ff9a85b78"
+dependencies = [
+ "enum_primitive",
+ "i2cdev",
+]
+
+[[package]]
+name = "qwiic-relay-rs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cda3d2c0b960b1b6dde5f4db1258c52ec9a98d51d24e21c06576f6fcd1193047"
 dependencies = [
  "enum_primitive",
  "i2cdev",
