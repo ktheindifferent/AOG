@@ -82,12 +82,12 @@ fn main() -> Result<(), std::io::Error> {
         if init_log_status.is_ok() {
 
             
-            SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
+            SimpleLogger::new().with_module_level("something", LevelFilter::Off).with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
         } else {
-            SimpleLogger::new().with_colors(true).init().unwrap();
+            SimpleLogger::new().with_module_level("something", LevelFilter::Off).with_colors(true).init().unwrap();
         }
     } else {
-        SimpleLogger::new().with_colors(true).init().unwrap();
+        SimpleLogger::new().with_module_level("something", LevelFilter::Off).with_colors(true).init().unwrap();
     }
 
     // Term now will be true when its time to terminate the software...
@@ -157,17 +157,17 @@ fn main() -> Result<(), std::io::Error> {
     // Start Web Thread
     // let uv_arc = Arc::clone(&gpio_22_thread);
     // let air_arc = Arc::clone(&gpio_27_thread);
-    // thread::spawn(|| {
-    //     aog::web::init();
-    // });
+    thread::spawn(|| {
+        aog::web::init();
+    });
 
 
     // let uv_arc2 = Arc::clone(&gpio_22_thread);
     // let air_arc2 = Arc::clone(&gpio_27_thread);
-    // let tn = Arc::clone(&term_now);
-    // thread::spawn(|| {
-    //     aog::web::init_command_api(uv_arc2, air_arc2, tn);
-    // });
+    let tn = Arc::clone(&term_now);
+    thread::spawn(|| {
+        aog::web::init_command_api(tn);
+    });
 
     // Start video thread(s)
     aog::video::init_all();
@@ -332,7 +332,7 @@ fn main() -> Result<(), std::io::Error> {
 
             // let _ = aog::command::run(s.clone());
         
-    
+            
     
         }
 

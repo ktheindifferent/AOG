@@ -7,8 +7,14 @@ use i2cdev::linux::{LinuxI2CDevice, LinuxI2CError};
 
 pub fn init(){
 
+
+    let mut ip = String::new();
+
     // Fetch IP Address
-    let ip = machine_ip::get().unwrap();
+    let ipp = machine_ip::get();
+    if ipp.is_some(){
+        ip = ipp.unwrap().to_string();
+    }
 
     thread::spawn(move || loop {
 

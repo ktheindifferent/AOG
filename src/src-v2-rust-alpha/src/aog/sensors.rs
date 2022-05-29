@@ -22,6 +22,7 @@
 
 use sds011::{SDS011};
 
+use std::path::Path;
 
 
 use std::time::Duration;
@@ -169,7 +170,7 @@ pub fn parse_arduino_co2(raw: String) -> String {
         }
     }
 
-    "N/A".to_string()
+    "".to_string()
 }
 
 pub fn parse_arduino_tvoc(raw: String) -> String {
@@ -183,7 +184,7 @@ pub fn parse_arduino_tvoc(raw: String) -> String {
         }
     }
 
-    "N/A".to_string()
+    "".to_string()
 }
 
 pub fn parse_arduino_temperature(raw: String) -> String {
@@ -197,7 +198,7 @@ pub fn parse_arduino_temperature(raw: String) -> String {
         }
     }
 
-    "N/A".to_string()
+    "".to_string()
 }
 
 pub fn parse_arduino_humidity(raw: String) -> String {
@@ -211,7 +212,7 @@ pub fn parse_arduino_humidity(raw: String) -> String {
         }
     }
 
-    "N/A".to_string()
+    "".to_string()
 }
 
 
@@ -288,47 +289,72 @@ pub fn fetch_arduino() -> String {
 }
 
 pub fn get_co2() -> String {
-    let mut data = String::new();
-    let mut f = File::open("/opt/aog/sensors/co2").expect("Unable to open file");
-    f.read_to_string(&mut data).expect("Unable to read string");
-    return data;
+    if Path::new("/opt/aog/sensors/co2").exists(){
+        let mut data = String::new();
+        let mut f = File::open("/opt/aog/sensors/co2").expect("Unable to open file");
+        f.read_to_string(&mut data).expect("Unable to read string");
+        return data;
+    } else {
+        return format!("N/A");
+    }
 }
 
 pub fn get_tvoc() -> String {
-    let mut data = String::new();
-    let mut f = File::open("/opt/aog/sensors/tvoc").expect("Unable to open file");
-    f.read_to_string(&mut data).expect("Unable to read string");
-    return data;
+    if Path::new("/opt/aog/sensors/tvoc").exists(){
+        let mut data = String::new();
+        let mut f = File::open("/opt/aog/sensors/tvoc").expect("Unable to open file");
+        f.read_to_string(&mut data).expect("Unable to read string");
+        return data;
+    } else {
+        return format!("N/A");
+    }
 }
 
 pub fn get_temperature() -> String {
-    let mut data = String::new();
-    let mut f = File::open("/opt/aog/sensors/temp").expect("Unable to open file");
-    f.read_to_string(&mut data).expect("Unable to read string");
-    return data;
+    if Path::new("/opt/aog/sensors/temp").exists(){
+        let mut data = String::new();
+        let mut f = File::open("/opt/aog/sensors/temp").expect("Unable to open file");
+        f.read_to_string(&mut data).expect("Unable to read string");
+        return data;
+    } else {
+        return format!("N/A");
+    }
 }
 
 pub fn get_humidity() -> String {
-    let mut data = String::new();
-    let mut f = File::open("/opt/aog/sensors/hum").expect("Unable to open file");
-    f.read_to_string(&mut data).expect("Unable to read string");
-    return data;
+    if Path::new("/opt/aog/sensors/hum").exists(){
+        let mut data = String::new();
+        let mut f = File::open("/opt/aog/sensors/hum").expect("Unable to open file");
+        f.read_to_string(&mut data).expect("Unable to read string");
+        return data;
+    } else {
+        return format!("N/A");
+    }
 }
 
 
 
 pub fn get_pm25() -> String {
-    let mut data = String::new();
-    let mut f = File::open("/opt/aog/sensors/pm25").expect("Unable to open file");
-    f.read_to_string(&mut data).expect("Unable to read string");
-    return data;
+    if Path::new("/opt/aog/sensors/pm25").exists(){
+        let mut data = String::new();
+        let mut f = File::open("/opt/aog/sensors/pm25").expect("Unable to open file");
+        f.read_to_string(&mut data).expect("Unable to read string");
+        return data;
+    } else {
+        return format!("N/A");
+    }
+
 }
 
 pub fn get_pm10() -> String {
-    let mut data = String::new();
-    let mut f = File::open("/opt/aog/sensors/pm10").expect("Unable to open file");
-    f.read_to_string(&mut data).expect("Unable to read string");
-    return data;
+    if Path::new("/opt/aog/sensors/pm10").exists(){
+        let mut data = String::new();
+        let mut f = File::open("/opt/aog/sensors/pm10").expect("Unable to open file");
+        f.read_to_string(&mut data).expect("Unable to read string");
+        return data;
+    } else {
+        return format!("N/A");
+    }
 }
 
 // pub fn get_arduino_raw() -> String {

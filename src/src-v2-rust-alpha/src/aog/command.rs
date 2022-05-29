@@ -27,6 +27,7 @@ use rppal::gpio::Gpio;
 
 use std::error::Error;
 
+use std::path::Path;
 
 use std::thread;
 use std::time::Duration;
@@ -66,31 +67,27 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     }
 
     if command.starts_with("tvoc"){
-        // println!("{}", aog::sensors::get_tvoc(aog::sensors::get_arduino_raw()));
+        println!("{}", aog::sensors::get_tvoc());
     }
 
     if command.starts_with("temp"){
-        // println!("{}", aog::sensors::get_temperature(aog::sensors::get_arduino_raw()));
+        println!("{}", aog::sensors::get_temperature());
     }
 
     if command.starts_with("hum"){
-        // println!("{}", aog::sensors::get_humidity(aog::sensors::get_arduino_raw()));
+        println!("{}", aog::sensors::get_humidity());
     }
 
     if command.starts_with("co2"){
-        // println!("{}", aog::sensors::get_co2(aog::sensors::get_arduino_raw()));
+        println!("{}", aog::sensors::get_co2());
     }
 
     if command.starts_with("pm25"){
-        // println!("{}", aog::sensors::get_pm25());
+        println!("{}", aog::sensors::get_pm25());
     }
 
     if command.starts_with("pm10"){
-        // println!("{}", aog::sensors::get_pm10());
-    }
-
-    if command.starts_with("arduino"){
-        // println!("{}", aog::sensors::get_arduino_raw());
+        println!("{}", aog::sensors::get_pm10());
     }
 
     
