@@ -10,15 +10,18 @@ pub fn init(){
 
     let mut ip = String::new();
 
-    // Fetch IP Address
-    let ipp = machine_ip::get();
-    if ipp.is_some(){
-        ip = ipp.unwrap().to_string();
-    }
+
 
     thread::spawn(move || loop {
 
-       
+        // Fetch IP Address
+        let ipp = machine_ip::get();
+        if ipp.is_some(){
+            let tmpip = ipp.unwrap().to_string();
+            if tmpip.len() > 0{
+                ip = tmpip;
+            }
+        }
 
         // Default LCDSize is 4x20
         let mut config = ScreenConfig::default();
@@ -28,8 +31,8 @@ pub fn init(){
 
 
         // let arduino_raw = crate::aog::sensors::get_arduino_raw();
-        let co2 = crate::aog::sensors::get_co2();
-        let pm25 = crate::aog::sensors::get_pm25();
+        let co2 = crate::aog::sensors::get_value("co2");
+        let pm25 = crate::aog::sensors::get_value("pm25");
 
         let set_lcd_status = set_lcd(screen, ip.to_string(), co2, pm25);
 

@@ -67,28 +67,41 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     }
 
     if command.starts_with("tvoc"){
-        println!("{}", aog::sensors::get_tvoc());
+        println!("{}", aog::sensors::get_value("tvoc"));
     }
 
     if command.starts_with("temp"){
-        println!("{}", aog::sensors::get_temperature());
+        println!("{}", aog::sensors::get_value("temp"));
     }
 
     if command.starts_with("hum"){
-        println!("{}", aog::sensors::get_humidity());
+        println!("{}", aog::sensors::get_value("hum"));
     }
 
     if command.starts_with("co2"){
-        println!("{}", aog::sensors::get_co2());
+        println!("{}", aog::sensors::get_value("co2"));
     }
 
     if command.starts_with("pm25"){
-        println!("{}", aog::sensors::get_pm25());
+        println!("{}", aog::sensors::get_value("pm25"));
     }
 
     if command.starts_with("pm10"){
-        println!("{}", aog::sensors::get_pm10());
+        println!("{}", aog::sensors::get_value("pm10"));
     }
+
+    if command.starts_with("ph"){
+        println!("{}", aog::sensors::get_value("ph"));
+    }
+
+    if command.starts_with("t1_ovf"){
+        println!("{}", aog::sensors::get_value("t1_ovf"));
+    }
+
+    if command.starts_with("t2_ovf"){
+        println!("{}", aog::sensors::get_value("t2_ovf"));
+    }
+
 
     if command.starts_with("relay"){
 

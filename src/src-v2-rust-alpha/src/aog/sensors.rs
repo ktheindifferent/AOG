@@ -64,13 +64,13 @@ pub fn init(){
 
         if raw_arduino_ovf.len() > 5{
 
-            let t1_ovf = parse_arduino_t1_ovf(raw_arduino_ovf.clone());
+            let t1_ovf = parse_arduino(raw_arduino_ovf.clone(), "T1_OVF:", "OVERFLOW".to_string());
             if t1_ovf.len() > 0 {
                 let mut f = File::create("/opt/aog/sensors/t1_ovf").expect("Unable to create file");
                 f.write_all(t1_ovf.as_bytes()).expect("Unable to write data");
             }
 
-            let t2_ovf = parse_arduino_t2_ovf(raw_arduino_ovf.clone());
+            let t2_ovf = parse_arduino(raw_arduino_ovf.clone(), "T2_OVF:", "OVERFLOW".to_string());
             if t2_ovf.len() > 0 {
                 let mut f = File::create("/opt/aog/sensors/t2_ovf").expect("Unable to create file");
                 f.write_all(t2_ovf.as_bytes()).expect("Unable to write data");
@@ -82,8 +82,8 @@ pub fn init(){
         if raw_arduino.len() > 5{
 
             // Parse co2 reading from arduino serial string
-            let co2 = parse_arduino_co2(raw_arduino.clone());
-
+            let co2 = parse_arduino(raw_arduino.clone(), "CO2:", "".to_string());
+            
             if co2.len() > 0 {
                 let mut f = File::create("/opt/aog/sensors/co2").expect("Unable to create file");
                 f.write_all(co2.as_bytes()).expect("Unable to write data");
@@ -91,7 +91,7 @@ pub fn init(){
     
 
             // Parse tvoc reading from arduino serial string
-            let tvoc = parse_arduino_tvoc(raw_arduino.clone());
+            let tvoc = parse_arduino(raw_arduino.clone(), "TVOC:", "".to_string());
 
             if tvoc.len() > 0 {
                 let mut f = File::create("/opt/aog/sensors/tvoc").expect("Unable to create file");
@@ -100,7 +100,7 @@ pub fn init(){
     
 
             // Parse temperature reading from arduino serial string
-            let temp = parse_arduino_temperature(raw_arduino.clone());
+            let temp = parse_arduino(raw_arduino.clone(), "TEMP:", "".to_string());
 
             if temp.len() > 0 {
                 let mut f = File::create("/opt/aog/sensors/temp").expect("Unable to create file");
@@ -108,7 +108,7 @@ pub fn init(){
             }
 
             // Parse humidity reading from arduino serial string
-            let hum = parse_arduino_humidity(raw_arduino.clone());
+            let hum = parse_arduino(raw_arduino.clone(), "HUM:", "".to_string());
 
             if hum.len() > 0 {
                 let mut f = File::create("/opt/aog/sensors/hum").expect("Unable to create file");
@@ -191,153 +191,31 @@ pub fn fetch_pm10() -> String {
 
 
 
-pub fn parse_arduino_co2(raw: String) -> String {
+
+pub fn parse_arduino(raw: String, line_key: &str, on_fail_string: String) -> String {
     let split = raw.split('\n');
     let split_vec = split.collect::<Vec<&str>>();
     for line in split_vec {
-        if line.contains("CO2:") {
+        if line.contains(line_key) {
             let split2 = line.split(": ");
             let split2_vec = split2.collect::<Vec<&str>>();
             if split2_vec.len() > 1{
                 return split2_vec[1].to_string();
             } else {
-                return "".to_string();
+                return on_fail_string;
             }
         }
     }
 
-    "".to_string()
-}
-
-pub fn parse_arduino_tvoc(raw: String) -> String {
-    let split = raw.split('\n');
-    let split_vec = split.collect::<Vec<&str>>();
-    for line in split_vec {
-        if line.contains("TVOC:") {
-            let split2 = line.split(": ");
-            let split2_vec = split2.collect::<Vec<&str>>();
-            if split2_vec.len() > 1{
-                return split2_vec[1].to_string();
-            } else {
-                return "".to_string();
-            }
-        }
-    }
-
-    "".to_string()
-}
-
-pub fn parse_arduino_t1_ovf(raw: String) -> String {
-    let split = raw.split('\n');
-    let split_vec = split.collect::<Vec<&str>>();
-    for line in split_vec {
-        if line.contains("T1_OVF:") {
-            let split2 = line.split(": ");
-            let split2_vec = split2.collect::<Vec<&str>>();
-            if split2_vec.len() > 1{
-                return split2_vec[1].to_string();
-            } else {
-                return "OVERFLOW".to_string();
-            }
-
-        }
-    }
-
-    return "OVERFLOW".to_string();
-}
-
-pub fn parse_arduino_t2_ovf(raw: String) -> String {
-    let split = raw.split('\n');
-    let split_vec = split.collect::<Vec<&str>>();
-    for line in split_vec {
-        if line.contains("T2_OVF:") {
-            let split2 = line.split(": ");
-            let split2_vec = split2.collect::<Vec<&str>>();
-            if split2_vec.len() > 1{
-                return split2_vec[1].to_string();
-            } else {
-                return "OVERFLOW".to_string();
-            }
-        }
-    }
-
-    return "OVERFLOW".to_string();
-}
-
-pub fn parse_arduino_temperature(raw: String) -> String {
-    let split = raw.split('\n');
-    let split_vec = split.collect::<Vec<&str>>();
-    for line in split_vec {
-        if line.contains("TEMP:") {
-            let split2 = line.split(": ");
-            let split2_vec = split2.collect::<Vec<&str>>();
-            if split2_vec.len() > 1{
-                return split2_vec[1].to_string();
-            } else {
-                return "".to_string();
-            }
-        }
-    }
-
-    "".to_string()
-}
-
-pub fn parse_arduino_humidity(raw: String) -> String {
-    let split = raw.split('\n');
-    let split_vec = split.collect::<Vec<&str>>();
-    for line in split_vec {
-        if line.contains("HUM:") {
-            let split2 = line.split(": ");
-            let split2_vec = split2.collect::<Vec<&str>>();
-            if split2_vec.len() > 1{
-                return split2_vec[1].to_string();
-            } else {
-                return "".to_string();
-            }
-        }
-    }
-
-    "".to_string()
+    return on_fail_string;
 }
 
 
-pub fn get_co2() -> String {
-    if Path::new("/opt/aog/sensors/co2").exists(){
+
+pub fn get_value(sensor: &str) -> String {
+    if Path::new(format!("/opt/aog/sensors/{}", sensor).as_str()).exists(){
         let mut data = String::new();
-        let mut f = File::open("/opt/aog/sensors/co2").expect("Unable to open file");
-        f.read_to_string(&mut data).expect("Unable to read string");
-        return data;
-    } else {
-        return format!("N/A");
-    }
-}
-
-pub fn get_tvoc() -> String {
-    if Path::new("/opt/aog/sensors/tvoc").exists(){
-        let mut data = String::new();
-        let mut f = File::open("/opt/aog/sensors/tvoc").expect("Unable to open file");
-        f.read_to_string(&mut data).expect("Unable to read string");
-        return data;
-    } else {
-        return format!("N/A");
-    }
-}
-
-pub fn get_temperature() -> String {
-    if Path::new("/opt/aog/sensors/temp").exists(){
-        let mut data = String::new();
-        let mut f = File::open("/opt/aog/sensors/temp").expect("Unable to open file");
-        f.read_to_string(&mut data).expect("Unable to read string");
-        return data;
-    } else {
-        return format!("N/A");
-    }
-}
-
-pub fn get_humidity() -> String {
-    if Path::new("/opt/aog/sensors/hum").exists(){
-        let mut data = String::new();
-        let mut f = File::open("/opt/aog/sensors/hum").expect("Unable to open file");
+        let mut f = File::open(format!("/opt/aog/sensors/{}", sensor).as_str()).expect("Unable to open file");
         f.read_to_string(&mut data).expect("Unable to read string");
         return data;
     } else {
@@ -346,29 +224,6 @@ pub fn get_humidity() -> String {
 }
 
 
-
-pub fn get_pm25() -> String {
-    if Path::new("/opt/aog/sensors/pm25").exists(){
-        let mut data = String::new();
-        let mut f = File::open("/opt/aog/sensors/pm25").expect("Unable to open file");
-        f.read_to_string(&mut data).expect("Unable to read string");
-        return data;
-    } else {
-        return format!("N/A");
-    }
-
-}
-
-pub fn get_pm10() -> String {
-    if Path::new("/opt/aog/sensors/pm10").exists(){
-        let mut data = String::new();
-        let mut f = File::open("/opt/aog/sensors/pm10").expect("Unable to open file");
-        f.read_to_string(&mut data).expect("Unable to read string");
-        return data;
-    } else {
-        return format!("N/A");
-    }
-}
 
 // device_type: DUAL_OVF_SENSOR, SENSORKIT_MK1
 pub fn fetch_arduino(device_type: String) -> String {
