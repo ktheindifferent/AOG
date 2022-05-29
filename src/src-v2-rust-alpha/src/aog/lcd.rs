@@ -25,7 +25,6 @@ pub fn init(){
         let co2 = crate::aog::sensors::get_co2(arduino_raw);
         let pm25 = crate::aog::sensors::get_pm25();
 
-    
         let set_lcd_status = set_lcd(screen, ip.to_string(), co2, pm25);
 
         if set_lcd_status.is_ok(){

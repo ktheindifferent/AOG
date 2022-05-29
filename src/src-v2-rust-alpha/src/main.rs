@@ -103,6 +103,8 @@ fn main() -> Result<(), std::io::Error> {
         flag::register(*sig, Arc::clone(&term_now))?;
     }
 
+    crate::aog::sensors::init();
+
     // Initialize the LCD
     crate::aog::lcd::init();
 
@@ -189,12 +191,12 @@ fn main() -> Result<(), std::io::Error> {
 
         // This is a live terminal so clear the screen first.
         // ----------------------------------------------------------------
-        aog::cls();
+        // aog::cls();
 
     
         // Print banner
         // ----------------------------------------------------------------
-        aog::print_stats();
+        // aog::print_stats();
     
     
         // If A.O.G. has never been installed ask user to install.

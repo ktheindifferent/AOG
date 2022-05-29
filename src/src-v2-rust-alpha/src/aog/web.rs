@@ -252,7 +252,7 @@ pub fn init_command_api(uv_gpio_thread: Arc<Mutex<crate::aog::gpio::thread::GPIO
             struct CommandStatus {
                 status: String
             }
-            let arduino_response = crate::aog::sensors::get_arduino_raw();
+            // let arduino_response = crate::aog::sensors::get_arduino_raw();
             let response = Response::json(&CommandStatus { status: "success".to_string() });
             return response;
 

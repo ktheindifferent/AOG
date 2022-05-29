@@ -175,6 +175,12 @@ pub fn install() {
 
             Command::new("sh")
             .arg("-c")
+            .arg("mkdir /opt/aog/sensors")
+            .output()
+            .expect("failed to execute process");
+
+            Command::new("sh")
+            .arg("-c")
             .arg("mkdir /opt/aog/crt")
             .output()
             .expect("failed to execute process");
