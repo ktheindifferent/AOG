@@ -268,12 +268,12 @@ pub fn fetch_arduino(device_type: String) -> String {
                                             response += &value;
                                         }    
                                     }
-                                    println!("response: {}", response.clone());
+                                    //println!("response: {}", response.clone());
                             
                                     if response.len() > 200 && response.contains("DEVICE_ID: ") && response.contains(device_type.as_str()) {
                                         tty_found = true;
 
-                                        println!("tty_found: YIP");
+                                        //println!("tty_found: YIP");
                             
         
                                         match sender.send(response.clone()) {
