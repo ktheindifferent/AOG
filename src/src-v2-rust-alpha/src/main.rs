@@ -71,31 +71,44 @@ const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 use signal_hook::consts::TERM_SIGNALS;
 
 
-use simple_logger::SimpleLogger;
+// use simple_logger::SimpleLogger;
 
 use log::LevelFilter;
+use log4rs::append::file::FileAppender;
+use log4rs::encode::pattern::PatternEncoder;
+use log4rs::config::{Appender, Config, Root};
 
 fn main() -> Result<(), std::io::Error> {
 
 
 
-
+    std::env::set_var("RUST_LOG", "info");
 
     // Setup a logfile if A.O.G. is installed. Clears old log on boot.
     // ----------------------------------------------------------------
-    if Path::new("/opt/aog/").exists() {
-        let init_log_status = aog::init_log("/opt/aog/output.log".to_string());
-        if init_log_status.is_ok() {
+    // if Path::new("/opt/aog/").exists() {
+    //     let init_log_status = aog::init_log("/opt/aog/output.log".to_string());
+    //     if init_log_status.is_ok() {
 
             
-            SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
-        } else {
-            SimpleLogger::new().with_colors(true).init().unwrap();
-        }
-    } else {
-        SimpleLogger::new().with_colors(true).init().unwrap();
-    }
+    //         SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
+    //     } else {
+    //         SimpleLogger::new().with_colors(true).init().unwrap();
+    //     }
+    // } else {
+    //     SimpleLogger::new().with_colors(true).init().unwrap();
+    // }
+    let logfile = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{l} - {m}\n")))
+        .build("/opt/aog/output.log").unwrap();
 
+    let config = Config::builder()
+        .appender(Appender::builder().build("logfile", Box::new(logfile)))
+        .build(Root::builder()
+                   .appender("logfile")
+                   .build(LevelFilter::Info)).unwrap();
+
+    log4rs::init_config(config).unwrap();
 
 
 

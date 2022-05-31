@@ -75,6 +75,12 @@ pub fn init(){
                 let mut f = File::create("/opt/aog/sensors/t2_ovf").expect("Unable to create file");
                 f.write_all(t2_ovf.as_bytes()).expect("Unable to write data");
             }
+
+            let ph = parse_arduino(raw_arduino_ovf.clone(), "PH:", "".to_string());
+            if ph.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/ph").expect("Unable to create file");
+                f.write_all(ph.as_bytes()).expect("Unable to write data");
+            }
     
         }
 
