@@ -14,6 +14,8 @@ pub fn init(){
 
     thread::spawn(move || loop {
 
+        log::info!("Updating LCD...");
+
         // Fetch IP Address
         let ipp = machine_ip::get();
         if ipp.is_some(){
@@ -36,9 +38,17 @@ pub fn init(){
 
         let set_lcd_status = set_lcd(screen, ip.to_string(), co2, pm25);
 
-        if set_lcd_status.is_ok(){
-            thread::sleep(Duration::from_secs(2));
+        
+        match set_lcd_status {
+            Ok(lcd_status) => {
+                
+            },
+            Err(err) => {
+                log::error!("{}", err);
+            }
         }
+
+        thread::sleep(Duration::from_secs(2));
 
         
 
