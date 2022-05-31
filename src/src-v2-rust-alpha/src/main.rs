@@ -80,9 +80,13 @@ use log4rs::config::{Appender, Config, Root};
 
 fn main() -> Result<(), std::io::Error> {
 
+    crate::aog::sensors::init();
+
+    // Initialize the LCD
+    crate::aog::lcd::init();
 
 
-    std::env::set_var("RUST_LOG", "info");
+    // std::env::set_var("RUST_LOG", "info");
 
     // Setup a logfile if A.O.G. is installed. Clears old log on boot.
     // ----------------------------------------------------------------
@@ -156,10 +160,6 @@ fn main() -> Result<(), std::io::Error> {
         flag::register(*sig, Arc::clone(&term_now))?;
     }
 
-    crate::aog::sensors::init();
-
-    // Initialize the LCD
-    crate::aog::lcd::init();
 
 
     // Init pump thread and start
