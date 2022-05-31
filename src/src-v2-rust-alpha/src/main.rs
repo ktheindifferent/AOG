@@ -71,7 +71,7 @@ const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 use signal_hook::consts::TERM_SIGNALS;
 
 
-// use simple_logger::SimpleLogger;
+use simple_logger::SimpleLogger;
 
 use log::LevelFilter;
 use log4rs::append::file::FileAppender;
