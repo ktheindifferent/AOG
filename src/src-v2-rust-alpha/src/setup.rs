@@ -30,228 +30,100 @@ use std::io;
 
 use crate::aog;
 
-extern crate savefile;
-use savefile::prelude::*;
 
-pub fn install() {
+// use std::io::Write;
+use error_chain::error_chain;
 
+error_chain! {
+    foreign_links {
+        Io(std::io::Error);
+        // Hound(hound::Error);
+        ToolKitError(crate::aog::tools::Error);
+    }
+}
 
-        let mut abort_install = true;
+pub fn install(args: AOG::Args) -> Result<()> {
 
-        let mut s=String::new();
-        print!("Do you want to install A.O.G (Y/n): ");
-        let _=stdout().flush();
-        stdin().read_line(&mut s).expect("Did not enter a correct string");
-        if let Some('\n')=s.chars().next_back() {
-            s.pop();
-        }
-        if let Some('\r')=s.chars().next_back() {
-            s.pop();
-        }
-        if s.contains('Y') || s.contains('y') {
-            abort_install = false;
-        } else {
-            println!("Skipping Setup...")
-        }
+    match crate::aog::tools::mkdir("/opt"){
+        Ok(_) => {},
+        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to create /opt directory").into()),
+    }
 
-        if !abort_install {
+    match crate::aog::tools::mkdir("/opt/aog"){
+        Ok(_) => {},
+        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to create /opt/aog directory").into()),
+    }
 
+    match crate::aog::tools::fix_permissions("/opt/aog"){
+        Ok(_) => {},
+        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to chmod /opt/aog").into()),
+    }
 
-            let mut aog_config = aog::Config::default();
+    match crate::aog::tools::mkdir("/opt/aog/bak"){
+        Ok(_) => {},
+        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to chmod /opt/aog/bak").into()),
+    }
 
-            // Automatic updates
-            let mut s=String::new();
-            print!("Enable automatic updates? (Y/n): ");
-            let _=stdout().flush();
-            stdin().read_line(&mut s).expect("Did not enter a correct string");
-            if let Some('\n')=s.chars().next_back() {
-                s.pop();
-            }
-            if let Some('\r')=s.chars().next_back() {
-                s.pop();
-            }
-            if s.contains('Y') || s.contains('y') {
-                aog_config.enable_automatic_updates = true;
-            }
+    match crate::aog::tools::mkdir("/opt/aog/sensors"){
+        Ok(_) => {},
+        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to mkdir /opt/aog/sensors").into()),
+    }
 
+    match crate::aog::tools::mkdir("/opt/aog/crt"){
+        Ok(_) => {},
+        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to mkdir /opt/aog/crt").into()),
+    }
 
+    match crate::aog::tools::mkdir("/opt/aog/crt/default"){
+        Ok(_) => {},
+        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to mkdir /opt/aog/crt/default").into()),
+    }
+    
+    match crate::aog::tools::mkdir("/opt/aog/dat"){
+        Ok(_) => {},
+        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to mkdir /opt/aog/dat").into()),
+    }
+    
 
-            let mut s=String::new();
-            print!("Does the unit tie into an HVAC system? (Y/n): ");
-            let _=stdout().flush();
-            stdin().read_line(&mut s).expect("Did not enter a correct string");
-            if let Some('\n')=s.chars().next_back() {
-                s.pop();
-            }
-            if let Some('\r')=s.chars().next_back() {
-                s.pop();
-            }
-            if s.contains('Y') || s.contains('y') {
-                aog_config.is_hvac_kit_installed = true;
-            }
+    let openssh = Command::new("/bin/bash")
+    .arg("-c")
+    .arg(" openssl req -x509 -out /opt/aog/crt/default/aog.local.cert -keyout /opt/aog/crt/default/aog.local.key \
+    -newkey rsa:2048 -nodes -sha256 \
+    -subj '/CN=localhost' -extensions EXT -config <( \
+        printf \"[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\")")
+    .output()
+    .expect("failed to execute process");
+    if openssh.status.success() {
+        println!();
+    } else {
+        let er = String::from_utf8_lossy(&openssh.stderr);
+        println!("{}", er);
+    }
 
-            let mut s=String::new();
-            print!("Does the unit have a sensor kit? (Y/n): ");
-            let _=stdout().flush();
-            stdin().read_line(&mut s).expect("Did not enter a correct string");
-            if let Some('\n')=s.chars().next_back() {
-                s.pop();
-            }
-            if let Some('\r')=s.chars().next_back() {
-                s.pop();
-            }
-            if s.contains('Y') || s.contains('y') {
-                aog_config.is_sensor_kit_installed = true;
+    let openssh_der = Command::new("/bin/bash")
+    .arg("-c")
+    .arg("openssl x509 -outform der -in /opt/aog/crt/default/aog.local.cert -out /opt/aog/crt/default/aog.local.der")
+    .output()
+    .expect("failed to execute process");
+    if openssh_der.status.success() {
+        println!();
+    } else {
+        let er = String::from_utf8_lossy(&openssh_der.stderr);
+        println!("{}", er);
+    }
 
-                // TODO collect sensor pinout config from user and flash arduino
+    
+    let www_build = rebuild_www();
 
-            }
+    if www_build.is_ok() {
+        Command::new("sh")
+        .arg("-c")
+        .arg("rm -rf /opt/aog/www.zip")
+        .output()
+        .expect("failed to execute process");    
+    }
 
-            let mut s=String::new();
-            print!("Is the unit solar powered? (Y/n): ");
-            let _=stdout().flush();
-            stdin().read_line(&mut s).expect("Did not enter a correct string");
-            if let Some('\n')=s.chars().next_back() {
-                s.pop();
-            }
-            if let Some('\r')=s.chars().next_back() {
-                s.pop();
-            }
-            if s.contains('Y') || s.contains('y') {
-                aog_config.power_type = "solar".to_string();
-            } else {
-                aog_config.power_type = "grid".to_string();
-            }
-
-
-            let mut sudo_password = String::new();
-            print!("Enter 'sudo' password: ");
-            let _=stdout().flush();
-            stdin().read_line(&mut sudo_password).expect("Did not enter a correct string");
-            println!();
-        
-        
-            let step1 = Command::new("sh")
-            .arg("-c")
-            .arg(format!("echo \"{}\" | sudo -S mkdir /opt/aog", sudo_password))
-            .output()
-            .expect("failed to execute process");
-            if step1.status.success() {
-                println!();
-            } else {
-                let er = String::from_utf8_lossy(&step1.stderr);
-                println!("{}", er);
-            }
-        
-            let step2 = Command::new("sh")
-            .arg("-c")
-            .arg(format!("echo \"{}\" | sudo -S chmod -R 777 /opt/aog", sudo_password))
-            .output()
-            .expect("failed to execute process");
-            if step2.status.success() {
-                println!();
-            } else {
-                let er = String::from_utf8_lossy(&step2.stderr);
-                println!("{}", er);
-            }
-        
-            let step3 = Command::new("sh")
-            .arg("-c")
-            .arg(format!("echo \"{}\" | sudo -S chown 1000 -R /opt/aog", sudo_password))
-            .output()
-            .expect("failed to execute process");
-            if step3.status.success() {
-                println!();
-            } else {
-                let er = String::from_utf8_lossy(&step3.stderr);
-                println!("{}", er);
-            }
-        
-            Command::new("sh")
-            .arg("-c")
-            .arg("mkdir /opt/aog/bak")
-            .output()
-            .expect("failed to execute process");
-
-            Command::new("sh")
-            .arg("-c")
-            .arg("mkdir /opt/aog/sensors")
-            .output()
-            .expect("failed to execute process");
-
-            Command::new("sh")
-            .arg("-c")
-            .arg("mkdir /opt/aog/crt")
-            .output()
-            .expect("failed to execute process");
-        
-            Command::new("sh")
-            .arg("-c")
-            .arg("mkdir /opt/aog/crt/default")
-            .output()
-            .expect("failed to execute process");
-        
-            Command::new("sh")
-            .arg("-c")
-            .arg("mkdir /opt/aog/dat")
-            .output()
-            .expect("failed to execute process");
-        
-            let openssh = Command::new("/bin/bash")
-            .arg("-c")
-            .arg(" openssl req -x509 -out /opt/aog/crt/default/aog.local.cert -keyout /opt/aog/crt/default/aog.local.key \
-            -newkey rsa:2048 -nodes -sha256 \
-            -subj '/CN=localhost' -extensions EXT -config <( \
-             printf \"[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\")")
-            .output()
-            .expect("failed to execute process");
-            if openssh.status.success() {
-                println!();
-            } else {
-                let er = String::from_utf8_lossy(&openssh.stderr);
-                println!("{}", er);
-            }
-        
-            let openssh_der = Command::new("/bin/bash")
-            .arg("-c")
-            .arg("openssl x509 -outform der -in /opt/aog/crt/default/aog.local.cert -out /opt/aog/crt/default/aog.local.der")
-            .output()
-            .expect("failed to execute process");
-            if openssh_der.status.success() {
-                println!();
-            } else {
-                let er = String::from_utf8_lossy(&openssh_der.stderr);
-                println!("{}", er);
-            }
-        
-        
-        
-          
-            let www_build = rebuild_www();
-
-            if www_build.is_ok() {
-                Command::new("sh")
-                .arg("-c")
-                .arg("rm -rf /opt/aog/www.zip")
-                .output()
-                .expect("failed to execute process");    
-            }
-
-
-
-            
-            save_file("/opt/aog/config.bin", 0, &aog_config).unwrap();
-
-
-
-            aog::cls();
-
-
-        }
-
-     
-  
-
+    Ok(())
 }
 
 fn rebuild_www() -> std::io::Result<()> {
@@ -273,24 +145,8 @@ fn rebuild_www() -> std::io::Result<()> {
 
 
 pub fn update(){
-
-    let mut s=String::new();
-    print!("Do you want to update A.O.G (Y/n): ");
-    let _=stdout().flush();
-    stdin().read_line(&mut s).expect("Did not enter a correct string");
-    if let Some('\n')=s.chars().next_back() {
-        s.pop();
-    }
-    if let Some('\r')=s.chars().next_back() {
-        s.pop();
-    }
-    if s.contains('Y') || s.contains('y') {
-        uninstall();
-        install();
-    } else {
-        println!("Skipping Update...")
-    }
-
+    // uninstall();
+    // install();
 }
 
 pub fn uninstall(){
@@ -357,4 +213,67 @@ fn extract_zip(zip_path: &str) -> i32 {
         }
     }
     0
+}
+
+
+
+pub fn install_service(args: AOG::Args) -> Result<()> {
+
+    // Linux
+    #[cfg(all(target_os = "linux"))] {
+        update_linux_service_file(args.clone());
+        match crate::aog::tools::systemctl_reload(){
+            Ok(_) => {},
+            Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to reload systemctl").into()),
+        }
+        match crate::aog::tools::systemctl_enable("aog.service"){
+            Ok(_) => {},
+            Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to enable aog as a service").into()),
+        }
+        match crate::aog::tools::systemctl_stop("aog.service"){
+            Ok(_) => {},
+            Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to stop aog as a service").into()),
+        }
+        // Copy Files
+        match std::env::current_exe() {
+            Ok(exe_path) => {
+                let current_exe_path = format!("{}", exe_path.display());
+                match crate::aog::tools::cp(current_exe_path.as_str(), "/opt/aog/bin"){
+                    Ok(_) => {},
+                    Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to copy aog binary").into()),
+                }
+            },
+            Err(e) => log::error!("failed to get current exe path: {e}"),
+        };
+        match crate::aog::tools::systemctl_start("aog.service"){
+            Ok(_) => {},
+            Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to start aog as a service").into()),
+        }
+    }
+
+    Ok(())
+}
+
+
+pub fn update_linux_service_file(args: AOG::Args){
+    let mut data = String::new();
+    data.push_str("[Unit]\n");
+    data.push_str("Description=aog\n");
+    data.push_str("After=network.target\n");
+    data.push_str("After=systemd-user-sessions.service\n");
+    data.push_str("After=network-online.target\n\n");
+    data.push_str("[Service]\n");
+    if args.encrypt{
+        data.push_str(format!("ExecStart=/opt/aog/bin/aog --max-threads {} --http-port {} --encrypt --key {}\n", args.max_threads, args.port, args.key).as_str());
+    } else {
+        data.push_str(format!("ExecStart=/opt/aog/bin/aog --max-threads {} --http-port {} --key {}\n", args.max_threads, args.port, args.key).as_str());
+    }
+    data.push_str("TimeoutSec=30\n");
+    data.push_str("Restart=on-failure\n");
+    data.push_str("RestartSec=30\n");
+    data.push_str("StartLimitInterval=350\n");
+    data.push_str("StartLimitBurst=10\n\n");
+    data.push_str("[Install]\n");
+    data.push_str("WantedBy=multi-user.target\n");
+    std::fs::write("/lib/systemd/system/aog.service", data).expect("Unable to write file");
 }

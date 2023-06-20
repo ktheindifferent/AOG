@@ -34,11 +34,8 @@ use std::thread;
 use std::sync::mpsc;
 use std::fs;
 
-
 // TODO - ADD PH Sensor
 // https://myhydropi.com/connecting-a-ph-sensor-to-a-raspberry-pi
-
-
 
 // S1CO2: 400.00ppm
 // S1TVOC: 0ppb

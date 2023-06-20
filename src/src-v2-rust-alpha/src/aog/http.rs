@@ -49,15 +49,13 @@ use crate::aog;
 
 
 
-extern crate savefile;
-use savefile::prelude::*;
 
 // Add Debug Flag and use ./www/ instead of installed dir
 
 pub fn init(){
 
 
-    let config = Arc::new(Mutex::new(crate::aog::load_config().unwrap()));
+    let config = Arc::new(Mutex::new(AOG::Config::load(0).unwrap()));
     let cert = std::fs::read("/opt/aog/crt/default/aog.local.cert").unwrap();
     let pkey = std::fs::read("/opt/aog/crt/default/aog.local.key").unwrap();
     
@@ -66,11 +64,11 @@ pub fn init(){
             session::session(request, "SID", 3600, |session| {
                 let session_id: &str = session.id();
                 let mut session_authenticated = false;
-                let mut sessions :Vec<crate::aog::Session> = Vec::new();
+                let mut sessions :Vec<AOG::Session> = Vec::new();
     
     
                 if Path::new("/opt/aog/dat/sessions.bin").exists() {
-                    sessions = crate::aog::load_sessions(Arc::clone(&config)).unwrap().sessions;
+                    sessions = AOG::Sessions::load(0).unwrap().sessions;
                 }
     
                 for session in &sessions{
@@ -92,17 +90,17 @@ pub fn init(){
                         input_password: String,
                     }));
                     if input.input_username == *"admin" && input.input_password == edit_aog_config.encrypted_password {
-                                            let session = crate::aog::Session {
+                                            let session = AOG::Session {
                                                 id: session_id.to_string(),
                                                 delta: 0
                                             };
                                             sessions.push(session);
                     
-                                            let session_save_file = crate::aog::Sessions {
+                                            let session_save_file = AOG::Sessions {
                                                 sessions: sessions.clone()
                                             };
                     
-                                            save_file("/opt/aog/dat/sessions.bin", 0, &session_save_file).unwrap();
+                                            // save_file("/opt/aog/dat/sessions.bin", 0, &session_save_file).unwrap();
                                             
                                         }
                   
@@ -129,7 +127,7 @@ pub fn init(){
                 }
     
                 if request.url() == "/api/stats"{
-                    #[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
+                    #[derive(Serialize, Deserialize, Debug, Clone)]
                     struct WebApiStats {
                         pm25: String,
                         pm10: String,
@@ -183,11 +181,11 @@ pub fn init(){
 
 
 // TODO - Add Security flag to only allow connections from localhost
-pub fn init_command_api(term_now: Arc<AtomicBool>){
+pub fn init_command_api(){
 
 
 
-    let config = Arc::new(Mutex::new(crate::aog::load_config().unwrap()));
+    let config = Arc::new(Mutex::new(AOG::Config::load(0).unwrap()));
     let cert = std::fs::read("/opt/aog/crt/default/aog.local.cert").unwrap();
     let pkey = std::fs::read("/opt/aog/crt/default/aog.local.key").unwrap();
     
@@ -201,54 +199,11 @@ pub fn init_command_api(term_now: Arc<AtomicBool>){
                 
             }
 
-            // Air Start Command
-            // ----------------------------------------------------------------
-            // if input.input_command == *"air start"{
-            //     aog::gpio::thread::stop(Arc::clone(&air_gpio_thread));
-            //     let mut gpio_27_thread_lock = air_gpio_thread.lock().unwrap();
-            //     let (tx_27_low, rx_27_low) = mpsc::channel();
-            //     gpio_27_thread_lock.set_low_tx = tx_27_low;
-            //     std::mem::drop(gpio_27_thread_lock);
-            //     aog::gpio::thread::set_low(Arc::clone(&air_gpio_thread), Arc::clone(&term_now), rx_27_low);
-            // }
-
-            // // Air Stop Command
-            // // ----------------------------------------------------------------
-            // if input.input_command == *"air stop"{
-            //     aog::gpio::thread::stop(Arc::clone(&air_gpio_thread));
-            //     let mut gpio_27_thread_lock = air_gpio_thread.lock().unwrap();
-            //     let (tx_27_high, rx_27_high) = mpsc::channel();
-            //     gpio_27_thread_lock.set_high_tx = tx_27_high;
-            //     std::mem::drop(gpio_27_thread_lock);
-            //     aog::gpio::thread::set_high(Arc::clone(&air_gpio_thread), Arc::clone(&term_now), rx_27_high);
-            // }
-
-            // Air Start Command
-            // ----------------------------------------------------------------
-            // if input.input_command == *"uv start"{
-            //     aog::gpio::thread::stop(Arc::clone(&uv_gpio_thread));
-            //     let mut gpio_22_thread_lock = uv_gpio_thread.lock().unwrap();
-            //     let (tx_22_low, rx_22_low) = mpsc::channel();
-            //     gpio_22_thread_lock.set_low_tx = tx_22_low;
-            //     std::mem::drop(gpio_22_thread_lock);
-            //     aog::gpio::thread::set_low(Arc::clone(&uv_gpio_thread), Arc::clone(&term_now), rx_22_low);
-            // }
-
-            // // Air Stop Command
-            // // ----------------------------------------------------------------
-            // if input.input_command == *"uv stop"{
-            //     aog::gpio::thread::stop(Arc::clone(&uv_gpio_thread));
-            //     let mut gpio_22_thread_lock = uv_gpio_thread.lock().unwrap();
-            //     let (tx_22_high, rx_22_high) = mpsc::channel();
-            //     gpio_22_thread_lock.set_high_tx = tx_22_high;
-            //     std::mem::drop(gpio_22_thread_lock);
-            //     aog::gpio::thread::set_high(Arc::clone(&uv_gpio_thread), Arc::clone(&term_now), rx_22_high);
-            // }
 
             let _ = aog::command::run(input.input_command);
 
 
-            #[derive(Serialize, Deserialize, Savefile, Debug, Clone)]
+            #[derive(Serialize, Deserialize, Debug, Clone)]
             struct CommandStatus {
                 status: String
             }

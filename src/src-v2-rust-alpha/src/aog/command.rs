@@ -55,7 +55,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     }
     
     if command.starts_with("install"){
-        crate::setup::install();
+        // crate::setup::install();
     }
 
     if command.starts_with("uninstall"){

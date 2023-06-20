@@ -20,6 +20,11 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+// Relay 1: Lights + Air
+// Relay 2: Drain
+// Relay 3: Fill
+// Relay 4: Aux Tank Pump
+
 pub mod setup;
 pub mod aog;
 
@@ -49,11 +54,10 @@ use std::sync::mpsc::{self};
 
 use std::sync::Mutex;
 
-extern crate savefile;
-use savefile::prelude::*;
 
-#[macro_use]
-extern crate savefile_derive;
+
+
+
 
 extern crate qwiic_lcd_rs;
 
@@ -72,21 +76,23 @@ use signal_hook::consts::TERM_SIGNALS;
 
 
 use simple_logger::SimpleLogger;
+use clap::Parser;
 
-use log::LevelFilter;
-use log4rs::append::file::FileAppender;
-use log4rs::encode::pattern::PatternEncoder;
-use log4rs::config::{Appender, Config, Root};
+
 
 fn main() -> Result<(), std::io::Error> {
+
+    let args = AOG::Args::parse();
+
+    setup::install(args.clone());
+
+    let config = Arc::new(Mutex::new(AOG::Config::load(0).unwrap()));
 
     crate::aog::sensors::init();
 
     // Initialize the LCD
     crate::aog::lcd::init();
 
-
-    // std::env::set_var("RUST_LOG", "info");
 
     // Setup a logfile if A.O.G. is installed. Clears old log on boot.
     // ----------------------------------------------------------------
@@ -102,9 +108,6 @@ fn main() -> Result<(), std::io::Error> {
     } else {
         SimpleLogger::new().with_colors(true).init().unwrap();
     }
-
-
-
 
     // Turn off all relays
     let qwiic_relay_config = QwiicRelayConfig::default();
@@ -156,181 +159,91 @@ fn main() -> Result<(), std::io::Error> {
     });
 
 
-    let tn = Arc::clone(&term_now);
+
     thread::spawn(|| {
-        aog::http::init_command_api(tn);
+        aog::http::init_command_api();
     });
 
     // Start video thread(s)
     aog::video::init_all();
 
-
-    // No ars triggers an interactive A.O.G. command line interface for debugging.
-    // Any arguments means this is running in the background on the unit.
+    // Print banner
     // ----------------------------------------------------------------
-    if env::args().count() > 1 {
-
-        log::info!("Flags detected. A.O.G. is running as a background service.");
-
-        if Path::new("/opt/aog/").exists() {
-            while !term_now.load(Ordering::Relaxed) {
-
-            }
-        } 
-    } else {
+    aog::print_stats();
 
 
 
-        // This is a live terminal so clear the screen first.
-        // ----------------------------------------------------------------
-        // aog::cls();
+    // Checks if config file exist and is valid
+    // Config can become invalid with software updates
+    // ----------------------------------------------------------------
+    // if Path::new("/opt/aog/").exists() {
+    //     let aog_config = load_file("/opt/aog/config.bin", 0);
 
-    
-        // Print banner
-        // ----------------------------------------------------------------
-        aog::print_stats();
-    
-    
-        // If A.O.G. has never been installed ask user to install.
-        // ----------------------------------------------------------------
-        if !Path::new("/opt/aog/").exists() {
-            setup::install();
-        }
-    
-        // Checks if config file exist and is valid
-        // Config can become invalid with software updates
-        // ----------------------------------------------------------------
-        if Path::new("/opt/aog/").exists() {
-            let aog_config = load_file("/opt/aog/config.bin", 0);
-    
-            if aog_config.is_ok() {
-                let cfg: aog::Config = aog_config.unwrap();
-                if cfg.version_installed != *VERSION.unwrap_or("unknown"){
-                    println!("An old A.O.G. install was detected.");
-                    setup::update();
-                } else {}
-            } else {
-                println!("A.O.G. config is corrupt....");
-                println!("Deleting config and re-initializing setup...");
-                setup::uninstall();
-                setup::install();
-            }
-        }
+    //     if aog_config.is_ok() {
+    //         let cfg: aog::Config = aog_config.unwrap();
+    //         if cfg.version_installed != *VERSION.unwrap_or("unknown"){
+    //             println!("An old A.O.G. install was detected.");
+    //             setup::update();
+    //         } else {}
+    //     } else {
+    //         println!("A.O.G. config is corrupt....");
+    //         println!("Deleting config and re-initializing setup...");
+    //         setup::uninstall();
+    //         setup::install();
+    //     }
+    // }
 
-        // A.O.G. Terminal Interface Loop
-        // ----------------------------------------------------------------
-        while !term_now.load(Ordering::Relaxed) {
-            
-
-            let mut s=String::new();
-            print!("> ");
-            let _=stdout().flush();
-            stdin().read_line(&mut s).expect("Did not enter a correct string");
-            if let Some('\n')=s.chars().next_back() {
-                s.pop();
-            } 
-            if let Some('\r')=s.chars().next_back() {
-                s.pop();
-            } 
-
-            // Note: Some commands need to be on the main loop for now.
-            // ----------------------------------------------------------------
-
-
-
-            // TODO
-            // If localhost:9443 is available then notify that their is a running background instance.
-            // Forward all commands to localhost:8443
-
-            let params = [("input_command", s)];
-            // let client = reqwest::Client::new();
-            let der = std::fs::read("/opt/aog/crt/default/aog.local.der").unwrap();
-            let cert = reqwest::Certificate::from_der(&der).unwrap();
-    
-            let res = reqwest::blocking::Client::builder()
-            .add_root_certificate(cert)
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap()
-            .post(format!("https://localhost:9443").as_str())
-            .form(&params)
-            .send()
-            .unwrap();
-
-
-            let body = res.text().unwrap();
-
-
-
-            // // Pump Start Command
-            // // ----------------------------------------------------------------
-            // if s.clone() == "pump start"{
-            //     let (tx, rx) = mpsc::channel();
-            //     let mut pump_thread_lock = pump_thread.lock().unwrap();
-            //     pump_thread_lock.tx = tx;
-            //     std::mem::drop(pump_thread_lock);
-            //     aog::pump::start(Arc::clone(&pump_thread), Arc::clone(&term_now), rx);
-            // } 
-
-            //  // Pump Stop Command
-            //  // ----------------------------------------------------------------
-            // if s.clone() == "pump stop"{
-            //     aog::pump::stop(Arc::clone(&pump_thread));
-            // }
-
-            // // Air Start Command
-            // // ----------------------------------------------------------------
-            // if s.clone() == "air start"{
-            //     aog::gpio::thread::stop(Arc::clone(&gpio_27_thread));
-            //     let mut gpio_27_thread_lock = gpio_27_thread.lock().unwrap();
-            //     let (tx_27_low, rx_27_low) = mpsc::channel();
-            //     gpio_27_thread_lock.set_low_tx = tx_27_low;
-            //     std::mem::drop(gpio_27_thread_lock);
-            //     aog::gpio::thread::set_low(Arc::clone(&gpio_27_thread), Arc::clone(&term_now), rx_27_low);
-            // }
-
-            // // Air Stop Command
-            // // ----------------------------------------------------------------
-            // if s.clone() == "air stop"{
-            //     aog::gpio::thread::stop(Arc::clone(&gpio_27_thread));
-            //     let mut gpio_27_thread_lock = gpio_27_thread.lock().unwrap();
-            //     let (tx_27_high, rx_27_high) = mpsc::channel();
-            //     gpio_27_thread_lock.set_high_tx = tx_27_high;
-            //     std::mem::drop(gpio_27_thread_lock);
-            //     aog::gpio::thread::set_high(Arc::clone(&gpio_27_thread), Arc::clone(&term_now), rx_27_high);
-            // }
-
-            // // Air Start Command
-            // // ----------------------------------------------------------------
-            // if s.clone() == "uv start"{
-            //     aog::gpio::thread::stop(Arc::clone(&gpio_22_thread));
-            //     let mut gpio_22_thread_lock = gpio_22_thread.lock().unwrap();
-            //     let (tx_22_low, rx_22_low) = mpsc::channel();
-            //     gpio_22_thread_lock.set_low_tx = tx_22_low;
-            //     std::mem::drop(gpio_22_thread_lock);
-            //     aog::gpio::thread::set_low(Arc::clone(&gpio_22_thread), Arc::clone(&term_now), rx_22_low);
-            // }
-
-            // // Air Stop Command
-            // // ----------------------------------------------------------------
-            // if s.clone() == "uv stop"{
-            //     aog::gpio::thread::stop(Arc::clone(&gpio_22_thread));
-            //     let mut gpio_22_thread_lock = gpio_22_thread.lock().unwrap();
-            //     let (tx_22_high, rx_22_high) = mpsc::channel();
-            //     gpio_22_thread_lock.set_high_tx = tx_22_high;
-            //     std::mem::drop(gpio_22_thread_lock);
-            //     aog::gpio::thread::set_high(Arc::clone(&gpio_22_thread), Arc::clone(&term_now), rx_22_high);
-            // }
-
-            // let _ = aog::command::run(s.clone());
+    // A.O.G. Terminal Interface Loop
+    // ----------------------------------------------------------------
+    while !term_now.load(Ordering::Relaxed) {
         
-            
-    
-        }
+
+        let mut s=String::new();
+        print!("> ");
+        let _=stdout().flush();
+        stdin().read_line(&mut s).expect("Did not enter a correct string");
+        if let Some('\n')=s.chars().next_back() {
+            s.pop();
+        } 
+        if let Some('\r')=s.chars().next_back() {
+            s.pop();
+        } 
+
+        // Note: Some commands need to be on the main loop for now.
+        // ----------------------------------------------------------------
+
+
+
+        // TODO
+        // If localhost:9443 is available then notify that their is a running background instance.
+        // Forward all commands to localhost:8443
+
+        let params = [("input_command", s)];
+        // let client = reqwest::Client::new();
+        let der = std::fs::read("/opt/aog/crt/default/aog.local.der").unwrap();
+        let cert = reqwest::Certificate::from_der(&der).unwrap();
+
+        let res = reqwest::blocking::Client::builder()
+        .add_root_certificate(cert)
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap()
+        .post(format!("https://localhost:9443").as_str())
+        .form(&params)
+        .send()
+        .unwrap();
+
+
+        let body = res.text().unwrap();
+
 
 
 
     }
+
+
+
+    
 
     // Since our loop is basically an infinite loop,
     // that only ends when we receive SIGTERM, if
