@@ -102,17 +102,6 @@ fn main() -> Result<(), std::io::Error> {
     } else {
         SimpleLogger::new().with_colors(true).init().unwrap();
     }
-    // let logfile = FileAppender::builder()
-    //     .encoder(Box::new(PatternEncoder::new("{l} - {m}\n")))
-    //     .build("/opt/aog/output.log").unwrap();
-
-    // let config = Config::builder()
-    //     .appender(Appender::builder().build("logfile", Box::new(logfile)))
-    //     .build(Root::builder()
-    //                .appender("logfile")
-    //                .build(LevelFilter::Info)).unwrap();
-
-    // log4rs::init_config(config).unwrap();
 
 
 
@@ -162,64 +151,14 @@ fn main() -> Result<(), std::io::Error> {
 
 
 
-    // Init pump thread and start
-    // ----------------------------------------------------------------
-    // let (tx, rx) = mpsc::channel();
-    // let mut pump_thread = Arc::new(Mutex::new(aog::pump::PumpThread::default()));
-    // let mut pump_thread_lock = pump_thread.lock().unwrap();
-    // pump_thread_lock.tx = tx;
-    // std::mem::drop(pump_thread_lock);
-    // // TODO - Check if this is disabled in the config first
-    // aog::pump::start(Arc::clone(&pump_thread), Arc::clone(&term_now), rx);
-
-
-    
-    
-    // // Air Pump Relay
-    // // Init GPIO 27 thread and set low(relay-on)
-    // // ----------------------------------------------------------------
-    // let (tx_27_low, rx_27_low) = mpsc::channel();
-    // let (tx_27_high, _rx_27_high) = mpsc::channel();
-    // let mut gpio_27_thread = Arc::new(Mutex::new(aog::gpio::thread::GPIOThread::default()));
-
-    // let mut gpio_27_thread_lock = gpio_27_thread.lock().unwrap();
-    // gpio_27_thread_lock.gpio_pin = 27;
-    // gpio_27_thread_lock.set_low_tx = tx_27_low;
-    // gpio_27_thread_lock.set_high_tx = tx_27_high;
-    // std::mem::drop(gpio_27_thread_lock);
-
-    // // TODO - Check if this is disabled in the config first
-    // aog::gpio::thread::set_low(Arc::clone(&gpio_27_thread), Arc::clone(&term_now), rx_27_low);
-
-
-    // // UV Light Relay
-    // // Init GPIO 22 thread and set low(relay-on)
-    // // ----------------------------------------------------------------
-    // let (tx_22_low, rx_22_low) = mpsc::channel();
-    // let (tx_22_high, _rx_22_high) = mpsc::channel();
-    // let mut gpio_22_thread = Arc::new(Mutex::new(aog::gpio::thread::GPIOThread::default()));
-    // let mut gpio_22_thread_lock = gpio_22_thread.lock().unwrap();
-    // gpio_22_thread_lock.gpio_pin = 22;
-    // gpio_22_thread_lock.set_low_tx = tx_22_low;
-    // gpio_22_thread_lock.set_high_tx = tx_22_high;
-    // std::mem::drop(gpio_22_thread_lock);
-    // // TODO - Check if this is disabled in the config first
-    // aog::gpio::thread::set_low(Arc::clone(&gpio_22_thread), Arc::clone(&term_now), rx_22_low);
-
-
-    // Start Web Thread
-    // let uv_arc = Arc::clone(&gpio_22_thread);
-    // let air_arc = Arc::clone(&gpio_27_thread);
     thread::spawn(|| {
-        aog::web::init();
+        aog::http::init();
     });
 
 
-    // let uv_arc2 = Arc::clone(&gpio_22_thread);
-    // let air_arc2 = Arc::clone(&gpio_27_thread);
     let tn = Arc::clone(&term_now);
     thread::spawn(|| {
-        aog::web::init_command_api(tn);
+        aog::http::init_command_api(tn);
     });
 
     // Start video thread(s)

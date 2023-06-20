@@ -26,7 +26,7 @@ pub mod gpio;
 pub mod lcd;
 pub mod video;
 pub mod pump;
-pub mod web;
+pub mod http;
 
 
 use std::io::{Write, stdout};

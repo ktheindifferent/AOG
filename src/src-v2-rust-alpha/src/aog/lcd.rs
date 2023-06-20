@@ -14,7 +14,7 @@ pub fn init(){
 
     thread::spawn(move || loop {
 
-        log::info!("Updating LCD...");
+        // log::info!("Updating LCD...");
 
         // Fetch IP Address
         let ipp = machine_ip::get();
@@ -31,7 +31,6 @@ pub fn init(){
         // Default Qwiic address is 0x72
         let mut screen = Screen::new(config, "/dev/i2c-1", 0x72).expect("Could not init device");
 
-
         // let arduino_raw = crate::aog::sensors::get_arduino_raw();
         let co2 = crate::aog::sensors::get_value("co2");
         let pm25 = crate::aog::sensors::get_value("pm25");
@@ -44,7 +43,7 @@ pub fn init(){
                 
             },
             Err(err) => {
-                log::error!("{}", err);
+                // log::error!("{}", err);
             }
         }
 

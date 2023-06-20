@@ -29,3 +29,7 @@ i2cdev = "0.4.4"
 log4rs = "*"
 simple_logger = { git = "https://github.com/PixelCoda/rust-simple_logger.git", version = "1.13.6" }
 reqwest = { version = "0.11.3", features = ["blocking", "json"] }
+error-chain = "0.12.4"
+sudo = "0.5"
+sha2 = "0.10.6"
+titlecase = "2.2.1"
