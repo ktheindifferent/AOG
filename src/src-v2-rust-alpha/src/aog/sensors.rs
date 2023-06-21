@@ -305,11 +305,13 @@ pub fn fetch_arduino(device_type: String) -> String {
                                         if device_type.contains("DUAL_OVF_SENSOR") && response.contains("SENSORKIT_MK1"){
                                             // Wrong sensor, break loop
                                             tty_found = false;
+                                            response = "".to_string();
                                             break;
                                         }
                                         if device_type.contains("SENSORKIT_MK1") && response.contains("DUAL_OVF_SENSOR"){
                                             // Wrong sensor, break loop
                                             tty_found = false;
+                                            response = "".to_string();
                                             break;
                                         }
 
@@ -322,14 +324,16 @@ pub fn fetch_arduino(device_type: String) -> String {
                                 },
                                 Err(e) => {
                                     log::error!("{}", e);
-                                    // break;
+                                    tty_found = false;
+                                    response = "".to_string();
+                                    break;
                                 },
                             }
                         }
                     
                 },
-                Err(ref _e) => {
-              
+                Err(ref e) => {
+                    log::error!("{}", e);
                     // break;
                 }
     
