@@ -71,8 +71,9 @@ float co2Average = 0.0;
 
 void loop() {
 
-    Serial.println("DEVICE_ID: SENSORKIT_MK1");
-    Serial.println("FIRMWARE_VERSION: 001");
+    Serial.print("BEGIN\n");
+    Serial.print("DEVICE_ID: SENSORKIT_MK1\n");
+    Serial.print("FIRMWARE_VERSION: 001\n");
 
     float totalCO2 = 0.00;
     countCO2SensorsReporting = 0;
@@ -81,7 +82,7 @@ void loop() {
         float co2 = sensor.getCO2PPM();
         Serial.print("TVOC: ");
         Serial.print(sensor.getTVOCPPB());
-        Serial.println("ppb");
+        Serial.print("ppb\n");
         countCO2SensorsReporting = countCO2SensorsReporting + 1;
         totalCO2 = totalCO2 + co2;
     } 
@@ -109,16 +110,17 @@ void loop() {
 
     Serial.print("CO2: ");
     Serial.print(co2Average);
-    Serial.println("ppm");
+    Serial.print("ppm\n");
 
     int chk = DHT.read11(DHT11_PIN);
     Serial.print("HUM: ");
     Serial.print(DHT.humidity);
-    Serial.println("%");
+    Serial.print("%\n");
     Serial.print("TEMP: ");
     Serial.print(DHT.temperature);
-    Serial.println("C");
+    Serial.print("C\n");
+    Serial.print("END\n");
 
 
-    //delay(200);//Wait 1 seconds before accessing sensor again.
+    delay(500); //Wait before accessing sensor again.
 }

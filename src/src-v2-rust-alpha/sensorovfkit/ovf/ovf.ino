@@ -32,19 +32,15 @@ void parse_cmd(char* string) {
   strupr(string);
   if (strcmp(string, "CAL,7") == 0) {
     pH.cal_mid();
-    Serial.println("MID CALIBRATED");
   }
   else if (strcmp(string, "CAL,4") == 0) {
     pH.cal_low();
-    Serial.println("LOW CALIBRATED");
   }
   else if (strcmp(string, "CAL,10") == 0) {
     pH.cal_high();
-    Serial.println("HIGH CALIBRATED");
   }
   else if (strcmp(string, "CAL,CLEAR") == 0) {
     pH.cal_clear();
-    Serial.println("CALIBRATION CLEARED");
   }
 }
 
@@ -53,21 +49,14 @@ void setup() {
   pinMode(T2_OVF, INPUT_PULLUP);
 
   Serial.begin(115200);
-  //delay(200);
-  // Serial.println(F("Use commands \"CAL,7\", \"CAL,4\", and \"CAL,10\" to calibrate the circuit to those respective values"));
-  // Serial.println(F("Use command \"CAL,CLEAR\" to clear the calibration"));
-  if (pH.begin()) {
-    // Serial.println("Loaded EEPROM");
-  }
+  pH.begin();
 }
 
 void loop() {
+  Serial.print("BEGIN\n");
   Serial.print("DEVICE_ID: DUAL_OVF_SENSOR\n");
-
   Serial.print("FIRMWARE_VERSION: 001\n");
-
   Serial.print("P1: PIN_2\n");
-
   Serial.print("P2: PIN_4\n");
 
 
@@ -100,6 +89,8 @@ void loop() {
     memset(user_data, 0, sizeof(user_data));
   }
   Serial.print("PH: ");
-  Serial.println(pH.read_ph());
-  // delay(200);
+  Serial.print(pH.read_ph());
+  Serial.print("\n");
+  Serial.print("END\n");
+  delay(500);
 }

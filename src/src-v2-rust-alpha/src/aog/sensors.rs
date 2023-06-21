@@ -288,7 +288,7 @@ pub fn fetch_arduino(device_type: String) -> String {
                                     }
                                     // println!("response: {}", response.clone());
                             
-                                    if response.len() > 200 && response.contains(device_type.as_str()) {
+                                    if response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
                                         tty_found = true;
 
                                         //println!("tty_found: YIP");
