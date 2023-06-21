@@ -261,7 +261,7 @@ pub fn fetch_arduino(device_type: String) -> String {
                             match port.read(serial_buf.as_mut_slice()) {
                                 Ok(t) => {
 
-                                    // println!("found_arduino: {}", port_name.clone());
+                                    println!("found_arduino: {}", port_name.clone());
                     
                                     let pre_value = str::from_utf8(&serial_buf[..t]);
         
@@ -271,7 +271,7 @@ pub fn fetch_arduino(device_type: String) -> String {
                                             response += &value;
                                         }    
                                     }
-                                    //println!("response: {}", response.clone());
+                                    println!("response: {}", response.clone());
                             
                                     if response.len() > 200 && response.contains("DEVICE_ID: ") && response.contains(device_type.as_str()) {
                                         tty_found = true;
@@ -287,14 +287,14 @@ pub fn fetch_arduino(device_type: String) -> String {
                                         break;
 
                                     } else {
-                                        if device_type.contains("DUAL_OVF_SENSOR") && response.contains("SENSORKIT_MK1"){
-                                            // Wrong sensor, break loop
-                                            break;
-                                        }
-                                        if device_type.contains("SENSORKIT_MK1") && response.contains("DUAL_OVF_SENSOR"){
-                                            // Wrong sensor, break loop
-                                            break;
-                                        }
+                                        // if device_type.contains("DUAL_OVF_SENSOR") && response.contains("SENSORKIT_MK1"){
+                                        //     // Wrong sensor, break loop
+                                        //     break;
+                                        // }
+                                        // if device_type.contains("SENSORKIT_MK1") && response.contains("DUAL_OVF_SENSOR"){
+                                        //     // Wrong sensor, break loop
+                                        //     break;
+                                        // }
 
                                         
                                     }
@@ -303,9 +303,9 @@ pub fn fetch_arduino(device_type: String) -> String {
                                     
                         
                                 },
-                                Err(_e) => {
-                        
-                                    break;
+                                Err(e) => {
+                                    log::error!("{}", e);
+                                    // break;
                                 },
                             }
                         }

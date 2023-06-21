@@ -6,10 +6,22 @@ use qwiic_relay_rs::*;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct QwiicRelayDevice {
     pub id: u16,
+    pub aux_tank_pump_relay_id: Option<u16>,
+    pub grow_light_relay_id: Option<u16>,
+    pub water_pump_relay_id: Option<u16>,
+    pub water_drain_relay_id: Option<u16>,
+    pub air_circulation_relay_id: Option<u16>,
+
 }
 impl QwiicRelayDevice {
     pub fn new(id: u16) -> QwiicRelayDevice {
-        QwiicRelayDevice { id }
+        QwiicRelayDevice { id,
+            aux_tank_pump_relay_id: Some(4),
+            grow_light_relay_id: Some(1),
+            water_pump_relay_id: Some(3),
+            water_drain_relay_id: Some(2),
+            air_circulation_relay_id: Some(1)
+        }
     }
     pub fn test(&self){
         let qwiic_relay_config = crate::QwiicRelayConfig::default();
