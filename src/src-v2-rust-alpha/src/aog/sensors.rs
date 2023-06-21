@@ -111,6 +111,8 @@ pub fn init(){
                 f.write_all(hum.as_bytes()).expect("Unable to write data");
             }
 
+            std::thread::sleep(std::time::Duration::from_secs(1));
+
 
         }
 
@@ -142,6 +144,8 @@ pub fn init(){
                 let mut f = File::create("/opt/aog/sensors/ph").expect("Unable to create file");
                 f.write_all(ph.as_bytes()).expect("Unable to write data");
             }
+
+            std::thread::sleep(std::time::Duration::from_secs(1));
     
         }
 
