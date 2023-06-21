@@ -246,7 +246,7 @@ pub fn fetch_arduino(device_type: String) -> String {
 
             // println!("checking: {}", port_name.clone());
 
-            let baud_rate = 74880;
+            let baud_rate = 115200;
     
             let port = serialport::new(port_name.clone(), baud_rate)
                 .timeout(Duration::from_millis(3000))
