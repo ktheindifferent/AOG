@@ -259,13 +259,13 @@ pub fn fetch_arduino(device_type: String) -> String {
 
             let baud_rate = 115200;
     
-            let port = serialport::new(port_name.clone(), baud_rate)
+            let ttsport = serialport::new(port_name.clone(), baud_rate)
                 .timeout(Duration::from_millis(5000))
                 .open();
     
     
         
-            match port {
+            match ttsport {
                 Ok(mut port) => {
                     
               
@@ -298,7 +298,7 @@ pub fn fetch_arduino(device_type: String) -> String {
                                             Ok(()) => {}, // everything good
                                             Err(_) => {}, // we have been released, don't panic
                                         }
-
+                                        std::mem::drop(port);
                                         break;
 
                                     } else {

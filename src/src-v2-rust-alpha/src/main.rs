@@ -60,7 +60,7 @@ error_chain! {
 fn main() -> Result<()> {
 
     let args = ::aog::Args::parse();
-
+    sudo::with_env(&["LIBTORCH", "LD_LIBRARY_PATH", "PG_DBNAME", "PG_USER", "PG_PASS", "PG_ADDRESS"]).unwrap();
     setup::install(args.clone())?;
 
     let _config = Arc::new(Mutex::new(Config::load(0).unwrap()));
