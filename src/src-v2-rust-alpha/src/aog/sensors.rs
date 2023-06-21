@@ -249,7 +249,7 @@ pub fn fetch_arduino(device_type: String) -> String {
             let baud_rate = 74880;
     
             let port = serialport::new(port_name.clone(), baud_rate)
-                .timeout(Duration::from_millis(2000))
+                .timeout(Duration::from_millis(1000))
                 .open();
     
     
@@ -333,7 +333,7 @@ pub fn fetch_arduino(device_type: String) -> String {
         "".to_string()
     });
 
-    let value = receiver.recv_timeout(Duration::from_millis(2000));
+    let value = receiver.recv_timeout(Duration::from_millis(5000));
 
     if value.is_ok(){
         value.unwrap()
