@@ -277,7 +277,7 @@ pub fn fetch_arduino(device_type: String) -> String {
                                     }
                                     // println!("response: {}", response.clone());
                             
-                                    if response.len() > 300 && response.contains(device_type.as_str()) {
+                                    if response.len() > 500 && response.contains(device_type.as_str()) {
                                         tty_found = true;
 
                                         //println!("tty_found: YIP");
@@ -333,7 +333,7 @@ pub fn fetch_arduino(device_type: String) -> String {
         "".to_string()
     });
 
-    let value = receiver.recv_timeout(Duration::from_millis(3000));
+    let value = receiver.recv_timeout(Duration::from_millis(10000));
 
     if value.is_ok(){
         value.unwrap()
