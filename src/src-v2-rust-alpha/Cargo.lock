@@ -3,36 +3,6 @@
 version = 3
 
 [[package]]
-name = "AOG"
-version = "0.2.0"
-dependencies = [
- "clap 4.3.5",
- "error-chain",
- "i2cdev",
- "log",
- "machine-ip",
- "mime",
- "qwiic-lcd-rs",
- "qwiic-relay-rs",
- "rand",
- "reqwest",
- "rouille",
- "rppal",
- "rscam",
- "sds011",
- "serde",
- "serde_json",
- "serialport 4.2.1",
- "sha2",
- "shuteye",
- "signal-hook",
- "simple_logger",
- "sudo",
- "titlecase",
- "zip",
-]
-
-[[package]]
 name = "CoreFoundation-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -169,6 +139,36 @@ checksum = "180abfa45703aebe0093f79badacc01b8fd4ea2e35118747e5811127f926e188"
 dependencies = [
  "anstyle",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "aog"
+version = "0.2.0"
+dependencies = [
+ "clap 4.3.5",
+ "error-chain",
+ "i2cdev",
+ "log",
+ "machine-ip",
+ "mime",
+ "qwiic-lcd-rs",
+ "qwiic-relay-rs",
+ "rand",
+ "reqwest",
+ "rouille",
+ "rppal",
+ "rscam",
+ "sds011",
+ "serde",
+ "serde_json",
+ "serialport 4.2.1",
+ "sha2",
+ "shuteye",
+ "signal-hook",
+ "simple_logger",
+ "sudo",
+ "titlecase",
+ "zip",
 ]
 
 [[package]]

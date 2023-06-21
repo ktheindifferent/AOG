@@ -27,7 +27,7 @@ use rppal::gpio::Gpio;
 
 use std::error::Error;
 
-use std::path::Path;
+
 
 use std::thread;
 use std::time::Duration;
@@ -148,7 +148,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
 
     if command == *"test"{
         let selected_pin = 17;
-        let mut pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
+        let _pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
         loop {
             // let raw = aog::sensors::get_arduino_raw();
 

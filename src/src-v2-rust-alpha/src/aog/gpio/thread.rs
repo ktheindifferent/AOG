@@ -68,7 +68,7 @@ pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, r
 
     let _ = stop_high(Arc::clone(&gpio_thread));
     
-    let mut gpio_thread_lock = gpio_thread.lock().unwrap();
+    let gpio_thread_lock = gpio_thread.lock().unwrap();
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
@@ -108,7 +108,7 @@ pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, r
             });
         } else {
             match gpio_pin {
-                Ok(v) => {},
+                Ok(_v) => {},
                 Err(e) => log::error!("{:?}", e),
             }
         }
@@ -116,7 +116,7 @@ pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, r
 
     } else {
         match gpio {
-            Ok(v) => {},
+            Ok(_v) => {},
             Err(e) => log::error!("{:?}", e),
         }
     }
@@ -126,7 +126,7 @@ pub fn set_high(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, 
 
     let _ = stop_low(Arc::clone(&gpio_thread));
 
-    let mut gpio_thread_lock = gpio_thread.lock().unwrap();
+    let gpio_thread_lock = gpio_thread.lock().unwrap();
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
@@ -165,7 +165,7 @@ pub fn set_high(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, 
             });
         } else {
             match gpio_pin {
-                Ok(v) => {},
+                Ok(_v) => {},
                 Err(e) => log::error!("{:?}", e),
             }
         }
@@ -173,7 +173,7 @@ pub fn set_high(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, 
 
     } else {
         match gpio {
-            Ok(v) => {},
+            Ok(_v) => {},
             Err(e) => log::error!("{:?}", e),
         }
     }
@@ -186,14 +186,14 @@ pub fn stop(gpio_thread: Arc<Mutex<GPIOThread>>){
 }
 
 pub fn stop_low(gpio_thread: Arc<Mutex<GPIOThread>>) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
-    let mut gpio_thread_lock = gpio_thread.lock().unwrap();
+    let gpio_thread_lock = gpio_thread.lock().unwrap();
     let vv =  gpio_thread_lock.set_low_tx.send("stop".to_string());
     std::mem::drop(gpio_thread_lock);
     return vv;
 }
 
 pub fn stop_high(gpio_thread: Arc<Mutex<GPIOThread>>) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
-    let mut gpio_thread_lock = gpio_thread.lock().unwrap();
+    let gpio_thread_lock = gpio_thread.lock().unwrap();
     let vv = gpio_thread_lock.set_high_tx.send("stop".to_string());
     std::mem::drop(gpio_thread_lock);
     return vv;

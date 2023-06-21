@@ -3,7 +3,7 @@ use std::thread;
 use std::time::Duration;
 extern crate machine_ip;
 
-use i2cdev::linux::{LinuxI2CDevice, LinuxI2CError};
+use i2cdev::linux::{LinuxI2CError};
 
 pub fn init(){
 
@@ -26,10 +26,10 @@ pub fn init(){
         }
 
         // Default LCDSize is 4x20
-        let mut config = ScreenConfig::default();
+        let config = ScreenConfig::default();
     
         // Default Qwiic address is 0x72
-        let mut screen = Screen::new(config, "/dev/i2c-1", 0x72).expect("Could not init device");
+        let screen = Screen::new(config, "/dev/i2c-1", 0x72).expect("Could not init device");
 
         // let arduino_raw = crate::aog::sensors::get_arduino_raw();
         let co2 = crate::aog::sensors::get_value("co2");
@@ -39,10 +39,10 @@ pub fn init(){
 
         
         match set_lcd_status {
-            Ok(lcd_status) => {
+            Ok(_lcd_status) => {
                 
             },
-            Err(err) => {
+            Err(_err) => {
                 // log::error!("{}", err);
             }
         }

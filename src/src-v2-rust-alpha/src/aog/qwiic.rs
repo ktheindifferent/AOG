@@ -13,7 +13,7 @@ impl QwiicRelayDevice {
     }
     pub fn test(&self){
         let qwiic_relay_config = crate::QwiicRelayConfig::default();
-        let mut qwiic_relay_d = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id);
+        let qwiic_relay_d = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id);
         match qwiic_relay_d{
             Ok(mut qwiic_relay) => {
                 let qwiic_relay_version = qwiic_relay.get_version();
@@ -40,7 +40,7 @@ impl QwiicRelayDevice {
 
     pub fn all_off(&self){
         let qwiic_relay_config = crate::QwiicRelayConfig::default();
-        let mut qwiic_relay_d = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id);
+        let qwiic_relay_d = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id);
         match qwiic_relay_d{
             Ok(mut qwiic_relay) => {
                 qwiic_relay.set_all_relays_off().unwrap()

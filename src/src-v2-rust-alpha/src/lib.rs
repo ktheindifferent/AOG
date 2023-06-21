@@ -3,7 +3,7 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::error::Error;
-use std::time::Duration;
+
 use serde::{Serialize, Deserialize};
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");

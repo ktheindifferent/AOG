@@ -32,7 +32,7 @@ use std::str;
 
 use std::thread;
 use std::sync::mpsc;
-use std::fs;
+
 
 // TODO - ADD PH Sensor
 // https://myhydropi.com/connecting-a-ph-sensor-to-a-raspberry-pi
@@ -53,7 +53,7 @@ use std::io::Read;
 
 pub fn init(){
 
-    thread::Builder::new().name("thread1".to_string()).spawn(move || loop {
+    let _ = thread::Builder::new().name("thread1".to_string()).spawn(move || loop {
         let raw_arduino = fetch_arduino(format!("SENSORKIT_MK1"));
         let pm10 = fetch_pm10();
         let pm25 = fetch_pm25();
@@ -132,7 +132,7 @@ pub fn init(){
             f.write_all(pm25.as_bytes()).expect("Unable to write data");
         }
 
-    });
+    }).unwrap();
   
 }
 
@@ -143,14 +143,14 @@ pub fn fetch_pm25() -> String {
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
                 match sensor.set_work_period(10){
-                    Ok(wp) => {
+                    Ok(_wp) => {
                         if let Ok(m) = sensor.query() {
                             return format!("{}", m.pm25);
                         } else {
                             return format!("");
                         }
                     },
-                    Err(err) => {
+                    Err(_err) => {
                         
                     }
                 }
@@ -170,20 +170,20 @@ pub fn fetch_pm10() -> String {
         match SDS011::new(format!("/dev/ttyUSB{}", tty_port).as_str()) {
             Ok(mut sensor) => {
                 match sensor.set_work_period(10){
-                    Ok(wp) => {
+                    Ok(_wp) => {
                         if let Ok(m) = sensor.query() {
                             return format!("{}", m.pm10);
                         } else {
                             return format!("");
                         }
                     },
-                    Err(err) => {
+                    Err(_err) => {
 
                     }
                 }
      
             },
-            Err(e) => {
+            Err(_e) => {
                 tty_port += 1
             }
         };

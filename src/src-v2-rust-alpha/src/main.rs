@@ -28,33 +28,42 @@
 pub mod setup;
 pub mod aog;
 
-const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
+// const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 extern crate qwiic_lcd_rs;
 extern crate qwiic_relay_rs;
 
 use clap::Parser;
-use qwiic_lcd_rs::*;
+
 use qwiic_relay_rs::*;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag;
 use simple_logger::SimpleLogger;
-use std::env;
+
 use std::io::{stdin,stdout,Write};
-use std::path::{Path};
+
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self};
+use ::aog::Config;
 use std::thread;
-use std::time::Duration;
 
-fn main() -> Result<(), std::io::Error> {
+use error_chain::error_chain;
+error_chain! {
+    foreign_links {
+        Io(std::io::Error);
+        Setup(setup::Error);
+    }
+}
 
-    let args = AOG::Args::parse();
 
-    setup::install(args.clone());
 
-    let config = Arc::new(Mutex::new(AOG::Config::load(0).unwrap()));
+fn main() -> Result<()> {
+
+    let args = ::aog::Args::parse();
+
+    setup::install(args.clone())?;
+
+    let _config = Arc::new(Mutex::new(Config::load(0).unwrap()));
 
     crate::aog::sensors::init();
 
@@ -149,7 +158,7 @@ fn main() -> Result<(), std::io::Error> {
         .unwrap();
 
 
-        let body = res.text().unwrap();
+        let _body = res.text().unwrap();
 
 
 

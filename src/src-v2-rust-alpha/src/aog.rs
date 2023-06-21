@@ -32,29 +32,30 @@ pub mod qwiic;
 
 
 use std::io::{Write, stdout};
-use std::path::{Path};
 
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
-use serde::{Serialize, Deserialize};
+
+
+
+
 use shuteye::sleep;
 
-use std::time::{SystemTime, UNIX_EPOCH};
+
 
 use std::time::Duration;
 
-use std::sync::Mutex;
+
 
 use std::fs::File;
 
-use std::sync::Arc;
 
 
 
 
 
-const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
+
+// const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
 pub fn init_log(path: String) -> Result<(), std::io::Error>{
     let mut output = File::create(path.as_str())?;
@@ -105,7 +106,7 @@ pub fn print_logo(){
     println!(r"██   ██    ██    ██    ██    ██    ");
     println!(r"██   ██ ██  ██████  ██  ██████  ██ ");                      
     println!(r"----------------------------------------------------------------------------");
-    println!(r"v0.2.0-alpha");
+    println!("v{}-alpha", VERSION.unwrap_or("UNKNOWN"));
     println!(r"----------------------------------------------------------------------------");
 }
 

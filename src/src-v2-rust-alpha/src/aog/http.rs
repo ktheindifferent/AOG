@@ -35,9 +35,9 @@ use std::sync::Mutex;
 
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-use std::sync::mpsc::{self};
+
+
 
 
 
@@ -46,7 +46,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::aog;
 
-
+use ::aog::Config;
 
 
 
@@ -55,7 +55,7 @@ use crate::aog;
 pub fn init(){
 
 
-    let config = Arc::new(Mutex::new(AOG::Config::load(0).unwrap()));
+    let config = Arc::new(Mutex::new(Config::load(0).unwrap()));
     let cert = std::fs::read("/opt/aog/crt/default/aog.local.cert").unwrap();
     let pkey = std::fs::read("/opt/aog/crt/default/aog.local.key").unwrap();
     
@@ -64,11 +64,11 @@ pub fn init(){
             session::session(request, "SID", 3600, |session| {
                 let session_id: &str = session.id();
                 let mut session_authenticated = false;
-                let mut sessions :Vec<AOG::Session> = Vec::new();
+                let mut sessions :Vec<::aog::Session> = Vec::new();
     
     
                 if Path::new("/opt/aog/dat/sessions.bin").exists() {
-                    sessions = AOG::Sessions::load(0).unwrap().sessions;
+                    sessions = ::aog::Sessions::load(0).unwrap().sessions;
                 }
     
                 for session in &sessions{
@@ -90,13 +90,13 @@ pub fn init(){
                         input_password: String,
                     }));
                     if input.input_username == *"admin" && input.input_password == edit_aog_config.encrypted_password {
-                                            let session = AOG::Session {
+                                            let session = ::aog::Session {
                                                 id: session_id.to_string(),
                                                 delta: 0
                                             };
                                             sessions.push(session);
                     
-                                            let session_save_file = AOG::Sessions {
+                                            let _session_save_file = ::aog::Sessions {
                                                 sessions: sessions.clone()
                                             };
                     
@@ -185,7 +185,7 @@ pub fn init_command_api(){
 
 
 
-    let config = Arc::new(Mutex::new(AOG::Config::load(0).unwrap()));
+    let _config = Arc::new(Mutex::new(Config::load(0).unwrap()));
     let cert = std::fs::read("/opt/aog/crt/default/aog.local.cert").unwrap();
     let pkey = std::fs::read("/opt/aog/crt/default/aog.local.key").unwrap();
     

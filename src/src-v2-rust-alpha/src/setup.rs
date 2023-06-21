@@ -22,13 +22,13 @@
 
 
 use std::process::Command;
-use std::io::{Write, stdin, stdout};
+use std::io::{Write};
 use std::path::{Path};
 use std::fs::File;
 use std::fs;
 use std::io;
 
-use crate::aog;
+
 
 
 // use std::io::Write;
@@ -42,7 +42,7 @@ error_chain! {
     }
 }
 
-pub fn install(args: AOG::Args) -> Result<()> {
+pub fn install(_args: aog::Args) -> Result<()> {
 
     match crate::aog::tools::mkdir("/opt"){
         Ok(_) => {},
@@ -217,7 +217,7 @@ fn extract_zip(zip_path: &str) -> i32 {
 
 
 
-pub fn install_service(args: AOG::Args) -> Result<()> {
+pub fn install_service(args: aog::Args) -> Result<()> {
 
     // Linux
     #[cfg(all(target_os = "linux"))] {
@@ -255,7 +255,7 @@ pub fn install_service(args: AOG::Args) -> Result<()> {
 }
 
 
-pub fn update_linux_service_file(args: AOG::Args){
+pub fn update_linux_service_file(args: aog::Args){
     let mut data = String::new();
     data.push_str("[Unit]\n");
     data.push_str("Description=aog\n");
