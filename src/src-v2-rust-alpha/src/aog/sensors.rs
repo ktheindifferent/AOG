@@ -61,6 +61,8 @@ pub fn init(){
 
         if raw_arduino_ovf.len() > 5{
 
+            log::info!("Raw Arduino OVF: {:?}", raw_arduino_ovf);
+
             let t1_ovf = parse_arduino(raw_arduino_ovf.clone(), "T1_OVF:", "OVERFLOW".to_string());
             if t1_ovf.len() > 0 {
                 let mut f = File::create("/opt/aog/sensors/t1_ovf").expect("Unable to create file");
@@ -83,6 +85,8 @@ pub fn init(){
 
 
         if raw_arduino.len() > 5{
+
+            log::info!("Raw Arduino: {:?}", raw_arduino);
 
             // Parse co2 reading from arduino serial string
             let co2 = parse_arduino(raw_arduino.clone(), "CO2:", "".to_string());
@@ -271,7 +275,7 @@ pub fn fetch_arduino(device_type: String) -> String {
                                             response += &value;
                                         }    
                                     }
-                                    println!("response: {}", response.clone());
+                                    // println!("response: {}", response.clone());
                             
                                     if response.len() > 200 && response.contains("DEVICE_ID: ") && response.contains(device_type.as_str()) {
                                         tty_found = true;
@@ -287,14 +291,14 @@ pub fn fetch_arduino(device_type: String) -> String {
                                         break;
 
                                     } else {
-                                        // if device_type.contains("DUAL_OVF_SENSOR") && response.contains("SENSORKIT_MK1"){
-                                        //     // Wrong sensor, break loop
-                                        //     break;
-                                        // }
-                                        // if device_type.contains("SENSORKIT_MK1") && response.contains("DUAL_OVF_SENSOR"){
-                                        //     // Wrong sensor, break loop
-                                        //     break;
-                                        // }
+                                        if device_type.contains("DUAL_OVF_SENSOR") && response.contains("SENSORKIT_MK1"){
+                                            // Wrong sensor, break loop
+                                            break;
+                                        }
+                                        if device_type.contains("SENSORKIT_MK1") && response.contains("DUAL_OVF_SENSOR"){
+                                            // Wrong sensor, break loop
+                                            break;
+                                        }
 
                                         
                                     }
