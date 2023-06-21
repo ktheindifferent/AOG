@@ -52,7 +52,7 @@ void setup() {
   pinMode(T1_OVF, INPUT_PULLUP);
   pinMode(T2_OVF, INPUT_PULLUP);
 
-  Serial.begin(74880);
+  Serial.begin(115200);
   //delay(200);
   // Serial.println(F("Use commands \"CAL,7\", \"CAL,4\", and \"CAL,10\" to calibrate the circuit to those respective values"));
   // Serial.println(F("Use command \"CAL,CLEAR\" to clear the calibration"));

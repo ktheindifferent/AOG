@@ -39,7 +39,7 @@ int countCO2SensorsReporting = 0;
 void setup(void)
 {
  
-    Serial.begin(74880);
+    Serial.begin(115200);
     /*Wait for the chip to be initialized completely, and then exit*/
     while(sensor.begin() != 0){
         delay(1000);
@@ -47,6 +47,7 @@ void setup(void)
 
     int chk = DHT.read11(DHT11_PIN);
     sensor.setInTempHum(DHT.temperature, DHT.humidity);
+    sensor.writeBaseLine(0x847B);
     /* sensor.softReset(); */
     /* sensor.setInTempHum() */
 
@@ -84,7 +85,7 @@ void loop() {
         countCO2SensorsReporting = countCO2SensorsReporting + 1;
         totalCO2 = totalCO2 + co2;
     } 
-    sensor.writeBaseLine(0x847B);
+  
     //delay(500);
 
     //Read voltage
