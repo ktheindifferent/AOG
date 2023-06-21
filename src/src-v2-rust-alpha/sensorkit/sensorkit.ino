@@ -65,61 +65,49 @@ void setup(void)
 
     analogReference(DEFAULT);
 }
+
+float co2Average = 0.0;
+
 void loop() {
 
-  Serial.println("DEVICE_ID: SENSORKIT_MK1");
-  Serial.println("FIRMWARE_VERSION: 001");
+    Serial.println("DEVICE_ID: SENSORKIT_MK1");
+    Serial.println("FIRMWARE_VERSION: 001");
 
+    float totalCO2 = 0.00;
+    countCO2SensorsReporting = 0;
 
-  float totalCO2 = 0.00;
-  countCO2SensorsReporting = 0;
-  // delay(2000);
     if(sensor.checkDataReady() == true){
         float co2 = sensor.getCO2PPM();
-//        Serial.print("S1CO2: ");
-//        Serial.print(co2);
         Serial.print("TVOC: ");
         Serial.print(sensor.getTVOCPPB());
         Serial.println("ppb");
         countCO2SensorsReporting = countCO2SensorsReporting + 1;
         totalCO2 = totalCO2 + co2;
-    } else {
-        //Serial.println("Data is not ready!");
-    }
-    /*!
-     * @brief Set baseline
-     * @param get from getBaseline.ino
-     */
-    //sensor.writeBaseLine(0x847B);
-    //delay cannot be less than measurement cycle
-    delay(500);
+    } 
+    sensor.writeBaseLine(0x847B);
+    //delay(500);
 
-   //Read voltage
+    //Read voltage
     int analogCO2SensorValue = analogRead(analogCO2SensorIn);
 
     // The analog signal is converted to a voltage
     float voltage = analogCO2SensorValue*(5000/1024.0);
-    if(voltage == 0)
-    {
-//      Serial.println("Fault");
-    }
-    else if(voltage < 400)
-    {
-//      Serial.println("preheating");
-    }
-    else
-    {
+    if(voltage > 400){
       int voltage_diference=voltage-400;
       float concentration=voltage_diference*50.0/16.0;
-//      Serial.print("S2CO2: ");
-//      Serial.print(concentration);
-//      Serial.println("ppm");
       countCO2SensorsReporting = countCO2SensorsReporting + 1;
       totalCO2 = totalCO2 + concentration;
     }
 
+    if(co2Average < 1.0){
+        co2Average = totalCO2/countCO2SensorsReporting;
+    } else {
+        co2Average = ((co2Average + (totalCO2/countCO2SensorsReporting))/2);
+    }
+
+
     Serial.print("CO2: ");
-    Serial.print(totalCO2/countCO2SensorsReporting);
+    Serial.print(co2Average);
     Serial.println("ppm");
 
     int chk = DHT.read11(DHT11_PIN);
@@ -131,5 +119,5 @@ void loop() {
     Serial.println("C");
 
 
-    delay(200);//Wait 1 seconds before accessing sensor again.
+    //delay(200);//Wait 1 seconds before accessing sensor again.
 }

@@ -53,11 +53,11 @@ void setup() {
   pinMode(T2_OVF, INPUT_PULLUP);
 
   Serial.begin(74880);
-  delay(200);
-  Serial.println(F("Use commands \"CAL,7\", \"CAL,4\", and \"CAL,10\" to calibrate the circuit to those respective values"));
-  Serial.println(F("Use command \"CAL,CLEAR\" to clear the calibration"));
+  //delay(200);
+  // Serial.println(F("Use commands \"CAL,7\", \"CAL,4\", and \"CAL,10\" to calibrate the circuit to those respective values"));
+  // Serial.println(F("Use command \"CAL,CLEAR\" to clear the calibration"));
   if (pH.begin()) {
-    Serial.println("Loaded EEPROM");
+    // Serial.println("Loaded EEPROM");
   }
 }
 
@@ -101,5 +101,5 @@ void loop() {
   }
   Serial.print("PH: ");
   Serial.println(pH.read_ph());
-  delay(200);
+  // delay(200);
 }

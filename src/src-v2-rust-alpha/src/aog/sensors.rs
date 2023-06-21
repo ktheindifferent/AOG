@@ -249,7 +249,7 @@ pub fn fetch_arduino(device_type: String) -> String {
             let baud_rate = 74880;
     
             let port = serialport::new(port_name.clone(), baud_rate)
-                .timeout(Duration::from_millis(3000))
+                .timeout(Duration::from_millis(2000))
                 .open();
     
     
@@ -277,7 +277,7 @@ pub fn fetch_arduino(device_type: String) -> String {
                                     }
                                     // println!("response: {}", response.clone());
                             
-                                    if response.len() > 500 && response.contains(device_type.as_str()) {
+                                    if response.len() > 250 && response.contains(device_type.as_str()) {
                                         tty_found = true;
 
                                         //println!("tty_found: YIP");
