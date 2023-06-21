@@ -53,36 +53,25 @@ use std::io::Read;
 
 pub fn init(){
 
-    let _ = thread::Builder::new().name("thread1".to_string()).spawn(move || loop {
-        let raw_arduino = fetch_arduino(format!("SENSORKIT_MK1"));
+    let _ = thread::Builder::new().name("pm1025_thread".to_string()).spawn(move || loop {
         let pm10 = fetch_pm10();
         let pm25 = fetch_pm25();
-        let raw_arduino_ovf = fetch_arduino(format!("DUAL_OVF_SENSOR"));
 
-        if raw_arduino_ovf.len() > 5{
-
-            log::info!("Raw Arduino OVF: {:?}", raw_arduino_ovf);
-
-            let t1_ovf = parse_arduino(raw_arduino_ovf.clone(), "T1_OVF:", "OVERFLOW".to_string());
-            if t1_ovf.len() > 0 {
-                let mut f = File::create("/opt/aog/sensors/t1_ovf").expect("Unable to create file");
-                f.write_all(t1_ovf.as_bytes()).expect("Unable to write data");
-            }
-
-            let t2_ovf = parse_arduino(raw_arduino_ovf.clone(), "T2_OVF:", "OVERFLOW".to_string());
-            if t2_ovf.len() > 0 {
-                let mut f = File::create("/opt/aog/sensors/t2_ovf").expect("Unable to create file");
-                f.write_all(t2_ovf.as_bytes()).expect("Unable to write data");
-            }
-
-            let ph = parse_arduino(raw_arduino_ovf.clone(), "PH:", "".to_string());
-            if ph.len() > 0 {
-                let mut f = File::create("/opt/aog/sensors/ph").expect("Unable to create file");
-                f.write_all(ph.as_bytes()).expect("Unable to write data");
-            }
-    
+        if pm10.len() > 0 {
+            let mut f = File::create("/opt/aog/sensors/pm10").expect("Unable to create file");
+            f.write_all(pm10.as_bytes()).expect("Unable to write data");
         }
 
+        if pm25.len() > 0 {
+            let mut f = File::create("/opt/aog/sensors/pm25").expect("Unable to create file");
+            f.write_all(pm25.as_bytes()).expect("Unable to write data");
+        }
+
+    }).unwrap();
+
+
+    let _ = thread::Builder::new().name("sensorkit_thread".to_string()).spawn(move || loop {
+        let raw_arduino = fetch_arduino(format!("SENSORKIT_MK1"));
 
         if raw_arduino.len() > 5{
 
@@ -125,15 +114,35 @@ pub fn init(){
 
         }
 
+    }).unwrap();
 
-        if pm10.len() > 0 {
-            let mut f = File::create("/opt/aog/sensors/pm10").expect("Unable to create file");
-            f.write_all(pm10.as_bytes()).expect("Unable to write data");
-        }
 
-        if pm25.len() > 0 {
-            let mut f = File::create("/opt/aog/sensors/pm25").expect("Unable to create file");
-            f.write_all(pm25.as_bytes()).expect("Unable to write data");
+    let _ = thread::Builder::new().name("ovf_thread".to_string()).spawn(move || loop {
+
+        let raw_arduino_ovf = fetch_arduino(format!("DUAL_OVF_SENSOR"));
+
+        if raw_arduino_ovf.len() > 5{
+
+            log::info!("Raw Arduino OVF: {:?}", raw_arduino_ovf);
+
+            let t1_ovf = parse_arduino(raw_arduino_ovf.clone(), "T1_OVF:", "OVERFLOW".to_string());
+            if t1_ovf.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/t1_ovf").expect("Unable to create file");
+                f.write_all(t1_ovf.as_bytes()).expect("Unable to write data");
+            }
+
+            let t2_ovf = parse_arduino(raw_arduino_ovf.clone(), "T2_OVF:", "OVERFLOW".to_string());
+            if t2_ovf.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/t2_ovf").expect("Unable to create file");
+                f.write_all(t2_ovf.as_bytes()).expect("Unable to write data");
+            }
+
+            let ph = parse_arduino(raw_arduino_ovf.clone(), "PH:", "".to_string());
+            if ph.len() > 0 {
+                let mut f = File::create("/opt/aog/sensors/ph").expect("Unable to create file");
+                f.write_all(ph.as_bytes()).expect("Unable to write data");
+            }
+    
         }
 
     }).unwrap();
