@@ -28,57 +28,25 @@
 pub mod setup;
 pub mod aog;
 
-
-
-use std::thread;
-
-
-use std::io::{stdin,stdout,Write};
-
-use std::path::{Path};
-
-
-
-
-
-
-use std::env;
-
-use signal_hook::flag;
-
-
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-
-use std::sync::mpsc::{self};
-
-use std::sync::Mutex;
-
-
-
-
-
-
+const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 extern crate qwiic_lcd_rs;
-
-use qwiic_lcd_rs::*;
-// use std::thread;
-use std::time::Duration;
 extern crate qwiic_relay_rs;
 
-use qwiic_relay_rs::*;
-
-
-const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
-
-
-use signal_hook::consts::TERM_SIGNALS;
-
-
-use simple_logger::SimpleLogger;
 use clap::Parser;
-
-
+use qwiic_lcd_rs::*;
+use qwiic_relay_rs::*;
+use signal_hook::consts::TERM_SIGNALS;
+use signal_hook::flag;
+use simple_logger::SimpleLogger;
+use std::env;
+use std::io::{stdin,stdout,Write};
+use std::path::{Path};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self};
+use std::thread;
+use std::time::Duration;
 
 fn main() -> Result<(), std::io::Error> {
 
@@ -93,46 +61,14 @@ fn main() -> Result<(), std::io::Error> {
     // Initialize the LCD
     crate::aog::lcd::init();
 
+    // Initialize the log system
+    aog::init_log("/opt/aog/output.log".to_string()).unwrap();
+    SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
 
-    // Setup a logfile if A.O.G. is installed. Clears old log on boot.
-    // ----------------------------------------------------------------
-    if Path::new("/opt/aog/").exists() {
-        let init_log_status = aog::init_log("/opt/aog/output.log".to_string());
-        if init_log_status.is_ok() {
-
-            
-            SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
-        } else {
-            SimpleLogger::new().with_colors(true).init().unwrap();
-        }
-    } else {
-        SimpleLogger::new().with_colors(true).init().unwrap();
-    }
 
     // Turn off all relays
-    let qwiic_relay_config = QwiicRelayConfig::default();
-    let mut qwiic_relay_d = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", 0x08);
-    match qwiic_relay_d{
-        Ok(mut qwiic_relay) => {
-            let qwiic_relay_version = qwiic_relay.get_version();
-            match qwiic_relay_version {
-                Ok(v) => {
-                    log::info!("Qwiic Relay Firmware Version: {}", v);
-        
-                    qwiic_relay.set_all_relays_off().unwrap();
-                    thread::sleep(Duration::from_secs(2));
-        
-                },
-                Err(err) => {
-                    log::error!("{}", err);
-                }
-            }        
-        }, 
-        Err(err) => {
-
-        }
-    }
-
+    let qwiic_device = crate::aog::qwiic::QwiicRelayDevice::new(0x25);
+    qwiic_device.test();
 
 
 
@@ -171,27 +107,6 @@ fn main() -> Result<(), std::io::Error> {
     // ----------------------------------------------------------------
     aog::print_stats();
 
-
-
-    // Checks if config file exist and is valid
-    // Config can become invalid with software updates
-    // ----------------------------------------------------------------
-    // if Path::new("/opt/aog/").exists() {
-    //     let aog_config = load_file("/opt/aog/config.bin", 0);
-
-    //     if aog_config.is_ok() {
-    //         let cfg: aog::Config = aog_config.unwrap();
-    //         if cfg.version_installed != *VERSION.unwrap_or("unknown"){
-    //             println!("An old A.O.G. install was detected.");
-    //             setup::update();
-    //         } else {}
-    //     } else {
-    //         println!("A.O.G. config is corrupt....");
-    //         println!("Deleting config and re-initializing setup...");
-    //         setup::uninstall();
-    //         setup::install();
-    //     }
-    // }
 
     // A.O.G. Terminal Interface Loop
     // ----------------------------------------------------------------

@@ -28,6 +28,7 @@ pub mod video;
 pub mod pump;
 pub mod http;
 pub mod tools;
+pub mod qwiic;
 
 
 use std::io::{Write, stdout};
