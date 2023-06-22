@@ -185,6 +185,13 @@ pub fn fetch_arduino(device_type: String) {
         let mut tty_port = 0;
         let tty_quit = 10;
         let mut tty_found = false;
+
+        let ports = serialport::available_ports().expect("No ports found!");
+        for p in ports {
+            log::info!("{}", p.port_name);
+        }
+
+
         while !tty_found && tty_port < tty_quit{
     
             let port_name = format!("/dev/ttyUSB{}", tty_port);
@@ -195,7 +202,8 @@ pub fn fetch_arduino(device_type: String) {
     
             let ttsport = serialport::new(port_name.clone(), baud_rate).open();
     
-    
+            loop{}
+            loop{}
         
             match ttsport {
                 Ok(mut port) => {
