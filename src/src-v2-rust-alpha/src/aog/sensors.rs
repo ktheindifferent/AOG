@@ -318,7 +318,7 @@ pub fn fetch_arduino(device_type: String) {
                                         std::thread::sleep(std::time::Duration::from_millis(500));
                             
                                     },
-                                    Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
+                                    Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => (),
                                     Err(e) => log::error!("{:?}", e),
                                 }
                    
