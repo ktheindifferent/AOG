@@ -192,16 +192,20 @@ pub fn fetch_arduino(device_type: String) {
         }
 
 
-        while !tty_found && tty_port < tty_quit{
+        while !tty_found{
+
+            if tty_port > 10 {
+                tty_port = 0;
+            }
     
             let port_name = format!("/dev/ttyUSB{}", tty_port);
 
             if !std::path::Path::new(port_name.clone().as_str()).exists(){
                 tty_port += 1;
             } else {
-                let baud_rate = 115200;
+                let baud_rate = 9600;
     
-                let ttsport = serialport::new(port_name.clone(), 115_200).timeout(std::time::Duration::from_millis(100000000000)).open();
+                let mut ttsport = serialport::new(port_name.clone(), baud_rate).timeout(std::time::Duration::from_millis(10)).open();
     
             
                 match ttsport {
@@ -226,7 +230,7 @@ pub fn fetch_arduino(device_type: String) {
                                             }    
                                         }
     
-                                        if response.len() > 200 && device_type.contains("SENSORKIT_MK1") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
+                                        if response.len() > 500 && device_type.contains("SENSORKIT_MK1") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
     
                                             let raw_arduino = response.clone();
     
@@ -272,7 +276,7 @@ pub fn fetch_arduino(device_type: String) {
     
                                             response = String::new();
     
-                                        } else if response.len() > 200 && device_type.contains("DUAL_OVF_SENSOR") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
+                                        } else if response.len() > 500 && device_type.contains("DUAL_OVF_SENSOR") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
                                             
                                             let raw_arduino_ovf = response.clone();
                                             
@@ -314,12 +318,21 @@ pub fn fetch_arduino(device_type: String) {
     
                                             
                                         }
-
-                                        std::thread::sleep(std::time::Duration::from_millis(500));
                             
                                     },
                                     Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => (),
-                                    Err(e) => log::error!("{:?}", e),
+                                    Err(ref e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+
+                                        // TODO: Set water level sensors to OVERFLOW as a pecaution
+
+
+                                        tty_port = -1;
+                                        break;
+                                    },
+                                    Err(e) => {
+                                        log::error!("{:?}", e)
+                                        // TODO: Set water level sensors to OVERFLOW as a pecaution
+                                    }
                                 }
                    
                             }

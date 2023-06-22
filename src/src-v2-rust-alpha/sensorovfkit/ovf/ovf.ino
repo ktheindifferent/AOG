@@ -48,7 +48,7 @@ void setup() {
   pinMode(T1_OVF, INPUT_PULLUP);
   pinMode(T2_OVF, INPUT_PULLUP);
 
-  Serial.begin(115200);
+  Serial.begin(9600);
   pH.begin();
 }
 
