@@ -181,7 +181,7 @@ pub fn get_value(sensor: &str) -> String {
 pub fn fetch_arduino(device_type: String) {
 
  
-    let _ = thread::Builder::new().name("fetch_arduino_thread".to_string()).spawn(move || loop {
+    let _ = thread::Builder::new().name("fetch_arduino_thread".to_string()).spawn(move || {
         let mut tty_port = 0;
         let tty_quit = 10;
         let mut tty_found = false;
