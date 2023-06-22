@@ -333,7 +333,7 @@ pub fn fetch_arduino(device_type: String) {
                                         break;
                                     },
                                     Err(e) => {
-                                        log::error!("{:?}", e)
+                                        log::error!("{:?}", e);
                                         // TODO: Set water level sensors to OVERFLOW as a pecaution
                                         if device_type.contains("DUAL_OVF_SENSOR"){
 
