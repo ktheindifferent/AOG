@@ -196,7 +196,7 @@ pub fn fetch_arduino(device_type: String) {
     
             let port_name = format!("/dev/ttyUSB{}", tty_port);
 
-            if !std::path::Path::new(port_name).exists(){
+            if !std::path::Path::new(port_name.clone().as_str()).exists(){
                 tty_port += 1;
             } else {
                 let baud_rate = 115200;
