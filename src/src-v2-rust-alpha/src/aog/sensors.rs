@@ -196,149 +196,146 @@ pub fn fetch_arduino(device_type: String) {
     
             let port_name = format!("/dev/ttyUSB{}", tty_port);
 
-            // println!("checking: {}", port_name.clone());
-
-            let baud_rate = 115200;
+            if !std::path::Path::new(port_name).exists(){
+                tty_port += 1;
+            } else {
+                let baud_rate = 115200;
     
-            let ttsport = serialport::new(port_name.clone(), baud_rate).open();
+                let ttsport = serialport::new(port_name.clone(), baud_rate).open();
     
-            loop{}
-            loop{}
-        
-            match ttsport {
-                Ok(mut port) => {
-                    
-              
-                        let mut serial_buf: Vec<u8> = vec![0; 2000];
-                        let mut response = String::new();
-    
-                        loop {
-                            match port.read(serial_buf.as_mut_slice()) {
-                                Ok(t) => {
-
-                                    // println!("found_arduino: {}", port_name.clone());
-                    
-                                    let pre_value = str::from_utf8(&serial_buf[..t]);
-        
-                                    if pre_value.is_ok(){
-                                        let value = pre_value.unwrap().to_string();
-                                        if !value.is_empty(){
-                                            response += &value;
-                                        }    
-                                    }
-
-                                    if response.len() > 200 && device_type.contains("SENSORKIT_MK1") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
-
-                                        let raw_arduino = response.clone();
-
-                                        log::info!("Raw Arduino: {:?}", raw_arduino);
-
-                                        // Parse co2 reading from arduino serial string
-                                        let co2 = parse_arduino(raw_arduino.clone(), "CO2:", "".to_string());
-                                        
-                                        if co2.len() > 0 {
-                                            let mut f = File::create("/opt/aog/sensors/co2").expect("Unable to create file");
-                                            f.write_all(co2.as_bytes()).expect("Unable to write data");
-                                        }
-                                
-                            
-                                        // Parse tvoc reading from arduino serial string
-                                        let tvoc = parse_arduino(raw_arduino.clone(), "TVOC:", "".to_string());
-                            
-                                        if tvoc.len() > 0 {
-                                            let mut f = File::create("/opt/aog/sensors/tvoc").expect("Unable to create file");
-                                            f.write_all(tvoc.as_bytes()).expect("Unable to write data");
-                                        }
-                                
-                            
-                                        // Parse temperature reading from arduino serial string
-                                        let temp = parse_arduino(raw_arduino.clone(), "TEMP:", "".to_string());
-                            
-                                        if temp.len() > 0 {
-                                            if !temp.contains("-"){
-                                                let mut f = File::create("/opt/aog/sensors/temp").expect("Unable to create file");
-                                                f.write_all(temp.as_bytes()).expect("Unable to write data");
-                                            }
-                                        }
-                            
-                                        // Parse humidity reading from arduino serial string
-                                        let hum = parse_arduino(raw_arduino.clone(), "HUM:", "".to_string());
-                            
-                                        if hum.len() > 0 {
-                                            if !hum.contains("-"){
-                                                let mut f = File::create("/opt/aog/sensors/hum").expect("Unable to create file");
-                                                f.write_all(hum.as_bytes()).expect("Unable to write data");
-                                            }
-                                        }
-
-                                        response = String::new();
-
-                                    } else if response.len() > 200 && device_type.contains("DUAL_OVF_SENSOR") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
-                                        
-                                        let raw_arduino_ovf = response.clone();
-                                        
-                                        log::info!("Raw Arduino OVF: {:?}", raw_arduino_ovf);
-
-                                        let t1_ovf = parse_arduino(raw_arduino_ovf.clone(), "T1_OVF:", "OVERFLOW".to_string());
-                                        if t1_ovf.len() > 0 {
-                                            let mut f = File::create("/opt/aog/sensors/t1_ovf").expect("Unable to create file");
-                                            f.write_all(t1_ovf.as_bytes()).expect("Unable to write data");
-                                        }
-                            
-                                        let t2_ovf = parse_arduino(raw_arduino_ovf.clone(), "T2_OVF:", "OVERFLOW".to_string());
-                                        if t2_ovf.len() > 0 {
-                                            let mut f = File::create("/opt/aog/sensors/t2_ovf").expect("Unable to create file");
-                                            f.write_all(t2_ovf.as_bytes()).expect("Unable to write data");
-                                        }
-                            
-                                        let ph = parse_arduino(raw_arduino_ovf.clone(), "PH:", "".to_string());
-                                        if ph.len() > 0 {
-                                            let mut f = File::create("/opt/aog/sensors/ph").expect("Unable to create file");
-                                            f.write_all(ph.as_bytes()).expect("Unable to write data");
-                                        }
-
-                                        response = String::new();
-                            
-                                    } else {
-                                        if device_type.contains("DUAL_OVF_SENSOR") && response.contains("SENSORKIT_MK1"){
-                                            // Wrong sensor, break loop
-                                            tty_found = false;
-                                            response = "".to_string();
-                                            break;
-                                        }
-                                        if device_type.contains("SENSORKIT_MK1") && response.contains("DUAL_OVF_SENSOR"){
-                                            // Wrong sensor, break loop
-                                            tty_found = false;
-                                            response = "".to_string();
-                                            break;
-                                        }
-
-                                        if response.len() > 200 && !response.contains("DUAL_OVF_SENSOR") && !response.contains("SENSORKIT_MK1"){
-                                            // Wrong sensor, break loop
-                                        }
-
-                                        
-                                    }
+            
+                match ttsport {
+                    Ok(mut port) => {
                         
-                                },
-                                Err(e) => {
-                                    log::error!("lop: {}", e);
-                                },
+                  
+                            let mut serial_buf: Vec<u8> = vec![0; 2000];
+                            let mut response = String::new();
+        
+                            loop {
+                                match port.read(serial_buf.as_mut_slice()) {
+                                    Ok(t) => {
+    
+                                        // println!("found_arduino: {}", port_name.clone());
+                        
+                                        let pre_value = str::from_utf8(&serial_buf[..t]);
+            
+                                        if pre_value.is_ok(){
+                                            let value = pre_value.unwrap().to_string();
+                                            if !value.is_empty(){
+                                                response += &value;
+                                            }    
+                                        }
+    
+                                        if response.len() > 200 && device_type.contains("SENSORKIT_MK1") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
+    
+                                            let raw_arduino = response.clone();
+    
+                                            log::info!("Raw Arduino: {:?}", raw_arduino);
+    
+                                            // Parse co2 reading from arduino serial string
+                                            let co2 = parse_arduino(raw_arduino.clone(), "CO2:", "".to_string());
+                                            
+                                            if co2.len() > 0 {
+                                                let mut f = File::create("/opt/aog/sensors/co2").expect("Unable to create file");
+                                                f.write_all(co2.as_bytes()).expect("Unable to write data");
+                                            }
+                                    
+                                
+                                            // Parse tvoc reading from arduino serial string
+                                            let tvoc = parse_arduino(raw_arduino.clone(), "TVOC:", "".to_string());
+                                
+                                            if tvoc.len() > 0 {
+                                                let mut f = File::create("/opt/aog/sensors/tvoc").expect("Unable to create file");
+                                                f.write_all(tvoc.as_bytes()).expect("Unable to write data");
+                                            }
+                                    
+                                
+                                            // Parse temperature reading from arduino serial string
+                                            let temp = parse_arduino(raw_arduino.clone(), "TEMP:", "".to_string());
+                                
+                                            if temp.len() > 0 {
+                                                if !temp.contains("-"){
+                                                    let mut f = File::create("/opt/aog/sensors/temp").expect("Unable to create file");
+                                                    f.write_all(temp.as_bytes()).expect("Unable to write data");
+                                                }
+                                            }
+                                
+                                            // Parse humidity reading from arduino serial string
+                                            let hum = parse_arduino(raw_arduino.clone(), "HUM:", "".to_string());
+                                
+                                            if hum.len() > 0 {
+                                                if !hum.contains("-"){
+                                                    let mut f = File::create("/opt/aog/sensors/hum").expect("Unable to create file");
+                                                    f.write_all(hum.as_bytes()).expect("Unable to write data");
+                                                }
+                                            }
+    
+                                            response = String::new();
+    
+                                        } else if response.len() > 200 && device_type.contains("DUAL_OVF_SENSOR") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
+                                            
+                                            let raw_arduino_ovf = response.clone();
+                                            
+                                            log::info!("Raw Arduino OVF: {:?}", raw_arduino_ovf);
+    
+                                            let t1_ovf = parse_arduino(raw_arduino_ovf.clone(), "T1_OVF:", "OVERFLOW".to_string());
+                                            if t1_ovf.len() > 0 {
+                                                let mut f = File::create("/opt/aog/sensors/t1_ovf").expect("Unable to create file");
+                                                f.write_all(t1_ovf.as_bytes()).expect("Unable to write data");
+                                            }
+                                
+                                            let t2_ovf = parse_arduino(raw_arduino_ovf.clone(), "T2_OVF:", "OVERFLOW".to_string());
+                                            if t2_ovf.len() > 0 {
+                                                let mut f = File::create("/opt/aog/sensors/t2_ovf").expect("Unable to create file");
+                                                f.write_all(t2_ovf.as_bytes()).expect("Unable to write data");
+                                            }
+                                
+                                            let ph = parse_arduino(raw_arduino_ovf.clone(), "PH:", "".to_string());
+                                            if ph.len() > 0 {
+                                                let mut f = File::create("/opt/aog/sensors/ph").expect("Unable to create file");
+                                                f.write_all(ph.as_bytes()).expect("Unable to write data");
+                                            }
+    
+                                            response = String::new();
+                                
+                                        } else {
+                                            if device_type.contains("DUAL_OVF_SENSOR") && response.contains("SENSORKIT_MK1"){
+                                                // Wrong sensor, break loop
+                                                tty_found = false;
+                                                response = "".to_string();
+                                                break;
+                                            }
+                                            if device_type.contains("SENSORKIT_MK1") && response.contains("DUAL_OVF_SENSOR"){
+                                                // Wrong sensor, break loop
+                                                tty_found = false;
+                                                response = "".to_string();
+                                                break;
+                                            }
+    
+                                            
+                                        }
+                            
+                                    },
+                                    Err(e) => {
+                                        log::error!("lop: {}", e);
+                                    },
+                                }
+                   
                             }
-               
-                        }
+                        
+                    },
+                    Err(ref e) => {
+                        log::error!("{}", e);
+                        // break;
+                    }
+        
                     
-                },
-                Err(ref e) => {
-                    log::error!("{}", e);
-                    // break;
                 }
     
-                
+                tty_port += 1;
             }
 
-            tty_port += 1;
-            std::thread::sleep(std::time::Duration::from_secs(1));
+
         }
     
 
