@@ -201,18 +201,17 @@ pub fn fetch_arduino(device_type: String) {
             } else {
                 let baud_rate = 115200;
     
-                let ttsport = serialport::new(port_name.clone(), 115_200).open();
+                let ttsport = serialport::new(port_name.clone(), 115_200).timeout(std::time::Duration::from_millis(10)).open();
     
             
                 match ttsport {
                     Ok(mut port) => {
                         
                   
-                            
+                            let mut serial_buf: Vec<u8> = vec![0; 1000];
                             let mut response = String::new();
         
                             loop {
-                                let mut serial_buf: Vec<u8> = vec![0; 5000];
                                 match port.read(serial_buf.as_mut_slice()) {
                                     Ok(t) => {
     
@@ -319,9 +318,8 @@ pub fn fetch_arduino(device_type: String) {
                                         std::thread::sleep(std::time::Duration::from_millis(500));
                             
                                     },
-                                    Err(e) => {
-                                        // log::error!("lop: {}", e);
-                                    },
+                                    Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
+                                    Err(e) => log::error!("{:?}", e),
                                 }
                    
                             }
