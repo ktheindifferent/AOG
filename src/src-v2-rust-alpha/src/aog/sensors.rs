@@ -316,10 +316,7 @@ pub fn fetch_arduino(device_type: String) {
                         
                                 },
                                 Err(e) => {
-                                    log::error!("{}", e);
-                                    tty_found = false;
-                                    response = "".to_string();
-                                    break;
+                                    log::error!("lop: {}", e);
                                 },
                             }
                         }
