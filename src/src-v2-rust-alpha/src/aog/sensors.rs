@@ -331,6 +331,7 @@ pub fn fetch_arduino(device_type: String) {
             }
 
             tty_port += 1;
+            std::thread::sleep(std::time::Duration::from_secs(1));
         }
     
 
