@@ -208,10 +208,11 @@ pub fn fetch_arduino(device_type: String) {
                     Ok(mut port) => {
                         
                   
-                            let mut serial_buf: Vec<u8> = vec![0; 5000];
+                            
                             let mut response = String::new();
         
                             loop {
+                                let mut serial_buf: Vec<u8> = vec![0; 5000];
                                 match port.read(serial_buf.as_mut_slice()) {
                                     Ok(t) => {
     
