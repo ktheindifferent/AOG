@@ -201,14 +201,14 @@ pub fn fetch_arduino(device_type: String) {
             } else {
                 let baud_rate = 115200;
     
-                let ttsport = serialport::new(port_name.clone(), baud_rate).open();
+                let ttsport = serialport::new(port_name.clone(), 115_200).open();
     
             
                 match ttsport {
                     Ok(mut port) => {
                         
                   
-                            let mut serial_buf: Vec<u8> = vec![0; 2000];
+                            let mut serial_buf: Vec<u8> = vec![0; 32];
                             let mut response = String::new();
         
                             loop {
