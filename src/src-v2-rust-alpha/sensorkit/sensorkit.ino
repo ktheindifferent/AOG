@@ -39,7 +39,7 @@ int countCO2SensorsReporting = 0;
 void setup(void)
 {
  
-    Serial.begin(115200);
+    Serial.begin(9600);
     /*Wait for the chip to be initialized completely, and then exit*/
     while(sensor.begin() != 0){
         delay(1000);
