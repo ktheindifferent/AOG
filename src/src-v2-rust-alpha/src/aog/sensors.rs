@@ -314,10 +314,12 @@ pub fn fetch_arduino(device_type: String) {
     
                                             
                                         }
+
+                                        std::thread::sleep(std::time::Duration::from_millis(500));
                             
                                     },
                                     Err(e) => {
-                                        log::error!("lop: {}", e);
+                                        // log::error!("lop: {}", e);
                                     },
                                 }
                    
