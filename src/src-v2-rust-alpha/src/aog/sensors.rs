@@ -193,9 +193,7 @@ pub fn fetch_arduino(device_type: String) {
 
             let baud_rate = 115200;
     
-            let ttsport = serialport::new(port_name.clone(), baud_rate)
-                .timeout(Duration::from_millis(5000))
-                .open();
+            let ttsport = serialport::new(port_name.clone(), baud_rate).open();
     
     
         
