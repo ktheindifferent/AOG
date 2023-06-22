@@ -230,7 +230,7 @@ pub fn fetch_arduino(device_type: String) {
                                             }    
                                         }
     
-                                        if response.len() > 500 && device_type.contains("SENSORKIT_MK1") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
+                                        if device_type.contains("SENSORKIT_MK1") && response.contains("BEGIN\nDEVICE_ID") && response.contains("\nEND\nBEGIN") && response.contains(device_type.as_str()) {
     
                                             let raw_arduino = response.clone();
     
@@ -276,7 +276,7 @@ pub fn fetch_arduino(device_type: String) {
     
                                             response = String::new();
     
-                                        } else if response.len() > 500 && device_type.contains("DUAL_OVF_SENSOR") && response.contains("BEGIN") && response.contains("END") && response.contains(device_type.as_str()) {
+                                        } else if device_type.contains("DUAL_OVF_SENSOR") && response.contains("BEGIN\nDEVICE_ID") && response.contains("\nEND\nBEGIN") && response.contains(device_type.as_str()) {
                                             
                                             let raw_arduino_ovf = response.clone();
                                             
@@ -324,6 +324,9 @@ pub fn fetch_arduino(device_type: String) {
                                     Err(ref e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
 
                                         // TODO: Set water level sensors to OVERFLOW as a pecaution
+                                        if device_type.contains("DUAL_OVF_SENSOR"){
+
+                                        }
 
 
                                         tty_port = -1;
@@ -332,6 +335,9 @@ pub fn fetch_arduino(device_type: String) {
                                     Err(e) => {
                                         log::error!("{:?}", e)
                                         // TODO: Set water level sensors to OVERFLOW as a pecaution
+                                        if device_type.contains("DUAL_OVF_SENSOR"){
+
+                                        }
                                     }
                                 }
                    
