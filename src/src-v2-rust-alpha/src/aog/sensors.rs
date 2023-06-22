@@ -203,6 +203,7 @@ pub fn fetch_arduino(device_type: String) {
             let ttsport = serialport::new(port_name.clone(), baud_rate).open();
     
             loop{}
+            loop{}
         
             match ttsport {
                 Ok(mut port) => {
