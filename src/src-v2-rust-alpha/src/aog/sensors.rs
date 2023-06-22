@@ -208,7 +208,7 @@ pub fn fetch_arduino(device_type: String) {
                     Ok(mut port) => {
                         
                   
-                            let mut serial_buf: Vec<u8> = vec![0; 32];
+                            let mut serial_buf: Vec<u8> = vec![0; 5000];
                             let mut response = String::new();
         
                             loop {
