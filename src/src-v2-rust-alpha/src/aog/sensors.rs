@@ -279,7 +279,7 @@ pub fn fetch_arduino(device_type: String) {
                                                         }
                                                     }
         
-                                                    response = String::new();
+                                                    // response = String::new();
 
                                                 
         
@@ -307,7 +307,7 @@ pub fn fetch_arduino(device_type: String) {
                                                     f.write_all(ph.as_bytes()).expect("Unable to write data");
                                                 }
         
-                                                response = String::new();
+                                                // response = String::new();
                                     
                                             } else {
                                                 if device_type.contains("DUAL_OVF_SENSOR") && response.contains("SENSORKIT_MK1"){
