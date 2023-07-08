@@ -230,11 +230,11 @@ pub fn fetch_arduino(device_type: String) {
                                             }    
                                         }
 
-                                        let parts = response.split("BEGIN");
+                                        let parts = response.split("END");
                                         let collection = parts.collect::<Vec<&str>>();
                                         
                                
-                                        if collection.len() > 2 {
+                                        if collection.len() > 3 {
                                             if device_type.contains("SENSORKIT_MK1") && response.contains("BEGIN\nDEVICE_ID") && response.contains("\nEND\nBEGIN") && response.contains(device_type.as_str()) {
         
                                                     let raw_arduino = collection[collection.len() - 1].clone().to_string();
