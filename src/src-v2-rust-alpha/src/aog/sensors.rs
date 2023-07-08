@@ -219,7 +219,7 @@ pub fn fetch_arduino(device_type: String) {
                                 match port.read(serial_buf.as_mut_slice()) {
                                     Ok(t) => {
 
-                                        io::stdout().write_all(&serial_buf[..t]).unwrap();
+                                        std::io::stdout().write_all(&serial_buf[..t]).unwrap();
     
                                         // println!("found_arduino: {}", port_name.clone());
                         
