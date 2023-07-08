@@ -204,7 +204,7 @@ pub fn fetch_arduino(device_type: String) {
                 tty_port += 1;
             } else {
                 let baud_rate = 9600;
-                let mut ttsport = SerialPort::open(port_name.clone(), baud_rate)?;
+                let mut ttsport = SerialPort::open(port_name.clone(), baud_rate);
     
             
                 match ttsport {
