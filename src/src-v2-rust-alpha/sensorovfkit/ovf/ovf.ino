@@ -53,6 +53,11 @@ void setup() {
 }
 
 void loop() {
+
+  float phf = pH.read_ph();
+  String mmts = "";     // empty string
+  mmts.concat(phf);
+  
   Serial.println("BEGIN");
   Serial.println("DEVICE_ID: DUAL_OVF_SENSOR");
   Serial.println("FIRMWARE_VERSION: 001");
@@ -77,24 +82,8 @@ void loop() {
     Serial.println("T2_OVF: OVERFLOW");
   }
 
-
-
-  if (Serial.available() > 0) {
-    user_bytes_received = Serial.readBytesUntil(13, user_data, sizeof(user_data));
-  }
-
-  if (user_bytes_received) {
-    parse_cmd(user_data);
-    user_bytes_received = 0;
-    memset(user_data, 0, sizeof(user_data));
-  }
-
-  float phf = pH.read_ph();
-  
-  String mmts = "";     // empty string
-  mmts.concat(phf);
   
   Serial.println("PH: " + mmts);
   Serial.println("END");
-  delay(500);
+  delay(1000);
 }
