@@ -212,7 +212,7 @@ pub fn fetch_arduino(device_type: String) {
                     Ok(mut port) => {
                         
                   
-                            let mut serial_buf: Vec<u8> = vec![0; 1000];
+                            let mut serial_buf: Vec<u8> = vec![0; 5000];
                             let mut response = String::new();
         
                             loop {
@@ -230,9 +230,11 @@ pub fn fetch_arduino(device_type: String) {
                                             }    
                                         }
 
-                                        let parts = response.split("\n");
-                                        let collection = parts.collect::<Vec<&str>>();
-                                        log::info!("{:?}", collection);
+                                        log::info!("response: {}", response.clone());
+
+                                        // let parts = response.split("\n");
+                                        // let collection = parts.collect::<Vec<&str>>();
+                                        // log::info!("{:?}", collection);
                                         
                                
                                         // if collection.len() > 3 {

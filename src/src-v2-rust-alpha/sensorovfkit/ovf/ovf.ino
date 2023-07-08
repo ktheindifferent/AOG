@@ -53,28 +53,28 @@ void setup() {
 }
 
 void loop() {
-  Serial.print("BEGIN\n");
-  Serial.print("DEVICE_ID: DUAL_OVF_SENSOR\n");
-  Serial.print("FIRMWARE_VERSION: 001\n");
-  Serial.print("P1: PIN_2\n");
-  Serial.print("P2: PIN_4\n");
+  Serial.println("BEGIN");
+  Serial.println("DEVICE_ID: DUAL_OVF_SENSOR");
+  Serial.println("FIRMWARE_VERSION: 001");
+  Serial.println("P1: PIN_2");
+  Serial.println("P2: PIN_4");
 
 
 
   int val = digitalRead(T1_OVF);  // read input value
   if (val == LOW) {         // check if the input is HIGH (button released)
-    Serial.print("T1_OVF: NONE\n");
+    Serial.println("T1_OVF: NONE");
   } else {
-    Serial.print("T1_OVF: OVERFLOW\n");
+    Serial.println("T1_OVF: OVERFLOW");
   }
 
 
 
   int val2 = digitalRead(T2_OVF);  // read input value
   if (val2 == LOW) {         // check if the input is HIGH (button released)
-    Serial.print("T2_OVF: NONE\n");
+    Serial.println("T2_OVF: NONE");
   } else {
-    Serial.print("T2_OVF: OVERFLOW\n");
+    Serial.println("T2_OVF: OVERFLOW");
   }
 
 
@@ -88,9 +88,13 @@ void loop() {
     user_bytes_received = 0;
     memset(user_data, 0, sizeof(user_data));
   }
-  Serial.print("PH: ");
-  Serial.print(pH.read_ph());
-  Serial.print("\n");
-  Serial.print("END\n");
+
+  float phf = pH.read_ph();
+  
+  String mmts = "";     // empty string
+  mmts.concat(phf);
+  
+  Serial.println("PH: " + mmts);
+  Serial.println("END");
   delay(500);
 }
