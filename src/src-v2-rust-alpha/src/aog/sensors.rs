@@ -175,7 +175,7 @@ pub fn get_value(sensor: &str) -> String {
     }
 }
 
-
+use serial2::SerialPort;
 
 // device_type: DUAL_OVF_SENSOR, SENSORKIT_MK1
 pub fn fetch_arduino(device_type: String) {
@@ -186,10 +186,10 @@ pub fn fetch_arduino(device_type: String) {
         let tty_quit = 10;
         let mut tty_found = false;
 
-        let ports = serialport::available_ports().expect("No ports found!");
-        for p in ports {
-            log::info!("{}", p.port_name);
-        }
+        // let ports = serialport::available_ports().expect("No ports found!");
+        // for p in ports {
+        //     log::info!("{}", p.port_name);
+        // }
 
 
         while !tty_found{
@@ -204,15 +204,14 @@ pub fn fetch_arduino(device_type: String) {
                 tty_port += 1;
             } else {
                 let baud_rate = 9600;
-    
-                let mut ttsport = serialport::new(port_name.clone(), baud_rate).timeout(std::time::Duration::from_millis(10)).open();
+                let mut ttsport = SerialPort::new(port_name.clone(), baud_rate)?;
     
             
                 match ttsport {
                     Ok(mut port) => {
                         
                   
-                            let mut serial_buf: Vec<u8> = vec![0; 1000];
+                            let mut serial_buf: Vec<u8> = vec![0; 256];
                             let mut response = String::new();
         
                             loop {
