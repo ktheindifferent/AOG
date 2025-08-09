@@ -55,9 +55,29 @@ use ::aog::Config;
 pub fn init(){
 
 
-    let config = Arc::new(Mutex::new(Config::load(0).unwrap()));
-    let cert = std::fs::read("/opt/aog/crt/default/aog.local.cert").unwrap();
-    let pkey = std::fs::read("/opt/aog/crt/default/aog.local.key").unwrap();
+    let config = Arc::new(Mutex::new(match Config::load(0) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            log::error!("Failed to load config: {}", e);
+            return;
+        }
+    }));
+    
+    let cert = match std::fs::read("/opt/aog/crt/default/aog.local.cert") {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("Failed to read certificate: {}", e);
+            return;
+        }
+    };
+    
+    let pkey = match std::fs::read("/opt/aog/crt/default/aog.local.key") {
+        Ok(k) => k,
+        Err(e) => {
+            log::error!("Failed to read private key: {}", e);
+            return;
+        }
+    };
     
     rouille::Server::new_ssl("0.0.0.0:8443", move |request| {
         {
@@ -175,7 +195,10 @@ pub fn init(){
     
     
         }
-    }, cert, pkey).unwrap().run();
+    }, cert, pkey)
+    .map_err(|e| log::error!("Failed to start HTTPS server: {}", e))
+    .ok()
+    .map(|server| server.run());
     
 }
 
@@ -185,16 +208,78 @@ pub fn init_command_api(){
 
 
 
-    let _config = Arc::new(Mutex::new(Config::load(0).unwrap()));
-    let cert = std::fs::read("/opt/aog/crt/default/aog.local.cert").unwrap();
-    let pkey = std::fs::read("/opt/aog/crt/default/aog.local.key").unwrap();
+    let _config = Arc::new(Mutex::new(match Config::load(0) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            log::error!("Failed to load config: {}", e);
+            return;
+        }
+    }));
+    
+    let cert = match std::fs::read("/opt/aog/crt/default/aog.local.cert") {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("Failed to read certificate: {}", e);
+            return;
+        }
+    };
+    
+    let pkey = match std::fs::read("/opt/aog/crt/default/aog.local.key") {
+        Ok(k) => k,
+        Err(e) => {
+            log::error!("Failed to read private key: {}", e);
+            return;
+        }
+    };
     
     rouille::Server::new_ssl("0.0.0.0:9443", move |request| {
         {
        
+            #[derive(Serialize, Deserialize, Debug, Clone)]
+            struct CommandStatus {
+                status: String
+            }
+            
             let input = try_or_400!(post_input!(request, {
                 input_command: String,
             }));
+            
+            // Validate and sanitize input command
+            let command = input.input_command.trim();
+            
+            // Define allowed commands whitelist
+            let allowed_commands = vec![
+                "help", "cls", "clear", "gpio status", "stdout", "test",
+                "pump status", "pump fill", "pump drain", "pump stop",
+                "relay status"
+            ];
+            
+            // Check if command is in whitelist or is a safe gpio command
+            let is_safe = allowed_commands.contains(&command) ||
+                         (command.starts_with("gpio on ") && command.split_whitespace().count() == 3) ||
+                         (command.starts_with("gpio off ") && command.split_whitespace().count() == 3) ||
+                         (command.starts_with("relay on ") && command.split_whitespace().count() == 3) ||
+                         (command.starts_with("relay off ") && command.split_whitespace().count() == 3);
+            
+            if !is_safe {
+                log::warn!("Blocked potentially unsafe command: {}", command);
+                let response = Response::json(&CommandStatus { status: "blocked: unauthorized command".to_string() });
+                return response;
+            }
+            
+            // Additional validation for gpio/relay commands
+            if command.starts_with("gpio ") || command.starts_with("relay ") {
+                let parts: Vec<&str> = command.split_whitespace().collect();
+                if parts.len() >= 3 {
+                    // Validate pin/relay number is numeric
+                    if parts[2].parse::<u8>().is_err() {
+                        log::warn!("Invalid pin/relay number in command: {}", command);
+                        let response = Response::json(&CommandStatus { status: "error: invalid pin/relay number".to_string() });
+                        return response;
+                    }
+                }
+            }
+            
             if input.input_command == *"admin" {
                 
             }
@@ -202,17 +287,15 @@ pub fn init_command_api(){
 
             let _ = aog::command::run(input.input_command);
 
-
-            #[derive(Serialize, Deserialize, Debug, Clone)]
-            struct CommandStatus {
-                status: String
-            }
             // let arduino_response = crate::aog::sensors::get_arduino_raw();
             let response = Response::json(&CommandStatus { status: "success".to_string() });
             return response;
 
 
         }
-    }, cert, pkey).unwrap().run();
+    }, cert, pkey)
+    .map_err(|e| log::error!("Failed to start HTTPS server: {}", e))
+    .ok()
+    .map(|server| server.run());
     
 }

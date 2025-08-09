@@ -35,7 +35,7 @@ use std::time::Duration;
 
 
 
-use std::io::{self, BufRead};
+use std::io;
 use std::sync::mpsc::{self};
 
 
@@ -45,9 +45,6 @@ use std::sync::mpsc::{self};
 pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
 
     let command = cmd.clone();
-
-    let split = command.split(' ');
-    let _split_vec = split.collect::<Vec<&str>>();
 
 
     if command.starts_with("cls") || command.starts_with("clear"){
@@ -112,25 +109,25 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     
         if command.contains("off"){
             if command.contains("2"){
-                qwiic_relay.set_relay_off(Some(2)).unwrap();
+                let _ = qwiic_relay.set_relay_off(Some(2));
             }
             if command.contains("3"){
-                qwiic_relay.set_relay_off(Some(3)).unwrap();
+                let _ = qwiic_relay.set_relay_off(Some(3));
             }
             if command.contains("4"){
-                qwiic_relay.set_relay_off(Some(4)).unwrap();
+                let _ = qwiic_relay.set_relay_off(Some(4));
             }
         }
 
         if command.contains("on"){
             if command.contains("2"){
-                qwiic_relay.set_relay_on(Some(2)).unwrap();
+                let _ = qwiic_relay.set_relay_on(Some(2));
             }
             if command.contains("3"){
-                qwiic_relay.set_relay_on(Some(3)).unwrap();
+                let _ = qwiic_relay.set_relay_on(Some(3));
             }
             if command.contains("4"){
-                qwiic_relay.set_relay_on(Some(4)).unwrap();
+                let _ = qwiic_relay.set_relay_on(Some(4));
             }
         }
 
@@ -146,23 +143,16 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     }
 
 
+    // Test command disabled - infinite loop removed
     if command == *"test"{
-        let selected_pin = 17;
-        let _pin = Gpio::new().unwrap().get(selected_pin).unwrap().into_output();
-        loop {
-            // let raw = aog::sensors::get_arduino_raw();
-
-            // if raw.contains("TOP_TANK_OVERFLOW: NONE"){
-            //     pin.set_low();
-            // } else {
-            //     pin.set_high();
-            // }
-
-        }
+        log::info!("Test command is currently disabled");
     }
 
     if command == *"stdout"{
-        println!("{}", get_stdout().unwrap());
+        match get_stdout() {
+            Ok(stdout) => println!("{}", stdout),
+            Err(e) => log::error!("Failed to get stdout: {}", e),
+        }
     }
 
     // 0-21
@@ -176,13 +166,19 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
             let (tx, _rx) = mpsc::channel();
             let split = cmd.split(' ');
             let split_vec = split.collect::<Vec<&str>>();
-            let selected_pin = split_vec[2].parse::<u8>().unwrap();
+            let selected_pin = match split_vec[2].parse::<u8>() {
+                Ok(pin) => pin,
+                Err(e) => {
+                    log::error!("Invalid pin number: {}", e);
+                    return Ok(());
+                }
+            };
 
             let gpio = Gpio::new();
             if gpio.is_ok() {
-                let gpio_pin = gpio.unwrap().get(selected_pin);
-                if gpio_pin.is_ok() {
-                    let mut pin = gpio_pin.unwrap().into_output();
+                let gpio_pin = gpio.ok().and_then(|g| g.get(selected_pin).ok());
+                if let Some(pin_result) = gpio_pin {
+                    let mut pin = pin_result.into_output();
                     thread::spawn(move || loop {
                         pin.set_low();
                         thread::sleep(Duration::from_millis(500));
@@ -205,14 +201,20 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
         } else if command.contains("off"){
             let split = cmd.split(' ');
             let split_vec = split.collect::<Vec<&str>>();
-            let selected_pin = split_vec[2].parse::<u8>().unwrap();
+            let selected_pin = match split_vec[2].parse::<u8>() {
+                Ok(pin) => pin,
+                Err(e) => {
+                    log::error!("Invalid pin number: {}", e);
+                    return Ok(());
+                }
+            };
 
 
             let gpio = Gpio::new();
             if gpio.is_ok() {
-                let gpio_pin = gpio.unwrap().get(selected_pin);
-                if gpio_pin.is_ok() {
-                    gpio_pin.unwrap().into_input();
+                let gpio_pin = gpio.ok().and_then(|g| g.get(selected_pin).ok());
+                if let Some(pin_result) = gpio_pin {
+                    pin_result.into_input();
                 } else {
                     log::warn!("Command '{}' failed. GPIO pin is unavailable.", command);
                 }
@@ -231,15 +233,21 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
             let (tx, _rx) = mpsc::channel();
             let split = cmd.split(' ');
             let split_vec = split.collect::<Vec<&str>>();
-            let selected_pin = split_vec[2].parse::<u8>().unwrap();
+            let selected_pin = match split_vec[2].parse::<u8>() {
+                Ok(pin) => pin,
+                Err(e) => {
+                    log::error!("Invalid pin number: {}", e);
+                    return Ok(());
+                }
+            };
 
 
 
             let gpio = Gpio::new();
             if gpio.is_ok() {
-                let gpio_pin = gpio.unwrap().get(selected_pin);
-                if gpio_pin.is_ok() {
-                    let mut pin = gpio_pin.unwrap().into_output();
+                let gpio_pin = gpio.ok().and_then(|g| g.get(selected_pin).ok());
+                if let Some(pin_result) = gpio_pin {
+                    let mut pin = pin_result.into_output();
                     thread::spawn(move || loop {
                             pin.set_low();
                             thread::sleep(Duration::from_millis(2000));
