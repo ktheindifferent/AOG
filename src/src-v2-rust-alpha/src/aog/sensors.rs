@@ -58,16 +58,21 @@ pub fn init(){
         let pm25 = fetch_pm25();
 
         if pm10.len() > 0 {
-            let mut f = File::create("/opt/aog/sensors/pm10").expect("Unable to create file");
-            f.write_all(pm10.as_bytes()).expect("Unable to write data");
+            if let Ok(mut f) = File::create("/opt/aog/sensors/pm10") {
+                let _ = f.write_all(pm10.as_bytes());
+            }
         }
 
         if pm25.len() > 0 {
-            let mut f = File::create("/opt/aog/sensors/pm25").expect("Unable to create file");
-            f.write_all(pm25.as_bytes()).expect("Unable to write data");
+            if let Ok(mut f) = File::create("/opt/aog/sensors/pm25") {
+                let _ = f.write_all(pm25.as_bytes());
+            }
         }
+        
+        // Add sleep to prevent CPU spinning
+        thread::sleep(Duration::from_secs(10));
 
-    }).unwrap();
+    });
 
 
 
@@ -81,7 +86,7 @@ pub fn init(){
 
 
 
-    }).unwrap();
+    });
   
 }
 
@@ -96,7 +101,7 @@ pub fn fetch_pm25() -> String {
                         if let Ok(m) = sensor.query() {
                             return format!("{}", m.pm25);
                         } else {
-                            return format!("");
+                            return String::new();
                         }
                     },
                     Err(_err) => {
@@ -109,7 +114,7 @@ pub fn fetch_pm25() -> String {
             }
         };
     }
-    return format!("");
+    return String::new();
 }
 
 pub fn fetch_pm10() -> String {
@@ -123,7 +128,7 @@ pub fn fetch_pm10() -> String {
                         if let Ok(m) = sensor.query() {
                             return format!("{}", m.pm10);
                         } else {
-                            return format!("");
+                            return String::new();
                         }
                     },
                     Err(_err) => {
@@ -137,7 +142,7 @@ pub fn fetch_pm10() -> String {
             }
         };
     }
-    return format!("");
+    return String::new();
 }
 
 
@@ -167,9 +172,13 @@ pub fn parse_arduino(raw: String, line_key: &str, on_fail_string: String) -> Str
 pub fn get_value(sensor: &str) -> String {
     if Path::new(format!("/opt/aog/sensors/{}", sensor).as_str()).exists(){
         let mut data = String::new();
-        let mut f = File::open(format!("/opt/aog/sensors/{}", sensor).as_str()).expect("Unable to open file");
-        f.read_to_string(&mut data).expect("Unable to read string");
-        return data;
+        match File::open(format!("/opt/aog/sensors/{}", sensor).as_str()) {
+            Ok(mut f) => {
+                let _ = f.read_to_string(&mut data);
+                return data;
+            },
+            Err(_) => return format!("N/A"),
+        }
     } else {
         return format!("N/A");
     }
@@ -218,7 +227,7 @@ pub fn fetch_arduino(device_type: String) {
                                 match port.read(serial_buf.as_mut_slice()) {
                                     Ok(t) => {
 
-                                        std::io::stdout().write_all(&serial_buf[..t]).unwrap();
+                                        let _ = std::io::stdout().write_all(&serial_buf[..t]);
     
                                         // println!("found_arduino: {}", port_name.clone());
                         
@@ -341,7 +350,7 @@ pub fn fetch_arduino(device_type: String) {
                                         }
 
 
-                                        tty_port = -1;
+                                        tty_port = 0;  // Reset to 0 instead of -1 for u8 type
                                         break;
                                     },
                                     Err(e) => {
@@ -371,7 +380,7 @@ pub fn fetch_arduino(device_type: String) {
         }
     
 
-    }).unwrap();
+    });
 
 
 

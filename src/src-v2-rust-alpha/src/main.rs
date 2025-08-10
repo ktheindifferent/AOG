@@ -60,10 +60,12 @@ error_chain! {
 fn main() -> Result<()> {
 
     let args = ::aog::Args::parse();
-    sudo::with_env(&["LIBTORCH", "LD_LIBRARY_PATH", "PG_DBNAME", "PG_USER", "PG_PASS", "PG_ADDRESS"]).unwrap();
+    sudo::with_env(&["LIBTORCH", "LD_LIBRARY_PATH", "PG_DBNAME", "PG_USER", "PG_PASS", "PG_ADDRESS"])
+        .map_err(|e| format!("Failed to set environment: {}", e))?;
     setup::install(args.clone())?;
 
-    let _config = Arc::new(Mutex::new(Config::load(0).unwrap()));
+    let _config = Arc::new(Mutex::new(Config::load(0)
+        .map_err(|e| format!("Failed to load config: {}", e))?));
 
     crate::aog::sensors::init();
 
@@ -71,8 +73,10 @@ fn main() -> Result<()> {
     crate::aog::lcd::init();
 
     // Initialize the log system
-    aog::init_log("/opt/aog/output.log".to_string()).unwrap();
-    SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init().unwrap();
+    aog::init_log("/opt/aog/output.log".to_string())
+        .map_err(|e| format!("Failed to initialize log: {}", e))?;
+    SimpleLogger::new().with_colors(true).with_output_file("/opt/aog/output.log".to_string()).init()
+        .map_err(|e| format!("Failed to initialize logger: {}", e))?;
 
 
     // Turn off all relays
@@ -144,21 +148,35 @@ fn main() -> Result<()> {
 
         let params = [("input_command", s)];
         // let client = reqwest::Client::new();
-        let der = std::fs::read("/opt/aog/crt/default/aog.local.der").unwrap();
-        let cert = reqwest::Certificate::from_der(&der).unwrap();
-
-        let res = reqwest::blocking::Client::builder()
-        .add_root_certificate(cert)
-        .danger_accept_invalid_certs(true)
-        .build()
-        .unwrap()
-        .post(format!("https://localhost:9443").as_str())
-        .form(&params)
-        .send()
-        .unwrap();
-
-
-        let _body = res.text().unwrap();
+        match std::fs::read("/opt/aog/crt/default/aog.local.der") {
+            Ok(der) => {
+                match reqwest::Certificate::from_der(&der) {
+                    Ok(cert) => {
+                        match reqwest::blocking::Client::builder()
+                            .add_root_certificate(cert)
+                            .danger_accept_invalid_certs(true)
+                            .build() {
+                            Ok(client) => {
+                                match client.post(format!("https://localhost:9443").as_str())
+                                    .form(&params)
+                                    .send() {
+                                    Ok(res) => {
+                                        let _body = res.text().unwrap_or_else(|e| {
+                                            log::error!("Failed to read response text: {}", e);
+                                            String::new()
+                                        });
+                                    },
+                                    Err(e) => log::error!("Failed to send command request: {}", e),
+                                }
+                            },
+                            Err(e) => log::error!("Failed to build HTTP client: {}", e),
+                        }
+                    },
+                    Err(e) => log::error!("Failed to parse certificate: {}", e),
+                }
+            },
+            Err(e) => log::error!("Failed to read certificate file: {}", e),
+        }
 
 
 
