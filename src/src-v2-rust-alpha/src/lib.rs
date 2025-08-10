@@ -222,3 +222,201 @@ pub struct Session {
     pub delta: u8
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+
+    fn cleanup_test_files() {
+        let test_files = [
+            "/opt/aog/data.json",
+            "/opt/aog/data.bak.json",
+            "/opt/aog/sessions.json",
+            "/opt/aog/sessions.bak.json",
+        ];
+        
+        for file in test_files.iter() {
+            if Path::new(file).exists() {
+                let _ = fs::remove_file(file);
+            }
+        }
+    }
+
+    fn setup_test_dir() {
+        if !Path::new("/opt/aog").exists() {
+            fs::create_dir_all("/opt/aog").expect("Failed to create test directory");
+        }
+    }
+
+    #[test]
+    fn test_args_default_values() {
+        let args = Args::parse_from(&["test"]);
+        assert_eq!(args.max_threads, 6);
+        assert_eq!(args.port, 8443);
+        assert_eq!(args.encrypt, false);
+        assert_eq!(args.key, "aog");
+    }
+
+    #[test]
+    fn test_config_new() {
+        let config = Config::new();
+        assert!(!config.id.is_empty());
+        assert_eq!(config.id.len(), 100);
+        assert_eq!(config.encrypted_password, "aog");
+        assert_eq!(config.photo_cycle_start, 6);
+        assert_eq!(config.photo_cycle_end, 24);
+        assert_eq!(config.tank_one_to_two_pump_pin, 17);
+        assert_eq!(config.uv_light_pin, 27);
+        assert_eq!(config.air_circulation_pin, 22);
+        assert_eq!(config.is_hvac_kit_installed, false);
+        assert_eq!(config.is_sensor_kit_installed, false);
+        assert!(config.sensor_logs.is_empty());
+    }
+
+    #[test]
+    fn test_config_save_and_load() {
+        setup_test_dir();
+        cleanup_test_files();
+        
+        let config = Config::new();
+        let original_id = config.id.clone();
+        config.save();
+        
+        assert!(Path::new("/opt/aog/data.json").exists());
+        
+        let loaded_config = Config::load(0).expect("Failed to load config");
+        assert_eq!(loaded_config.id, original_id);
+        assert_eq!(loaded_config.encrypted_password, "aog");
+        
+        cleanup_test_files();
+    }
+
+    #[test]
+    fn test_config_backup_creation() {
+        setup_test_dir();
+        cleanup_test_files();
+        
+        let mut config = Config::new();
+        config.sensor_logs.push(SensorLog {
+            id: "test_log".to_string(),
+            timestamp: 123456,
+            s1_co2: "400".to_string(),
+            s2_co2: "450".to_string(),
+            avg_co2: "425".to_string(),
+            humidity: "60".to_string(),
+            temperature: "25".to_string(),
+            is_tank_one_overflowed: false,
+            is_tank_two_overflowed: false,
+        });
+        
+        config.save();
+        
+        assert!(Path::new("/opt/aog/data.json").exists());
+        assert!(Path::new("/opt/aog/data.bak.json").exists());
+        
+        cleanup_test_files();
+    }
+
+    #[test]
+    fn test_sensor_log_struct() {
+        let sensor_log = SensorLog {
+            id: "test_sensor".to_string(),
+            timestamp: 1234567890,
+            s1_co2: "500".to_string(),
+            s2_co2: "550".to_string(),
+            avg_co2: "525".to_string(),
+            humidity: "65".to_string(),
+            temperature: "22".to_string(),
+            is_tank_one_overflowed: true,
+            is_tank_two_overflowed: false,
+        };
+        
+        assert_eq!(sensor_log.id, "test_sensor");
+        assert_eq!(sensor_log.timestamp, 1234567890);
+        assert_eq!(sensor_log.s1_co2, "500");
+        assert_eq!(sensor_log.is_tank_one_overflowed, true);
+        assert_eq!(sensor_log.is_tank_two_overflowed, false);
+    }
+
+    #[test]
+    fn test_sessions_new() {
+        let sessions = Sessions::new();
+        assert!(sessions.sessions.is_empty());
+    }
+
+    #[test]
+    fn test_sessions_save_and_load() {
+        setup_test_dir();
+        cleanup_test_files();
+        
+        let mut sessions = Sessions::new();
+        sessions.sessions.push(Session {
+            id: "session1".to_string(),
+            delta: 10,
+        });
+        
+        sessions.save();
+        assert!(Path::new("/opt/aog/sessions.json").exists());
+        assert!(Path::new("/opt/aog/sessions.bak.json").exists());
+        
+        let loaded_sessions = Sessions::load(0).expect("Failed to load sessions");
+        assert_eq!(loaded_sessions.sessions.len(), 1);
+        assert_eq!(loaded_sessions.sessions[0].id, "session1");
+        assert_eq!(loaded_sessions.sessions[0].delta, 10);
+        
+        cleanup_test_files();
+    }
+
+    #[test]
+    fn test_sensor_kit_config() {
+        let sensor_kit = SensorKitConfig {
+            dht11_pin: 7,
+            tank_one_overflow: 4,
+            tank_two_overflow: 2,
+            analog_co2_pin: "A0".to_string(),
+            enable_dht11: true,
+            enable_analog_co2: true,
+            enable_ccs811: false,
+        };
+        
+        assert_eq!(sensor_kit.dht11_pin, 7);
+        assert_eq!(sensor_kit.tank_one_overflow, 4);
+        assert_eq!(sensor_kit.tank_two_overflow, 2);
+        assert_eq!(sensor_kit.analog_co2_pin, "A0");
+        assert!(sensor_kit.enable_dht11);
+        assert!(sensor_kit.enable_analog_co2);
+        assert!(!sensor_kit.enable_ccs811);
+    }
+
+    #[test]
+    fn test_config_with_sensor_kit() {
+        let mut config = Config::new();
+        config.sensor_kit_config = Some(SensorKitConfig {
+            dht11_pin: 8,
+            tank_one_overflow: 5,
+            tank_two_overflow: 3,
+            analog_co2_pin: "A1".to_string(),
+            enable_dht11: false,
+            enable_analog_co2: true,
+            enable_ccs811: true,
+        });
+        
+        assert!(config.sensor_kit_config.is_some());
+        let sensor_kit = config.sensor_kit_config.unwrap();
+        assert_eq!(sensor_kit.dht11_pin, 8);
+        assert_eq!(sensor_kit.analog_co2_pin, "A1");
+    }
+
+    #[test]
+    fn test_config_serialization() {
+        let config = Config::new();
+        let json = serde_json::to_string(&config).expect("Failed to serialize config");
+        let deserialized: Config = serde_json::from_str(&json).expect("Failed to deserialize config");
+        
+        assert_eq!(config.encrypted_password, deserialized.encrypted_password);
+        assert_eq!(config.photo_cycle_start, deserialized.photo_cycle_start);
+        assert_eq!(config.photo_cycle_end, deserialized.photo_cycle_end);
+    }
+}
+
