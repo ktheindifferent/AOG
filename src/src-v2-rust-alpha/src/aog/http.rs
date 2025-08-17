@@ -45,8 +45,7 @@ use serde::{Serialize, Deserialize};
 
 
 use crate::aog;
-
-use ::aog::Config;
+use crate::Config;
 
 
 
@@ -84,11 +83,11 @@ pub fn init(){
             session::session(request, "SID", 3600, |session| {
                 let session_id: &str = session.id();
                 let mut session_authenticated = false;
-                let mut sessions :Vec<::aog::Session> = Vec::new();
+                let mut sessions :Vec<crate::Session> = Vec::new();
     
     
                 if Path::new("/opt/aog/dat/sessions.bin").exists() {
-                    sessions = ::aog::Sessions::load(0).unwrap().sessions;
+                    sessions = crate::Sessions::load(0).unwrap().sessions;
                 }
     
                 for session in &sessions{
@@ -110,13 +109,13 @@ pub fn init(){
                         input_password: String,
                     }));
                     if input.input_username == *"admin" && input.input_password == edit_aog_config.encrypted_password {
-                                            let session = ::aog::Session {
+                                            let session = crate::Session {
                                                 id: session_id.to_string(),
                                                 delta: 0
                                             };
                                             sessions.push(session);
                     
-                                            let _session_save_file = ::aog::Sessions {
+                                            let _session_save_file = crate::Sessions {
                                                 sessions: sessions.clone()
                                             };
                     
@@ -146,6 +145,52 @@ pub fn init(){
 
                 }
     
+                // New API endpoint for overflow alerts
+                if request.url() == "/api/alerts/overflow" {
+                    #[derive(Serialize, Deserialize, Debug, Clone)]
+                    struct OverflowAlert {
+                        tank1_overflow: bool,
+                        tank2_overflow: bool,
+                        sensor_error: bool,
+                        error_message: String,
+                        timestamp: u64,
+                        critical: bool
+                    }
+                    
+                    let t1_status = crate::aog::sensors::get_value("t1_ovf");
+                    let t2_status = crate::aog::sensors::get_value("t2_ovf");
+                    let sensor_error = std::path::Path::new("/opt/aog/sensors/overflow_error").exists();
+                    
+                    let error_message = if sensor_error {
+                        match std::fs::read_to_string("/opt/aog/sensors/overflow_error") {
+                            Ok(msg) => msg,
+                            Err(_) => "Sensor communication failure".to_string()
+                        }
+                    } else {
+                        "".to_string()
+                    };
+                    
+                    let timestamp = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    
+                    let tank1_overflow = t1_status.contains("OVERFLOW");
+                    let tank2_overflow = t2_status.contains("OVERFLOW");
+                    let critical = tank1_overflow || tank2_overflow || sensor_error;
+                    
+                    let response = Response::json(&OverflowAlert {
+                        tank1_overflow,
+                        tank2_overflow,
+                        sensor_error,
+                        error_message,
+                        timestamp,
+                        critical
+                    });
+                    
+                    return response;
+                }
+                
                 if request.url() == "/api/stats"{
                     #[derive(Serialize, Deserialize, Debug, Clone)]
                     struct WebApiStats {
@@ -154,10 +199,24 @@ pub fn init(){
                         co2: String,
                         tvoc: String,
                         temp: String,
-                        hum: String
+                        hum: String,
+                        t1_ovf: String,
+                        t2_ovf: String,
+                        overflow_error: bool
                     }
                    
-                    let response = Response::json(&WebApiStats { co2: crate::aog::sensors::get_value("co2"), tvoc: crate::aog::sensors::get_value("tvoc"), temp: crate::aog::sensors::get_value("temp"), hum: crate::aog::sensors::get_value("hum"), pm25: crate::aog::sensors::get_value("pm25"), pm10: crate::aog::sensors::get_value("pm10") });
+                    let overflow_error = std::path::Path::new("/opt/aog/sensors/overflow_error").exists();
+                    let response = Response::json(&WebApiStats { 
+                        co2: crate::aog::sensors::get_value("co2"), 
+                        tvoc: crate::aog::sensors::get_value("tvoc"), 
+                        temp: crate::aog::sensors::get_value("temp"), 
+                        hum: crate::aog::sensors::get_value("hum"), 
+                        pm25: crate::aog::sensors::get_value("pm25"), 
+                        pm10: crate::aog::sensors::get_value("pm10"),
+                        t1_ovf: crate::aog::sensors::get_value("t1_ovf"),
+                        t2_ovf: crate::aog::sensors::get_value("t2_ovf"),
+                        overflow_error: overflow_error
+                    });
                     return response;
                 }
     

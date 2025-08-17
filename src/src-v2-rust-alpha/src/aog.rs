@@ -30,6 +30,9 @@ pub mod http;
 pub mod tools;
 pub mod qwiic;
 
+#[cfg(test)]
+mod tests_overflow;
+
 
 use std::io::{Write, stdout};
 
@@ -71,7 +74,7 @@ pub fn sensors_check_animation(){
         // or
         // stdout.write(format!("\rProcessing {}%...", i).as_bytes()).unwrap();
 
-        stdout.flush().unwrap();
+        let _ = stdout.flush();
         sleep(Duration::from_millis(20));
     }
     println!();
@@ -111,7 +114,10 @@ pub fn print_logo(){
 }
 
 pub fn cls(){
-    assert!( std::process::Command::new("cls").status().or_else(|_| std::process::Command::new("clear").status()).unwrap().success() );
+    let _ = std::process::Command::new("cls").status()
+        .or_else(|_| std::process::Command::new("clear").status())
+        .map(|status| status.success())
+        .unwrap_or(false);
     print_logo();
 }
 

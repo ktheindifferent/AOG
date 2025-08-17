@@ -129,7 +129,10 @@ fn main() -> Result<()> {
         let mut s=String::new();
         print!("> ");
         let _=stdout().flush();
-        stdin().read_line(&mut s).expect("Did not enter a correct string");
+        if let Err(e) = stdin().read_line(&mut s) {
+            log::error!("Failed to read input: {}", e);
+            continue;
+        }
         if let Some('\n')=s.chars().next_back() {
             s.pop();
         } 

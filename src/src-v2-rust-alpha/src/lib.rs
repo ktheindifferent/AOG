@@ -1,3 +1,8 @@
+pub mod aog;
+
+// Re-export commonly used types for convenience
+pub use aog::qwiic::{QwiicRelayDevice, RecoveryConfig, RelayHealthStatus, RelayError};
+
 use clap::Parser;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -65,27 +70,39 @@ impl Config {
         let start = SystemTime::now();
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0));
 
         Config{id: random_id, encrypted_password: format!("aog"), version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
     }
-    pub fn save(&self){
-        std::fs::File::create("/opt/aog/data.json").expect("create failed");
-        let j = serde_json::to_string(&self).unwrap();
-        std::fs::write("/opt/aog/data.json", j).expect("Unable to write file");
+    pub fn save(&self) -> Result<(), Box<dyn Error>>{
+        std::fs::File::create("/opt/aog/data.json")
+            .map_err(|e| format!("Failed to create data.json: {}", e))?;
+        let j = serde_json::to_string(&self)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+        std::fs::write("/opt/aog/data.json", &j)
+            .map_err(|e| format!("Failed to write data.json: {}", e))?;
 
         if self.sensor_logs.len() > 0 {
-            std::fs::File::create("/opt/aog/data.bak.json").expect("create failed");
-            let j = serde_json::to_string(&self).unwrap();
-            std::fs::write("/opt/aog/data.bak.json", j).expect("Unable to write file");
+            if let Err(e) = std::fs::File::create("/opt/aog/data.bak.json") {
+                log::warn!("Failed to create backup file: {}", e);
+            } else {
+                if let Ok(j) = serde_json::to_string(&self) {
+                    if let Err(e) = std::fs::write("/opt/aog/data.bak.json", j) {
+                        log::warn!("Failed to write backup file: {}", e);
+                    }
+                }
+            }
         }
+        Ok(())
     }
 
     pub fn load(retries: i64) -> Result<Config, Box<dyn Error>>{
 
         if !std::path::Path::new("/opt/aog/data.json").exists(){
             let new_c = Config::new();
-            new_c.save();
+            if let Err(e) = new_c.save() {
+                log::warn!("Failed to save initial config: {}", e);
+            }
             return Ok(new_c);
         }
 
@@ -107,7 +124,9 @@ impl Config {
                         } else {
                             log::warn!("Unable to parse save file after 10 attempts....creating new save file.");
                             let new_c = Config::new();
-                            new_c.save();
+                            if let Err(e) = new_c.save() {
+                                log::warn!("Failed to save new config: {}", e);
+                            }
                             return Ok(new_c);
                         }
                  
@@ -153,23 +172,35 @@ impl Sessions {
         let sessions :Vec<Session> = Vec::new();
         return Sessions{sessions};
     }
-    pub fn save(&self){
-        std::fs::File::create("/opt/aog/sessions.json").expect("create failed");
-        let j = serde_json::to_string(&self).unwrap();
-        std::fs::write("/opt/aog/sessions.json", j).expect("Unable to write file");
+    pub fn save(&self) -> Result<(), Box<dyn Error>>{
+        std::fs::File::create("/opt/aog/sessions.json")
+            .map_err(|e| format!("Failed to create sessions.json: {}", e))?;
+        let j = serde_json::to_string(&self)
+            .map_err(|e| format!("Failed to serialize sessions: {}", e))?;
+        std::fs::write("/opt/aog/sessions.json", &j)
+            .map_err(|e| format!("Failed to write sessions.json: {}", e))?;
 
         if self.sessions.len() > 0 {
-            std::fs::File::create("/opt/aog/sessions.bak.json").expect("create failed");
-            let j = serde_json::to_string(&self).unwrap();
-            std::fs::write("/opt/aog/sessions.bak.json", j).expect("Unable to write file");
+            if let Err(e) = std::fs::File::create("/opt/aog/sessions.bak.json") {
+                log::warn!("Failed to create sessions backup file: {}", e);
+            } else {
+                if let Ok(j) = serde_json::to_string(&self) {
+                    if let Err(e) = std::fs::write("/opt/aog/sessions.bak.json", j) {
+                        log::warn!("Failed to write sessions backup file: {}", e);
+                    }
+                }
+            }
         }
+        Ok(())
     }
 
     pub fn load(retries: i64) -> Result<Sessions, Box<dyn Error>>{
 
         if !std::path::Path::new("/opt/aog/sessions.json").exists(){
             let new_c = Sessions::new();
-            new_c.save();
+            if let Err(e) = new_c.save() {
+                log::warn!("Failed to save initial sessions: {}", e);
+            }
             return Ok(new_c);
         }
 
@@ -191,7 +222,9 @@ impl Sessions {
                         } else {
                             log::warn!("Unable to parse save file after 10 attempts....creating new save file.");
                             let new_c = Sessions::new();
-                            new_c.save();
+                            if let Err(e) = new_c.save() {
+                                log::warn!("Failed to save new sessions: {}", e);
+                            }
                             return Ok(new_c);
                         }
                  
@@ -245,7 +278,7 @@ mod tests {
 
     fn setup_test_dir() {
         if !Path::new("/opt/aog").exists() {
-            fs::create_dir_all("/opt/aog").expect("Failed to create test directory");
+            let _ = fs::create_dir_all("/opt/aog");
         }
     }
 
@@ -281,7 +314,7 @@ mod tests {
         
         let config = Config::new();
         let original_id = config.id.clone();
-        config.save();
+        config.save().expect("Failed to save config");
         
         assert!(Path::new("/opt/aog/data.json").exists());
         
@@ -310,7 +343,7 @@ mod tests {
             is_tank_two_overflowed: false,
         });
         
-        config.save();
+        config.save().expect("Failed to save config with logs");
         
         assert!(Path::new("/opt/aog/data.json").exists());
         assert!(Path::new("/opt/aog/data.bak.json").exists());
@@ -356,7 +389,7 @@ mod tests {
             delta: 10,
         });
         
-        sessions.save();
+        sessions.save().expect("Failed to save sessions");
         assert!(Path::new("/opt/aog/sessions.json").exists());
         assert!(Path::new("/opt/aog/sessions.bak.json").exists());
         

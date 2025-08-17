@@ -33,6 +33,7 @@ titlecase = "2.2.1"
 mime = "0.3.17"
 clap = { version = "4.3.3", features = ["derive"] }
 serial2 = "0.2.1"
+chrono = "0.4"
 
 [dev-dependencies]
 mockall = "0.11.4"

@@ -28,7 +28,7 @@ error_chain! {
 pub fn hash_check(file_path: &str) -> Result<String>{
     let f = File::open(file_path)?;
 
-    let x = f.metadata().unwrap().len();
+    let x = f.metadata()?.len();
     log::warn!("File size: {}", x);
     log::warn!("hasging file: {}", file_path);
     let mut hasher = Sha256::new();
@@ -57,12 +57,12 @@ pub fn dbash(command: &str) -> Result<String>{
     .arg(command)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -73,12 +73,12 @@ pub fn bash(command: &str) -> Result<String>{
     .arg(command)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -93,12 +93,12 @@ pub fn brew_install(package: &str) -> Result<String>{
     .arg(package)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -110,12 +110,12 @@ pub fn untar(file_path: &str) -> Result<String>{
     .arg(file_path)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -128,12 +128,12 @@ pub fn apt_install(package: &str) -> Result<String>{
     .arg("-y")
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -146,12 +146,12 @@ pub fn dnf_install(package: &str) -> Result<String>{
     .arg("-y")
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -165,12 +165,12 @@ pub fn brew_uninstall(package: &str) -> Result<String>{
     .arg(package)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -182,12 +182,12 @@ pub fn ln(path: &str, link: &str) -> Result<String>{
     .arg(link)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -198,12 +198,12 @@ pub fn mv(source: &str, destination: &str) -> Result<String>{
     .arg(destination)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -214,12 +214,12 @@ pub fn cp(source: &str, destination: &str) -> Result<String>{
     .arg(destination)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -231,12 +231,12 @@ pub fn launchd_bootstrap(destination: &str) -> Result<String>{
     .arg(destination)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -248,12 +248,12 @@ pub fn launchd_bootout(destination: &str) -> Result<String>{
     .arg(destination)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -264,12 +264,12 @@ pub fn launchd_enable(destination: &str) -> Result<String>{
     .arg(destination)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -281,12 +281,12 @@ pub fn launchd_kickstart(destination: &str) -> Result<String>{
     .arg(destination)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -296,12 +296,12 @@ pub fn systemctl_reload() -> Result<String>{
     .arg("daemon-reload")
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -312,12 +312,12 @@ pub fn systemctl_start(service_name: &str) -> Result<String>{
     .arg(service_name)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -328,12 +328,12 @@ pub fn systemctl_stop(service_name: &str) -> Result<String>{
     .arg(service_name)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -344,12 +344,12 @@ pub fn systemctl_enable(service_name: &str) -> Result<String>{
     .arg(service_name)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -359,12 +359,12 @@ pub fn rm(path: &str) -> Result<String>{
     .arg(path)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -375,12 +375,12 @@ pub fn rmd(path: &str) -> Result<String>{
     .arg(path)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -399,12 +399,12 @@ pub fn whisper(model: &str, file_path: &str) -> Result<String>{
     .arg("-otxt")
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
     
@@ -423,12 +423,12 @@ pub fn whisper_owts(model: &str, file_path: &str) -> Result<String>{
     .arg("-owts")
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
     
@@ -444,12 +444,12 @@ pub fn mkdir(apath: &str) -> Result<String>{
     .arg(apath)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
@@ -461,12 +461,12 @@ pub fn fix_permissions(apath: &str) -> Result<String>{
     .arg(apath)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string()); 
 }
@@ -477,12 +477,12 @@ pub fn mark_as_executable(apath: &str) -> Result<String>{
     .arg(apath)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string()); 
 }
@@ -492,12 +492,12 @@ pub fn sh(script: &str) -> Result<String>{
     .arg(script)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string()); 
 }
@@ -508,12 +508,12 @@ pub fn srgan(input: &str, output: &str) -> Result<String>{
     .arg(output)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string()); 
 }
@@ -526,12 +526,12 @@ pub fn download(file_path: &str, url: &str) -> Result<bool>{
     .arg(url)
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let _output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(true);
 }
@@ -550,12 +550,12 @@ pub fn wav_to_16000(input: String) -> Result<String>{
     .arg(format!("{}.16.wav", input))
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());
 }
@@ -581,12 +581,12 @@ pub fn llama(model: &str, prompt: &str) -> Result<String>{
     .arg(format!("\"{}\"", prompt))
     .stdout(Stdio::piped())
     .spawn()
-    .expect("failed to execute child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
 
 
     let output = child
     .wait_with_output()
-    .expect("failed to wait on child");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
 
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
     
