@@ -108,7 +108,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
             Ok(relay) => relay,
             Err(e) => {
                 log::error!("Failed to initialize Qwiic relay device: {:?}", e);
-                return;
+                return Err(Box::new(e));
             }
         };
 

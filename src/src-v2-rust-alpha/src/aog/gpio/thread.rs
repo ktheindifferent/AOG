@@ -20,10 +20,6 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// TODO - Add continuous bool flag
-// TODO - Add photo_cycle bool flag and photo_cycle_start, photo_cycle_end
-// TODO - Add safty_gpio_pin intger
-
 use std::sync::mpsc::{self, TryRecvError};
 
 
@@ -40,6 +36,7 @@ use std::sync::Mutex;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
+use chrono::{Local, Timelike};
 
 
 #[derive(Debug, Clone)]
@@ -48,6 +45,11 @@ pub struct GPIOThread {
     pub gpio_pin: u8,
     pub set_low_tx: std::sync::mpsc::Sender<String>,
     pub set_high_tx: std::sync::mpsc::Sender<String>,
+    pub continuous: bool,  // Enable continuous operation mode
+    pub photo_cycle_enabled: bool,  // Enable photo cycle scheduling
+    pub photo_cycle_start: u8,  // Hour to start photo cycle (0-23)
+    pub photo_cycle_end: u8,  // Hour to end photo cycle (0-23)
+    pub safety_gpio_pin: Option<u8>,  // Optional safety GPIO pin for external switches
 }
 
 
@@ -60,7 +62,17 @@ impl Default for GPIOThread {
         let (set_low_tx, _rx) = mpsc::channel();
         let (set_high_tx, _rx) = mpsc::channel();
 
-        GPIOThread{id: random_id, gpio_pin: 0, set_low_tx, set_high_tx}
+        GPIOThread{
+            id: random_id, 
+            gpio_pin: 0, 
+            set_low_tx, 
+            set_high_tx,
+            continuous: false,
+            photo_cycle_enabled: false,
+            photo_cycle_start: 6,
+            photo_cycle_end: 24,
+            safety_gpio_pin: None,
+        }
     }
 }
 
@@ -86,14 +98,16 @@ pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, r
     std::mem::drop(gpio);
 
     log::info!("Starting gpio-set-low thread: {}", gpio_thread_lock.id);
-
+    
+    let pin_num = gpio_thread_lock.gpio_pin;
+    std::mem::drop(gpio_thread_lock);
 
     let gpio = Gpio::new();
 
 
 
     if let Ok(u_gpio) = gpio {
-        if let Ok(gpio_pin) = u_gpio.get(gpio_thread_lock.gpio_pin) {
+        if let Ok(gpio_pin) = u_gpio.get(pin_num) {
             let mut gpio_pin_out = gpio_pin.into_output();
             thread::spawn(move || while !term_now.load(Ordering::Relaxed) {
 
@@ -109,10 +123,7 @@ pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, r
                 }
             });
         } else {
-            match gpio_pin {
-                Ok(_v) => {},
-                Err(e) => log::error!("{:?}", e),
-            }
+            log::error!("Failed to get GPIO pin {}", pin_num);
         }
  
 
@@ -146,13 +157,15 @@ pub fn set_high(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, 
 
     log::info!("Starting gpio-set-high thread: {}", gpio_thread_lock.id);
 
+    let pin_num = gpio_thread_lock.gpio_pin;
+    std::mem::drop(gpio_thread_lock);
 
     let gpio = Gpio::new();
 
 
 
     if let Ok(u_gpio) = gpio {
-        if let Ok(gpio_pin) = u_gpio.get(gpio_thread_lock.gpio_pin) {
+        if let Ok(gpio_pin) = u_gpio.get(pin_num) {
             let mut gpio_pin_out = gpio_pin.into_output();
             thread::spawn(move || while !term_now.load(Ordering::Relaxed) {
 
@@ -168,10 +181,7 @@ pub fn set_high(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, 
                 }
             });
         } else {
-            match gpio_pin {
-                Ok(_v) => {},
-                Err(e) => log::error!("{:?}", e),
-            }
+            log::error!("Failed to get GPIO pin {}", pin_num);
         }
  
 

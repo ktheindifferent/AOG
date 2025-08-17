@@ -59,7 +59,8 @@ pub struct Config {
     pub uv_light_pin: usize,  // default 27
     pub air_circulation_pin: usize,  // default 22
     pub sensor_kit_config: Option<SensorKitConfig>,
-    pub sensor_logs: Vec<SensorLog>
+    pub sensor_logs: Vec<SensorLog>,
+    pub pump_config: Option<PumpConfig>,  // New pump configuration
 }
 impl Config {
     pub fn new() -> Config {
@@ -72,7 +73,7 @@ impl Config {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_else(|_| std::time::Duration::from_secs(0));
 
-        Config{id: random_id, encrypted_password: format!("aog"), version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
+        Config{id: random_id, encrypted_password: format!("aog"), version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, pump_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
     }
     pub fn save(&self) -> Result<(), Box<dyn Error>>{
         std::fs::File::create("/opt/aog/data.json")
@@ -160,6 +161,31 @@ pub struct SensorKitConfig {
     pub enable_dht11: bool,
     pub enable_analog_co2: bool,
     pub enable_ccs811: bool, 
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PumpConfig {
+    pub continuous_mode: bool,  // Enable continuous pump operation
+    pub photo_cycle_enabled: bool,  // Enable photo cycle scheduling for pumps
+    pub photo_cycle_start_hour: u8,  // Hour to start (0-23)
+    pub photo_cycle_end_hour: u8,  // Hour to end (0-23)
+    pub safety_gpio_pin: Option<u8>,  // Safety GPIO pin for external switches
+    pub pump_runtime_limit_seconds: u64,  // Maximum runtime in seconds (safety)
+    pub pump_cooldown_seconds: u64,  // Cooldown period between runs
+}
+
+impl Default for PumpConfig {
+    fn default() -> Self {
+        PumpConfig {
+            continuous_mode: false,
+            photo_cycle_enabled: false,
+            photo_cycle_start_hour: 6,
+            photo_cycle_end_hour: 24,
+            safety_gpio_pin: None,
+            pump_runtime_limit_seconds: 300,  // 5 minutes default
+            pump_cooldown_seconds: 60,  // 1 minute cooldown
+        }
+    }
 }
 
 
@@ -305,6 +331,7 @@ mod tests {
         assert_eq!(config.is_hvac_kit_installed, false);
         assert_eq!(config.is_sensor_kit_installed, false);
         assert!(config.sensor_logs.is_empty());
+        assert!(config.pump_config.is_none());
     }
 
     #[test]
@@ -450,6 +477,42 @@ mod tests {
         assert_eq!(config.encrypted_password, deserialized.encrypted_password);
         assert_eq!(config.photo_cycle_start, deserialized.photo_cycle_start);
         assert_eq!(config.photo_cycle_end, deserialized.photo_cycle_end);
+    }
+
+    #[test]
+    fn test_pump_config_default() {
+        let pump_config = PumpConfig::default();
+        assert_eq!(pump_config.continuous_mode, false);
+        assert_eq!(pump_config.photo_cycle_enabled, false);
+        assert_eq!(pump_config.photo_cycle_start_hour, 6);
+        assert_eq!(pump_config.photo_cycle_end_hour, 24);
+        assert_eq!(pump_config.safety_gpio_pin, None);
+        assert_eq!(pump_config.pump_runtime_limit_seconds, 300);
+        assert_eq!(pump_config.pump_cooldown_seconds, 60);
+    }
+
+    #[test]
+    fn test_config_with_pump_config() {
+        let mut config = Config::new();
+        config.pump_config = Some(PumpConfig {
+            continuous_mode: true,
+            photo_cycle_enabled: true,
+            photo_cycle_start_hour: 8,
+            photo_cycle_end_hour: 20,
+            safety_gpio_pin: Some(25),
+            pump_runtime_limit_seconds: 600,
+            pump_cooldown_seconds: 120,
+        });
+        
+        assert!(config.pump_config.is_some());
+        let pump_config = config.pump_config.unwrap();
+        assert!(pump_config.continuous_mode);
+        assert!(pump_config.photo_cycle_enabled);
+        assert_eq!(pump_config.photo_cycle_start_hour, 8);
+        assert_eq!(pump_config.photo_cycle_end_hour, 20);
+        assert_eq!(pump_config.safety_gpio_pin, Some(25));
+        assert_eq!(pump_config.pump_runtime_limit_seconds, 600);
+        assert_eq!(pump_config.pump_cooldown_seconds, 120);
     }
 }
 

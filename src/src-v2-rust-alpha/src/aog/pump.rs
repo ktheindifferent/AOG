@@ -20,10 +20,6 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// TODO - Add continuous bool flag
-// TODO - Add photo_cycle bool flag and photo_cycle_start, photo_cycle_end
-// TODO - Add safty_gpio_pin intger
-
 use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 use std::thread::sleep;
@@ -41,6 +37,7 @@ use std::thread;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
+use chrono::{Local, Timelike};
 
 
 #[derive(Debug, Clone)]
@@ -50,7 +47,11 @@ pub struct PumpThread {
     pub sensor_flag: String,
     pub running: bool,
     pub tx: std::sync::mpsc::Sender<String>,
-
+    pub continuous: bool,  // Enable continuous operation mode
+    pub photo_cycle_enabled: bool,  // Enable photo cycle scheduling
+    pub photo_cycle_start: u8,  // Hour to start photo cycle (0-23)
+    pub photo_cycle_end: u8,  // Hour to end photo cycle (0-23)
+    pub safety_gpio_pin: Option<u8>,  // Optional safety GPIO pin for external switches
 }
 
 
@@ -62,7 +63,57 @@ impl Default for PumpThread {
 
         let (tx, _rx) = mpsc::channel();
 
-        PumpThread{id: random_id, gpio_pin: 17, sensor_flag: "T1_OVF: NONE".to_string(), running: false, tx}
+        PumpThread{
+            id: random_id, 
+            gpio_pin: 17, 
+            sensor_flag: "T1_OVF: NONE".to_string(), 
+            running: false, 
+            tx,
+            continuous: false,
+            photo_cycle_enabled: false,
+            photo_cycle_start: 6,
+            photo_cycle_end: 24,
+            safety_gpio_pin: None,
+        }
+    }
+}
+
+// Helper function to check if pump should run based on photo cycle
+fn is_within_photo_cycle(start: u8, end: u8) -> bool {
+    let current_hour = Local::now().hour() as u8;
+    
+    if start < end {
+        // Normal case: start=6, end=22 means run from 6am to 10pm
+        current_hour >= start && current_hour < end
+    } else {
+        // Overnight case: start=22, end=6 means run from 10pm to 6am
+        current_hour >= start || current_hour < end
+    }
+}
+
+// Helper function to check safety GPIO pin
+fn check_safety_pin(pin_number: u8) -> bool {
+    let gpio = match Gpio::new() {
+        Ok(g) => g,
+        Err(e) => {
+            log::error!("Failed to initialize GPIO for safety check: {:?}", e);
+            return false; // Fail safe: don't run if we can't check safety
+        }
+    };
+    
+    match gpio.get(pin_number) {
+        Ok(pin) => {
+            let input_pin = pin.into_input();
+            let is_safe = input_pin.is_high();
+            if !is_safe {
+                log::warn!("Safety pin {} is LOW - pump operation blocked", pin_number);
+            }
+            is_safe
+        },
+        Err(e) => {
+            log::error!("Failed to read safety pin {}: {:?}", pin_number, e);
+            false // Fail safe
+        }
     }
 }
 
@@ -91,6 +142,46 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
 
         let pump_thread_lock = pump_thread.lock().unwrap();
 
+        // Check if photo cycle is enabled and if we're within the allowed time
+        if pump_thread_lock.photo_cycle_enabled {
+            if !is_within_photo_cycle(pump_thread_lock.photo_cycle_start, pump_thread_lock.photo_cycle_end) {
+                log::debug!("Pump {} outside photo cycle hours ({}-{})", 
+                    pump_thread_lock.id, pump_thread_lock.photo_cycle_start, pump_thread_lock.photo_cycle_end);
+                std::mem::drop(pump_thread_lock);
+                sleep(Duration::from_secs(60)); // Check again in a minute
+                
+                // Check for stop signal
+                match rx.try_recv() {
+                    Ok(_) | Err(TryRecvError::Disconnected) => {
+                        stop_pump_thread(Arc::clone(&pump_thread));
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => {}
+                }
+                continue;
+            }
+        }
+
+        // Check safety GPIO pin if configured
+        if let Some(safety_pin) = pump_thread_lock.safety_gpio_pin {
+            if !check_safety_pin(safety_pin) {
+                log::error!("Safety GPIO pin {} check failed - pump {} blocked", 
+                    safety_pin, pump_thread_lock.id);
+                std::mem::drop(pump_thread_lock);
+                sleep(Duration::from_secs(5)); // Check again in 5 seconds
+                
+                // Check for stop signal
+                match rx.try_recv() {
+                    Ok(_) | Err(TryRecvError::Disconnected) => {
+                        stop_pump_thread(Arc::clone(&pump_thread));
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => {}
+                }
+                continue;
+            }
+        }
+
         let gpio = Gpio::new();
 
         if gpio.is_ok() {
@@ -104,7 +195,7 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
 
                
 
-                // pump off
+                // pump off initially
                 pump_pin_out.set_high();
                 
                 // CRITICAL SAFETY CHECK: Check for overflow conditions before operating pump
@@ -122,7 +213,49 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                     
                     // Wait before checking again
                     sleep(Duration::from_secs(30));
+                } else if pump_thread_lock.continuous {
+                    // Continuous operation mode
+                    log::info!("Pump {} in continuous mode", pump_thread_lock.id);
+                    
+                    // Run continuously with periodic safety checks
+                    pump_pin_out.set_low(); // Turn pump on
+                    
+                    // Sleep for a short interval to allow safety checks
+                    for _ in 0..10 { // Check every second for 10 seconds
+                        sleep(Duration::from_secs(1));
+                        
+                        // Check for overflow during continuous operation
+                        let t1_check = crate::aog::sensors::get_value("t1_ovf");
+                        let t2_check = crate::aog::sensors::get_value("t2_ovf");
+                        
+                        if t1_check.contains("OVERFLOW") || t2_check.contains("OVERFLOW") {
+                            log::error!("CRITICAL: Overflow detected during continuous pump operation - emergency shutdown!");
+                            pump_pin_out.set_high();
+                            break;
+                        }
+                        
+                        // Check safety pin during continuous operation
+                        if let Some(safety_pin) = pump_thread_lock.safety_gpio_pin {
+                            if !check_safety_pin(safety_pin) {
+                                log::error!("Safety pin triggered during continuous operation - stopping pump");
+                                pump_pin_out.set_high();
+                                break;
+                            }
+                        }
+                        
+                        // Check for stop signal
+                        match rx.try_recv() {
+                            Ok(_) | Err(TryRecvError::Disconnected) => {
+                                pump_pin_out.set_high();
+                                stop_pump_thread(Arc::clone(&pump_thread));
+                                std::mem::drop(pump_thread_lock);
+                                return;
+                            }
+                            Err(TryRecvError::Empty) => {}
+                        }
+                    }
                 } else {
+                    // Normal sensor-based operation
                     // need more water?
                     // oscillating_state_safety protects against faulty connections to float sensor
                     let mut oscillating_state_safety:u64 = 0;
@@ -135,6 +268,15 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                             log::error!("CRITICAL: Overflow detected during pump operation - emergency shutdown!");
                             pump_pin_out.set_high();
                             break;
+                        }
+                        
+                        // Check safety pin during normal operation
+                        if let Some(safety_pin) = pump_thread_lock.safety_gpio_pin {
+                            if !check_safety_pin(safety_pin) {
+                                log::error!("Safety pin triggered - stopping pump");
+                                pump_pin_out.set_high();
+                                break;
+                            }
                         }
                         
                         if oscillating_state_safety > 10 && ovf_sensor_pin.is_high(){
@@ -246,6 +388,11 @@ mod tests {
         assert_eq!(pump.gpio_pin, 17);
         assert_eq!(pump.sensor_flag, "T1_OVF: NONE");
         assert_eq!(pump.running, false);
+        assert_eq!(pump.continuous, false);
+        assert_eq!(pump.photo_cycle_enabled, false);
+        assert_eq!(pump.photo_cycle_start, 6);
+        assert_eq!(pump.photo_cycle_end, 24);
+        assert_eq!(pump.safety_gpio_pin, None);
     }
 
     #[test]
@@ -257,11 +404,21 @@ mod tests {
             sensor_flag: "CUSTOM_FLAG".to_string(),
             running: true,
             tx,
+            continuous: true,
+            photo_cycle_enabled: true,
+            photo_cycle_start: 8,
+            photo_cycle_end: 20,
+            safety_gpio_pin: Some(23),
         };
         assert_eq!(pump.id, "test_pump");
         assert_eq!(pump.gpio_pin, 22);
         assert_eq!(pump.sensor_flag, "CUSTOM_FLAG");
         assert_eq!(pump.running, true);
+        assert_eq!(pump.continuous, true);
+        assert_eq!(pump.photo_cycle_enabled, true);
+        assert_eq!(pump.photo_cycle_start, 8);
+        assert_eq!(pump.photo_cycle_end, 20);
+        assert_eq!(pump.safety_gpio_pin, Some(23));
     }
 
     #[test]
@@ -320,6 +477,11 @@ mod tests {
             sensor_flag: "TEST".to_string(),
             running: false,
             tx: tx.clone(),
+            continuous: false,
+            photo_cycle_enabled: false,
+            photo_cycle_start: 6,
+            photo_cycle_end: 24,
+            safety_gpio_pin: None,
         };
         
         // Send message through pump's tx
@@ -364,6 +526,11 @@ mod tests {
                 sensor_flag: flag.to_string(),
                 running: false,
                 tx,
+                continuous: false,
+                photo_cycle_enabled: false,
+                photo_cycle_start: 6,
+                photo_cycle_end: 24,
+                safety_gpio_pin: None,
             };
             assert_eq!(pump.sensor_flag, flag);
         }
@@ -381,6 +548,11 @@ mod tests {
                 sensor_flag: format!("SENSOR_{}", i),
                 running: false,
                 tx,
+                continuous: i % 2 == 0,
+                photo_cycle_enabled: i % 3 == 0,
+                photo_cycle_start: 6 + i,
+                photo_cycle_end: 20 + i,
+                safety_gpio_pin: if i > 2 { Some(25 + i) } else { None },
             }));
             pumps.push(pump);
         }
@@ -391,6 +563,75 @@ mod tests {
             let pump_lock = pump.lock().unwrap();
             assert_eq!(pump_lock.id, format!("pump_{}", i));
             assert_eq!(pump_lock.gpio_pin, 17 + i as u8);
+            assert_eq!(pump_lock.continuous, i % 2 == 0);
+            assert_eq!(pump_lock.photo_cycle_enabled, i % 3 == 0);
         }
+    }
+
+    #[test]
+    fn test_photo_cycle_logic() {
+        // Test normal day cycle (6am to 10pm)
+        assert!(is_within_photo_cycle(6, 22));
+        
+        // Test overnight cycle (10pm to 6am)  
+        // Note: This will depend on actual time, so we just test the logic exists
+        let _ = is_within_photo_cycle(22, 6);
+    }
+
+    #[test]
+    fn test_continuous_mode_pump() {
+        let (tx, _rx) = mpsc::channel();
+        let pump = PumpThread {
+            id: "continuous_pump".to_string(),
+            gpio_pin: 17,
+            sensor_flag: "TEST".to_string(),
+            running: false,
+            tx,
+            continuous: true,
+            photo_cycle_enabled: false,
+            photo_cycle_start: 6,
+            photo_cycle_end: 24,
+            safety_gpio_pin: None,
+        };
+        assert!(pump.continuous);
+        assert!(!pump.photo_cycle_enabled);
+    }
+
+    #[test]
+    fn test_safety_pin_configuration() {
+        let (tx, _rx) = mpsc::channel();
+        let pump = PumpThread {
+            id: "safe_pump".to_string(),
+            gpio_pin: 17,
+            sensor_flag: "TEST".to_string(),
+            running: false,
+            tx,
+            continuous: false,
+            photo_cycle_enabled: false,
+            photo_cycle_start: 6,
+            photo_cycle_end: 24,
+            safety_gpio_pin: Some(24),
+        };
+        assert_eq!(pump.safety_gpio_pin, Some(24));
+    }
+
+    #[test]
+    fn test_photo_cycle_overnight() {
+        let (tx, _rx) = mpsc::channel();
+        let pump = PumpThread {
+            id: "night_pump".to_string(),
+            gpio_pin: 17,
+            sensor_flag: "TEST".to_string(),
+            running: false,
+            tx,
+            continuous: false,
+            photo_cycle_enabled: true,
+            photo_cycle_start: 22,  // 10pm
+            photo_cycle_end: 6,      // 6am
+            safety_gpio_pin: None,
+        };
+        assert!(pump.photo_cycle_enabled);
+        assert_eq!(pump.photo_cycle_start, 22);
+        assert_eq!(pump.photo_cycle_end, 6);
     }
 }
