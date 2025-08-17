@@ -232,3 +232,165 @@ pub fn stop(pump_thread: Arc<Mutex<PumpThread>>){
     let _ = pump_thread_lock.tx.send("stop".to_string());
     std::mem::drop(pump_thread_lock);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn test_pump_thread_default() {
+        let pump = PumpThread::default();
+        assert_eq!(pump.id.len(), 100);
+        assert_eq!(pump.gpio_pin, 17);
+        assert_eq!(pump.sensor_flag, "T1_OVF: NONE");
+        assert_eq!(pump.running, false);
+    }
+
+    #[test]
+    fn test_pump_thread_custom() {
+        let (tx, _rx) = mpsc::channel();
+        let pump = PumpThread {
+            id: "test_pump".to_string(),
+            gpio_pin: 22,
+            sensor_flag: "CUSTOM_FLAG".to_string(),
+            running: true,
+            tx,
+        };
+        assert_eq!(pump.id, "test_pump");
+        assert_eq!(pump.gpio_pin, 22);
+        assert_eq!(pump.sensor_flag, "CUSTOM_FLAG");
+        assert_eq!(pump.running, true);
+    }
+
+    #[test]
+    fn test_stop_function() {
+        let pump = Arc::new(Mutex::new(PumpThread::default()));
+        let pump_clone = Arc::clone(&pump);
+        
+        // This should send stop signal through channel
+        stop(pump_clone);
+        
+        // Verify the channel can still be accessed
+        let pump_lock = pump.lock().unwrap();
+        assert!(pump_lock.tx.send("test".to_string()).is_ok());
+    }
+
+    #[test]
+    fn test_pump_thread_id_uniqueness() {
+        let pump1 = PumpThread::default();
+        let pump2 = PumpThread::default();
+        
+        // IDs should be different (statistically)
+        assert_ne!(pump1.id, pump2.id);
+        
+        // Both should be 100 characters long
+        assert_eq!(pump1.id.len(), 100);
+        assert_eq!(pump2.id.len(), 100);
+    }
+
+    #[test]
+    fn test_pump_thread_arc_mutex_sharing() {
+        let pump = Arc::new(Mutex::new(PumpThread::default()));
+        let pump_clone1 = Arc::clone(&pump);
+        let pump_clone2 = Arc::clone(&pump);
+        
+        // Modify through one clone
+        {
+            let mut pump_lock = pump_clone1.lock().unwrap();
+            pump_lock.gpio_pin = 25;
+            pump_lock.running = true;
+        }
+        
+        // Verify changes through another clone
+        {
+            let pump_lock = pump_clone2.lock().unwrap();
+            assert_eq!(pump_lock.gpio_pin, 25);
+            assert_eq!(pump_lock.running, true);
+        }
+    }
+
+    #[test]
+    fn test_channel_communication() {
+        let (tx, rx) = mpsc::channel();
+        let pump = PumpThread {
+            id: "channel_test".to_string(),
+            gpio_pin: 17,
+            sensor_flag: "TEST".to_string(),
+            running: false,
+            tx: tx.clone(),
+        };
+        
+        // Send message through pump's tx
+        assert!(pump.tx.send("test_message".to_string()).is_ok());
+        
+        // Receive message
+        match rx.try_recv() {
+            Ok(msg) => assert_eq!(msg, "test_message"),
+            Err(_) => panic!("Failed to receive message"),
+        }
+    }
+
+    #[test]
+    fn test_atomic_bool_termination() {
+        let term_now = Arc::new(AtomicBool::new(false));
+        let term_clone = Arc::clone(&term_now);
+        
+        // Initially false
+        assert_eq!(term_now.load(Ordering::Relaxed), false);
+        
+        // Set to true through clone
+        term_clone.store(true, Ordering::Relaxed);
+        
+        // Verify change
+        assert_eq!(term_now.load(Ordering::Relaxed), true);
+    }
+
+    #[test]
+    fn test_sensor_flag_formats() {
+        let flags = vec![
+            "T1_OVF: NONE",
+            "T1_OVF: OVERFLOW",
+            "T2_OVF: NONE",
+            "T2_OVF: OVERFLOW",
+        ];
+        
+        for flag in flags {
+            let (tx, _rx) = mpsc::channel();
+            let pump = PumpThread {
+                id: "flag_test".to_string(),
+                gpio_pin: 17,
+                sensor_flag: flag.to_string(),
+                running: false,
+                tx,
+            };
+            assert_eq!(pump.sensor_flag, flag);
+        }
+    }
+
+    #[test]
+    fn test_multiple_pump_threads() {
+        let mut pumps = Vec::new();
+        
+        for i in 0..5 {
+            let (tx, _rx) = mpsc::channel();
+            let pump = Arc::new(Mutex::new(PumpThread {
+                id: format!("pump_{}", i),
+                gpio_pin: 17 + i,
+                sensor_flag: format!("SENSOR_{}", i),
+                running: false,
+                tx,
+            }));
+            pumps.push(pump);
+        }
+        
+        assert_eq!(pumps.len(), 5);
+        
+        for (i, pump) in pumps.iter().enumerate() {
+            let pump_lock = pump.lock().unwrap();
+            assert_eq!(pump_lock.id, format!("pump_{}", i));
+            assert_eq!(pump_lock.gpio_pin, 17 + i as u8);
+        }
+    }
+}
