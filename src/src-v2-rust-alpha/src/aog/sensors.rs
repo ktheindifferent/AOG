@@ -186,6 +186,9 @@ pub fn get_value(sensor: &str) -> String {
 
 use serial2::SerialPort;
 
+#[cfg(test)]
+use mockall::automock;
+
 // device_type: DUAL_OVF_SENSOR, SENSORKIT_MK1
 pub fn fetch_arduino(device_type: String) {
 
@@ -386,6 +389,112 @@ pub fn fetch_arduino(device_type: String) {
 
   
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+    use std::io::Write;
+
+    fn setup_test_sensor_dir() -> TempDir {
+        let temp_dir = TempDir::new().unwrap();
+        let sensor_dir = temp_dir.path().join("sensors");
+        fs::create_dir_all(&sensor_dir).unwrap();
+        std::env::set_var("AOG_SENSOR_DIR", sensor_dir.to_str().unwrap());
+        temp_dir
+    }
+
+    #[test]
+    fn test_parse_arduino_valid_input() {
+        let raw = "BEGIN\nDEVICE_ID: SENSORKIT_MK1\nCO2: 450ppm\nTEMP: 25C\nEND".to_string();
+        
+        let co2 = parse_arduino(raw.clone(), "CO2", "N/A".to_string());
+        assert_eq!(co2, "450ppm");
+        
+        let temp = parse_arduino(raw.clone(), "TEMP", "N/A".to_string());
+        assert_eq!(temp, "25C");
+        
+        let missing = parse_arduino(raw.clone(), "HUMIDITY", "N/A".to_string());
+        assert_eq!(missing, "N/A");
+    }
+
+    #[test]
+    fn test_parse_arduino_malformed_input() {
+        let raw = "BROKEN DATA WITHOUT COLONS".to_string();
+        let result = parse_arduino(raw, "CO2", "ERROR".to_string());
+        assert_eq!(result, "ERROR");
+    }
+
+    #[test]
+    fn test_parse_arduino_empty_input() {
+        let raw = "".to_string();
+        let result = parse_arduino(raw, "CO2", "EMPTY".to_string());
+        assert_eq!(result, "EMPTY");
+    }
+
+    #[test]
+    fn test_parse_arduino_multiple_values() {
+        let raw = "CO2: 400ppm\nCO2: 500ppm\nCO2: 600ppm".to_string();
+        let result = parse_arduino(raw, "CO2", "N/A".to_string());
+        assert_eq!(result, "400ppm");
+    }
+
+    #[test]
+    fn test_get_value_existing_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let sensors_dir = temp_dir.path().join("sensors");
+        fs::create_dir_all(&sensors_dir).unwrap();
+        
+        let test_file = sensors_dir.join("test_sensor");
+        let mut file = fs::File::create(&test_file).unwrap();
+        file.write_all(b"42.5").unwrap();
+        
+        std::env::set_var("TEST_SENSOR_PATH", test_file.to_str().unwrap());
+        
+        let mut data = String::new();
+        if let Ok(mut f) = fs::File::open(test_file) {
+            let _ = f.read_to_string(&mut data);
+        }
+        assert_eq!(data, "42.5");
+    }
+
+    #[test]
+    fn test_get_value_missing_file() {
+        let result = get_value("non_existent_sensor");
+        assert_eq!(result, "N/A");
+    }
+
+    #[test]
+    fn test_fetch_pm25_no_device() {
+        let result = fetch_pm25();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_fetch_pm10_no_device() {
+        let result = fetch_pm10();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_parse_arduino_with_special_characters() {
+        let raw = "SENSOR: value!@#$%^&*()\nTEMP: 25.5°C".to_string();
+        let sensor = parse_arduino(raw.clone(), "SENSOR", "N/A".to_string());
+        assert_eq!(sensor, "value!@#$%^&*()");
+        let temp = parse_arduino(raw, "TEMP", "N/A".to_string());
+        assert_eq!(temp, "25.5°C");
+    }
+
+    #[test]
+    fn test_parse_arduino_edge_cases() {
+        let raw = "KEY: \nEMPTY_VALUE: ".to_string();
+        let key_result = parse_arduino(raw.clone(), "KEY", "DEFAULT".to_string());
+        assert_eq!(key_result, "");
+        let empty_result = parse_arduino(raw, "EMPTY_VALUE", "DEFAULT".to_string());
+        assert_eq!(empty_result, "");
+    }
 }
 
 

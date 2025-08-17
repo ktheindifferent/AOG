@@ -33,3 +33,11 @@ titlecase = "2.2.1"
 mime = "0.3.17"
 clap = { version = "4.3.3", features = ["derive"] }
 serial2 = "0.2.1"
+
+[dev-dependencies]
+mockall = "0.11.4"
+proptest = "1.2.0"
+tokio-test = "0.4.3"
+serial_test = "3.0.0"
+tempfile = "3.8.0"
+assert_matches = "1.5.0"
