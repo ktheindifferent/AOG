@@ -25,7 +25,8 @@
 // TODO - Add safty_gpio_pin intger
 
 use std::sync::mpsc::{self, TryRecvError};
-
+use std::time::Duration;
+use std::thread::sleep;
 
 use rppal::gpio::Gpio;
 
@@ -105,20 +106,47 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
 
                 // pump off
                 pump_pin_out.set_high();
-
-                // need more water?
-                // oscillating_state_safety protects against faulty connections to float sensor
-                let mut oscillating_state_safety:u64 = 0;
-                while ovf_sensor_pin.is_high(){
-                    if oscillating_state_safety > 10 && ovf_sensor_pin.is_high(){
-                        // pump on
-                        log::debug!("Pump On");
-                        pump_pin_out.set_low();
-                    } else {
-                        // pump off
-                        log::debug!("Pump Off");
-                        pump_pin_out.set_high();
-                        oscillating_state_safety += 1;
+                
+                // CRITICAL SAFETY CHECK: Check for overflow conditions before operating pump
+                let t1_ovf = crate::aog::sensors::get_value("t1_ovf");
+                let t2_ovf = crate::aog::sensors::get_value("t2_ovf");
+                let sensor_error = std::path::Path::new("/opt/aog/sensors/overflow_error").exists();
+                
+                // If any overflow condition exists, DO NOT operate pump
+                if t1_ovf.contains("OVERFLOW") || t2_ovf.contains("OVERFLOW") || sensor_error {
+                    log::error!("CRITICAL SAFETY: Overflow condition detected - pump operation blocked!");
+                    log::error!("Tank 1: {}, Tank 2: {}, Sensor Error: {}", t1_ovf, t2_ovf, sensor_error);
+                    
+                    // Ensure pump is definitely off
+                    pump_pin_out.set_high();
+                    
+                    // Wait before checking again
+                    sleep(Duration::from_secs(30));
+                } else {
+                    // need more water?
+                    // oscillating_state_safety protects against faulty connections to float sensor
+                    let mut oscillating_state_safety:u64 = 0;
+                    while ovf_sensor_pin.is_high(){
+                        // Double-check overflow status before each pump activation
+                        let t1_check = crate::aog::sensors::get_value("t1_ovf");
+                        let t2_check = crate::aog::sensors::get_value("t2_ovf");
+                        
+                        if t1_check.contains("OVERFLOW") || t2_check.contains("OVERFLOW") {
+                            log::error!("CRITICAL: Overflow detected during pump operation - emergency shutdown!");
+                            pump_pin_out.set_high();
+                            break;
+                        }
+                        
+                        if oscillating_state_safety > 10 && ovf_sensor_pin.is_high(){
+                            // pump on
+                            log::debug!("Pump On");
+                            pump_pin_out.set_low();
+                        } else {
+                            // pump off
+                            log::debug!("Pump Off");
+                            pump_pin_out.set_high();
+                            oscillating_state_safety += 1;
+                        }
                     }
                 } 
 

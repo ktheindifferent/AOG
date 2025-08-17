@@ -25,7 +25,7 @@ use sds011::{SDS011};
 use std::path::Path;
 
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use std::str;
 
@@ -228,6 +228,17 @@ pub fn fetch_arduino(device_type: String) {
                                     Ok(t) => {
 
                                         let _ = std::io::stdout().write_all(&serial_buf[..t]);
+                                        
+                                        // RECOVERY: Clear error state if we successfully read from overflow sensor
+                                        if device_type.contains("DUAL_OVF_SENSOR") && t > 0 {
+                                            // Remove error state file to indicate recovery
+                                            let _ = std::fs::remove_file("/opt/aog/sensors/overflow_error");
+                                            
+                                            // Log recovery only once per recovery
+                                            if std::path::Path::new("/opt/aog/sensors/overflow_error").exists() {
+                                                log::info!("Overflow sensor communication recovered at {}", port_name);
+                                            }
+                                        }
     
                                         // println!("found_arduino: {}", port_name.clone());
                         
@@ -344,9 +355,31 @@ pub fn fetch_arduino(device_type: String) {
                                     Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => (),
                                     Err(ref e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
 
-                                        // TODO: Set water level sensors to OVERFLOW as a pecaution
+                                        // CRITICAL SAFETY: Set water level sensors to OVERFLOW as a precaution
                                         if device_type.contains("DUAL_OVF_SENSOR"){
-
+                                            log::error!("CRITICAL: Serial communication failed for overflow sensors - setting to OVERFLOW state for safety");
+                                            
+                                            // Force both tank overflow sensors to OVERFLOW state
+                                            if let Ok(mut f) = File::create("/opt/aog/sensors/t1_ovf") {
+                                                let _ = f.write_all(b"OVERFLOW");
+                                                log::warn!("Tank 1 overflow sensor set to OVERFLOW due to communication failure");
+                                            }
+                                            
+                                            if let Ok(mut f) = File::create("/opt/aog/sensors/t2_ovf") {
+                                                let _ = f.write_all(b"OVERFLOW");
+                                                log::warn!("Tank 2 overflow sensor set to OVERFLOW due to communication failure");
+                                            }
+                                            
+                                            // Write error state file for monitoring
+                                            if let Ok(mut f) = File::create("/opt/aog/sensors/overflow_error") {
+                                                let timestamp = SystemTime::now()
+                                                    .duration_since(UNIX_EPOCH)
+                                                    .unwrap_or_default()
+                                                    .as_secs();
+                                                let error_msg = format!("SENSOR_FAILURE: BrokenPipe at {} - timestamp: {}", 
+                                                    port_name, timestamp);
+                                                let _ = f.write_all(error_msg.as_bytes());
+                                            }
                                         }
 
 
@@ -354,10 +387,32 @@ pub fn fetch_arduino(device_type: String) {
                                         break;
                                     },
                                     Err(e) => {
-                                        log::error!("{:?}", e);
-                                        // TODO: Set water level sensors to OVERFLOW as a pecaution
+                                        log::error!("Serial read error: {:?}", e);
+                                        // CRITICAL SAFETY: Set water level sensors to OVERFLOW as a precaution
                                         if device_type.contains("DUAL_OVF_SENSOR"){
-
+                                            log::error!("CRITICAL: Serial read error for overflow sensors - setting to OVERFLOW state for safety");
+                                            
+                                            // Force both tank overflow sensors to OVERFLOW state
+                                            if let Ok(mut f) = File::create("/opt/aog/sensors/t1_ovf") {
+                                                let _ = f.write_all(b"OVERFLOW");
+                                                log::warn!("Tank 1 overflow sensor set to OVERFLOW due to read error");
+                                            }
+                                            
+                                            if let Ok(mut f) = File::create("/opt/aog/sensors/t2_ovf") {
+                                                let _ = f.write_all(b"OVERFLOW");
+                                                log::warn!("Tank 2 overflow sensor set to OVERFLOW due to read error");
+                                            }
+                                            
+                                            // Write error state file for monitoring
+                                            if let Ok(mut f) = File::create("/opt/aog/sensors/overflow_error") {
+                                                let timestamp = SystemTime::now()
+                                                    .duration_since(UNIX_EPOCH)
+                                                    .unwrap_or_default()
+                                                    .as_secs();
+                                                let error_msg = format!("SENSOR_FAILURE: {} at {} - timestamp: {}", 
+                                                    e, port_name, timestamp);
+                                                let _ = f.write_all(error_msg.as_bytes());
+                                            }
                                         }
                                     }
                                 }
