@@ -30,6 +30,9 @@ pub mod http;
 pub mod tools;
 pub mod qwiic;
 
+#[cfg(test)]
+mod tests_overflow;
+
 
 use std::io::{Write, stdout};
 
