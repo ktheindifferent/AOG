@@ -56,7 +56,8 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     }
 
     if command.starts_with("uninstall"){
-        crate::setup::uninstall();
+        // crate::setup::uninstall();
+        println!("Uninstall command is not available in library mode");
     }
     
     if command.starts_with("stats"){

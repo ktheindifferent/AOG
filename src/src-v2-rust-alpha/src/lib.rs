@@ -1,3 +1,8 @@
+pub mod aog;
+
+// Re-export commonly used types for convenience
+pub use aog::qwiic::{QwiicRelayDevice, RecoveryConfig, RelayHealthStatus, RelayError};
+
 use clap::Parser;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};

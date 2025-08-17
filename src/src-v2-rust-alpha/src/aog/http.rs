@@ -45,8 +45,7 @@ use serde::{Serialize, Deserialize};
 
 
 use crate::aog;
-
-use ::aog::Config;
+use crate::Config;
 
 
 
@@ -84,11 +83,11 @@ pub fn init(){
             session::session(request, "SID", 3600, |session| {
                 let session_id: &str = session.id();
                 let mut session_authenticated = false;
-                let mut sessions :Vec<::aog::Session> = Vec::new();
+                let mut sessions :Vec<crate::Session> = Vec::new();
     
     
                 if Path::new("/opt/aog/dat/sessions.bin").exists() {
-                    sessions = ::aog::Sessions::load(0).unwrap().sessions;
+                    sessions = crate::Sessions::load(0).unwrap().sessions;
                 }
     
                 for session in &sessions{
@@ -110,13 +109,13 @@ pub fn init(){
                         input_password: String,
                     }));
                     if input.input_username == *"admin" && input.input_password == edit_aog_config.encrypted_password {
-                                            let session = ::aog::Session {
+                                            let session = crate::Session {
                                                 id: session_id.to_string(),
                                                 delta: 0
                                             };
                                             sessions.push(session);
                     
-                                            let _session_save_file = ::aog::Sessions {
+                                            let _session_save_file = crate::Sessions {
                                                 sessions: sessions.clone()
                                             };
                     
