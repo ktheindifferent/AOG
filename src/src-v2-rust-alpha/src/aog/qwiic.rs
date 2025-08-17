@@ -1,5 +1,5 @@
 use serde::{Serialize, Deserialize};
-use qwiic_relay_rs::*;
+use qwiic_relay_rs::{QwiicRelay, QwiicRelayConfig};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::thread;
@@ -257,7 +257,7 @@ impl QwiicRelayDevice {
             loop {
                 thread::sleep(Duration::from_secs(interval));
                 
-                let qwiic_relay_config = crate::QwiicRelayConfig::default();
+                let qwiic_relay_config = QwiicRelayConfig::default();
                 match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", device_id) {
                     Ok(mut qwiic_relay) => {
                         match qwiic_relay.get_version() {
@@ -309,7 +309,7 @@ impl QwiicRelayDevice {
 
         let result = self.execute_with_retry(
             || {
-                let qwiic_relay_config = crate::QwiicRelayConfig::default();
+                let qwiic_relay_config = QwiicRelayConfig::default();
                 match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id) {
                     Ok(mut qwiic_relay) => {
                         self.check_firmware_version(&mut qwiic_relay)?;
@@ -336,7 +336,7 @@ impl QwiicRelayDevice {
     }
 
     fn test_legacy(&self) {
-        let qwiic_relay_config = crate::QwiicRelayConfig::default();
+        let qwiic_relay_config = QwiicRelayConfig::default();
         let qwiic_relay_d = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id);
         match qwiic_relay_d {
             Ok(mut qwiic_relay) => {
@@ -366,7 +366,7 @@ impl QwiicRelayDevice {
 
         let _ = self.execute_with_retry(
             || {
-                let qwiic_relay_config = crate::QwiicRelayConfig::default();
+                let qwiic_relay_config = QwiicRelayConfig::default();
                 match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id) {
                     Ok(mut qwiic_relay) => {
                         qwiic_relay.set_all_relays_off()
@@ -382,7 +382,7 @@ impl QwiicRelayDevice {
     }
 
     fn all_off_legacy(&self) {
-        let qwiic_relay_config = crate::QwiicRelayConfig::default();
+        let qwiic_relay_config = QwiicRelayConfig::default();
         let qwiic_relay_d = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id);
         match qwiic_relay_d {
             Ok(mut qwiic_relay) => {
@@ -401,7 +401,7 @@ impl QwiicRelayDevice {
 
         self.execute_with_retry(
             || {
-                let qwiic_relay_config = crate::QwiicRelayConfig::default();
+                let qwiic_relay_config = QwiicRelayConfig::default();
                 match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id) {
                     Ok(mut qwiic_relay) => {
                         if state {
@@ -422,7 +422,7 @@ impl QwiicRelayDevice {
     }
 
     fn set_relay_legacy(&self, relay_id: u16, state: bool) -> Result<(), RelayError> {
-        let qwiic_relay_config = crate::QwiicRelayConfig::default();
+        let qwiic_relay_config = QwiicRelayConfig::default();
         match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id) {
             Ok(mut qwiic_relay) => {
                 let result = if state {
@@ -447,18 +447,11 @@ impl QwiicRelayDevice {
 
         self.execute_with_retry(
             || {
-                let qwiic_relay_config = crate::QwiicRelayConfig::default();
+                let qwiic_relay_config = QwiicRelayConfig::default();
                 match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id) {
                     Ok(mut qwiic_relay) => {
-                        match qwiic_relay.get_relay_state(Some(relay_id as u8)) {
-                            qwiic_relay_rs::RelayDeviceStatus::RelayOn => Ok(true),
-                            qwiic_relay_rs::RelayDeviceStatus::RelayOff => Ok(false),
-                            qwiic_relay_rs::RelayDeviceStatus::AllRelaysOn => Ok(true),
-                            qwiic_relay_rs::RelayDeviceStatus::AllRelaysOff => Ok(false),
-                            qwiic_relay_rs::RelayDeviceStatus::SomeRelaysOn => {
-                                Err(RelayError::OperationFailure(format!("Failed to get relay {} state: ambiguous state", relay_id)))
-                            }
-                        }
+                        qwiic_relay.get_relay_state(Some(relay_id as u8))
+                            .map_err(|e| RelayError::OperationFailure(format!("Failed to get relay {} state: {}", relay_id, e)))
                     },
                     Err(err) => {
                         Err(RelayError::InitializationFailure(format!("Failed to initialize relay: {}", err)))
@@ -470,18 +463,11 @@ impl QwiicRelayDevice {
     }
 
     fn get_relay_state_legacy(&self, relay_id: u16) -> Result<bool, RelayError> {
-        let qwiic_relay_config = crate::QwiicRelayConfig::default();
+        let qwiic_relay_config = QwiicRelayConfig::default();
         match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id) {
             Ok(mut qwiic_relay) => {
-                match qwiic_relay.get_relay_state(Some(relay_id as u8)) {
-                    qwiic_relay_rs::RelayDeviceStatus::RelayOn => Ok(true),
-                    qwiic_relay_rs::RelayDeviceStatus::RelayOff => Ok(false),
-                    qwiic_relay_rs::RelayDeviceStatus::AllRelaysOn => Ok(true),
-                    qwiic_relay_rs::RelayDeviceStatus::AllRelaysOff => Ok(false),
-                    qwiic_relay_rs::RelayDeviceStatus::SomeRelaysOn => {
-                        Err(RelayError::OperationFailure(format!("Failed to get relay {} state: ambiguous state", relay_id)))
-                    }
-                }
+                qwiic_relay.get_relay_state(Some(relay_id as u8))
+                    .map_err(|e| RelayError::OperationFailure(format!("Failed to get relay {} state: {}", relay_id, e)))
             },
             Err(err) => {
                 log::error!("{}", err);
