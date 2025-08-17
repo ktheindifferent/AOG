@@ -92,7 +92,7 @@ pub fn install(_args: aog::Args) -> Result<()> {
     -subj '/CN=localhost' -extensions EXT -config <( \
         printf \"[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\")")
     .output()
-    .expect("failed to execute process");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to generate SSL certificate: {}", e)))?;
     if openssh.status.success() {
         println!();
     } else {
@@ -104,7 +104,7 @@ pub fn install(_args: aog::Args) -> Result<()> {
     .arg("-c")
     .arg("openssl x509 -outform der -in /opt/aog/crt/default/aog.local.cert -out /opt/aog/crt/default/aog.local.der")
     .output()
-    .expect("failed to execute process");
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to convert certificate to DER: {}", e)))?;
     if openssh_der.status.success() {
         println!();
     } else {
@@ -116,11 +116,12 @@ pub fn install(_args: aog::Args) -> Result<()> {
     let www_build = rebuild_www();
 
     if www_build.is_ok() {
-        Command::new("sh")
+        if let Err(e) = Command::new("sh")
         .arg("-c")
         .arg("rm -rf /opt/aog/www.zip")
-        .output()
-        .expect("failed to execute process");    
+        .output() {
+            log::warn!("Failed to remove www.zip: {}", e);
+        }    
     }
 
     Ok(())
@@ -138,7 +139,8 @@ fn rebuild_www() -> std::io::Result<()> {
         pos += bytes_written;
     }
 
-    extract_zip("/opt/aog/www.zip");
+    extract_zip("/opt/aog/www.zip")
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to extract www.zip: {:?}", e)))?;
     Ok(())
 }
 
@@ -150,29 +152,34 @@ pub fn update(){
 }
 
 pub fn uninstall(){
-    Command::new("sh")
+    if let Err(e) = Command::new("sh")
     .arg("-c")
     .arg("rm -rf /opt/aog")
-    .output()
-    .expect("failed to execute process");
+    .output() {
+        log::error!("Failed to remove /opt/aog directory: {}", e);
+    }
 }
 
 
-fn extract_zip(zip_path: &str) -> i32 {
+fn extract_zip(zip_path: &str) -> Result<i32> {
 
     let fname = std::path::Path::new(zip_path);
-    let file = fs::File::open(&fname).unwrap();
+    let file = fs::File::open(&fname)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to open zip file: {}", e)))?;
 
-    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to read zip archive: {}", e)))?;
 
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).unwrap();
+        let mut file = archive.by_index(i)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to read file from archive: {}", e)))?;
         let outpath_end = match file.enclosed_name() {
             Some(path) => path.to_owned(),
             None => continue,
         };
 
-        let out_mend = "/opt/aog/".to_owned() + outpath_end.to_str().unwrap();
+        let out_mend = "/opt/aog/".to_owned() + outpath_end.to_str()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Invalid path in archive"))?;
 
         let outpath = Path::new(&(out_mend));
 
@@ -185,7 +192,8 @@ fn extract_zip(zip_path: &str) -> i32 {
 
         if (&*file.name()).ends_with('/') {
             // println!("File {} extracted to \"{}\"", i, outpath.display());
-            fs::create_dir_all(&outpath).unwrap();
+            fs::create_dir_all(&outpath)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to create directory: {}", e)))?;
         } else {
             // println!(
             //     "File {} extracted to \"{}\" ({} bytes)",
@@ -195,11 +203,14 @@ fn extract_zip(zip_path: &str) -> i32 {
             // );
             if let Some(p) = outpath.parent() {
                 if !p.exists() {
-                    fs::create_dir_all(&p).unwrap();
+                    fs::create_dir_all(&p)
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to create parent directory: {}", e)))?;
                 }
             }
-            let mut outfile = fs::File::create(&outpath).unwrap();
-            io::copy(&mut file, &mut outfile).unwrap();
+            let mut outfile = fs::File::create(&outpath)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to create output file: {}", e)))?;
+            io::copy(&mut file, &mut outfile)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to copy file content: {}", e)))?;
         }
 
         // Get and Set permissions
@@ -208,11 +219,13 @@ fn extract_zip(zip_path: &str) -> i32 {
             use std::os::unix::fs::PermissionsExt;
 
             if let Some(mode) = file.unix_mode() {
-                fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
+                if let Err(e) = fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)) {
+                    log::warn!("Failed to set permissions on {}: {}", outpath.display(), e);
+                }
             }
         }
     }
-    0
+    Ok(0)
 }
 
 
@@ -275,5 +288,7 @@ pub fn update_linux_service_file(args: aog::Args){
     data.push_str("StartLimitBurst=10\n\n");
     data.push_str("[Install]\n");
     data.push_str("WantedBy=multi-user.target\n");
-    std::fs::write("/lib/systemd/system/aog.service", data).expect("Unable to write file");
+    if let Err(e) = std::fs::write("/lib/systemd/system/aog.service", data) {
+        log::error!("Failed to write service file: {}", e);
+    }
 }

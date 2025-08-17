@@ -104,7 +104,13 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     if command.starts_with("relay"){
 
         let qwiic_relay_config = QwiicRelayConfig::default();
-        let mut qwiic_relay = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", 0x25).expect("Could not init device");
+        let mut qwiic_relay = match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", 0x25) {
+            Ok(relay) => relay,
+            Err(e) => {
+                log::error!("Failed to initialize Qwiic relay device: {:?}", e);
+                return;
+            }
+        };
 
      
     
