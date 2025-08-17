@@ -5,9 +5,10 @@ $( document ).ready(function() {
     initVideoStreamByUrl("/api/dat/video1.jpg");
     initVideoStreamByUrl("/api/dat/video2.jpg");
 
-
     getStats();
-
+    
+    // Initialize pump control UI
+    initPumpControls();
 });
 
 function getStats(){
@@ -89,4 +90,130 @@ function makeid(length) {
  charactersLength));
    }
    return result;
+}
+
+// Pump Control Functions
+function initPumpControls() {
+    // Toggle photo cycle settings visibility
+    $('#photoCycleSwitch').change(function() {
+        if($(this).is(':checked')) {
+            $('#photoCycleSettings').show();
+        } else {
+            $('#photoCycleSettings').hide();
+        }
+    });
+    
+    // Toggle safety pin settings visibility
+    $('#safetyPinSwitch').change(function() {
+        if($(this).is(':checked')) {
+            $('#safetyPinSettings').show();
+        } else {
+            $('#safetyPinSettings').hide();
+        }
+    });
+    
+    // Load pump settings when modal opens
+    $('#pumpControlModal').on('show.bs.modal', function() {
+        loadPumpSettings();
+    });
+    
+    // Save pump settings
+    $('#savePumpSettings').click(function() {
+        savePumpSettings();
+    });
+}
+
+function loadPumpSettings() {
+    $.ajax({
+        url: "/api/pump/config",
+        type: "GET",
+        success: function(data) {
+            if(data && data.pump_config) {
+                var config = data.pump_config;
+                $('#continuousModeSwitch').prop('checked', config.continuous_mode);
+                $('#photoCycleSwitch').prop('checked', config.photo_cycle_enabled);
+                $('#photoCycleStart').val(config.photo_cycle_start_hour);
+                $('#photoCycleEnd').val(config.photo_cycle_end_hour);
+                
+                if(config.safety_gpio_pin !== null) {
+                    $('#safetyPinSwitch').prop('checked', true);
+                    $('#safetyGpioPin').val(config.safety_gpio_pin);
+                    $('#safetyPinSettings').show();
+                } else {
+                    $('#safetyPinSwitch').prop('checked', false);
+                    $('#safetyPinSettings').hide();
+                }
+                
+                $('#runtimeLimit').val(config.pump_runtime_limit_seconds);
+                $('#cooldownPeriod').val(config.pump_cooldown_seconds);
+                
+                if(config.photo_cycle_enabled) {
+                    $('#photoCycleSettings').show();
+                }
+                
+                updatePumpStatus();
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error("Failed to load pump settings:", error);
+            $('#pumpStatus').text('Failed to load settings');
+        }
+    });
+}
+
+function savePumpSettings() {
+    var settings = {
+        continuous_mode: $('#continuousModeSwitch').is(':checked'),
+        photo_cycle_enabled: $('#photoCycleSwitch').is(':checked'),
+        photo_cycle_start_hour: parseInt($('#photoCycleStart').val()),
+        photo_cycle_end_hour: parseInt($('#photoCycleEnd').val()),
+        safety_gpio_pin: $('#safetyPinSwitch').is(':checked') ? parseInt($('#safetyGpioPin').val()) : null,
+        pump_runtime_limit_seconds: parseInt($('#runtimeLimit').val()),
+        pump_cooldown_seconds: parseInt($('#cooldownPeriod').val())
+    };
+    
+    $.ajax({
+        url: "/api/pump/config",
+        type: "POST",
+        contentType: "application/json",
+        data: JSON.stringify(settings),
+        success: function(response) {
+            $('#pumpStatus').text('Settings saved successfully!');
+            setTimeout(function() {
+                $('#pumpControlModal').modal('hide');
+            }, 1500);
+        },
+        error: function(xhr, status, error) {
+            console.error("Failed to save pump settings:", error);
+            $('#pumpStatus').text('Failed to save settings: ' + error);
+        }
+    });
+}
+
+function updatePumpStatus() {
+    $.ajax({
+        url: "/api/pump/status",
+        type: "GET",
+        success: function(data) {
+            var statusText = 'Mode: ';
+            if(data.continuous_mode) {
+                statusText += 'Continuous';
+            } else {
+                statusText += 'Sensor-based';
+            }
+            
+            if(data.photo_cycle_enabled) {
+                statusText += ' | Photo Cycle: ' + data.photo_cycle_start_hour + ':00 - ' + data.photo_cycle_end_hour + ':00';
+            }
+            
+            if(data.safety_gpio_pin !== null) {
+                statusText += ' | Safety Pin: GPIO' + data.safety_gpio_pin;
+            }
+            
+            $('#pumpStatus').text(statusText);
+        },
+        error: function(xhr, status, error) {
+            $('#pumpStatus').text('Unable to fetch pump status');
+        }
+    });
 }
