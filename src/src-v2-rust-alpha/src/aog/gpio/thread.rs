@@ -68,7 +68,13 @@ pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, r
 
     let _ = stop_high(Arc::clone(&gpio_thread));
     
-    let gpio_thread_lock = gpio_thread.lock().unwrap();
+    let gpio_thread_lock = match gpio_thread.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            log::error!("Failed to acquire GPIO thread lock: {:?}", e);
+            return;
+        }
+    };
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
@@ -86,13 +92,9 @@ pub fn set_low(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, r
 
 
 
-    if gpio.is_ok() {
-        let u_gpio = gpio.unwrap();
-        let gpio_pin = u_gpio.get(gpio_thread_lock.gpio_pin);
-        
-
-        if gpio_pin.is_ok() {
-            let mut gpio_pin_out = gpio_pin.unwrap().into_output();
+    if let Ok(u_gpio) = gpio {
+        if let Ok(gpio_pin) = u_gpio.get(gpio_thread_lock.gpio_pin) {
+            let mut gpio_pin_out = gpio_pin.into_output();
             thread::spawn(move || while !term_now.load(Ordering::Relaxed) {
 
                 gpio_pin_out.set_low();
@@ -126,7 +128,13 @@ pub fn set_high(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, 
 
     let _ = stop_low(Arc::clone(&gpio_thread));
 
-    let gpio_thread_lock = gpio_thread.lock().unwrap();
+    let gpio_thread_lock = match gpio_thread.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            log::error!("Failed to acquire GPIO thread lock: {:?}", e);
+            return;
+        }
+    };
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
     let gpio = Gpio::new();
@@ -143,13 +151,9 @@ pub fn set_high(gpio_thread: Arc<Mutex<GPIOThread>>, term_now: Arc<AtomicBool>, 
 
 
 
-    if gpio.is_ok() {
-        let u_gpio = gpio.unwrap();
-        let gpio_pin = u_gpio.get(gpio_thread_lock.gpio_pin);
-        
-
-        if gpio_pin.is_ok() {
-            let mut gpio_pin_out = gpio_pin.unwrap().into_output();
+    if let Ok(u_gpio) = gpio {
+        if let Ok(gpio_pin) = u_gpio.get(gpio_thread_lock.gpio_pin) {
+            let mut gpio_pin_out = gpio_pin.into_output();
             thread::spawn(move || while !term_now.load(Ordering::Relaxed) {
 
                 gpio_pin_out.set_high();
@@ -186,14 +190,26 @@ pub fn stop(gpio_thread: Arc<Mutex<GPIOThread>>){
 }
 
 pub fn stop_low(gpio_thread: Arc<Mutex<GPIOThread>>) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
-    let gpio_thread_lock = gpio_thread.lock().unwrap();
+    let gpio_thread_lock = match gpio_thread.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            log::error!("Failed to acquire GPIO thread lock: {:?}", e);
+            return Err(std::sync::mpsc::SendError("lock failed".to_string()));
+        }
+    };
     let vv =  gpio_thread_lock.set_low_tx.send("stop".to_string());
     std::mem::drop(gpio_thread_lock);
     return vv;
 }
 
 pub fn stop_high(gpio_thread: Arc<Mutex<GPIOThread>>) -> Result<(), std::sync::mpsc::SendError<std::string::String>>{
-    let gpio_thread_lock = gpio_thread.lock().unwrap();
+    let gpio_thread_lock = match gpio_thread.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            log::error!("Failed to acquire GPIO thread lock: {:?}", e);
+            return Err(std::sync::mpsc::SendError("lock failed".to_string()));
+        }
+    };
     let vv = gpio_thread_lock.set_high_tx.send("stop".to_string());
     std::mem::drop(gpio_thread_lock);
     return vv;
