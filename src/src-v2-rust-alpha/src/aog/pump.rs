@@ -21,7 +21,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::sync::mpsc::{self, TryRecvError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::thread::sleep;
 
 use rppal::gpio::Gpio;
@@ -40,6 +40,9 @@ use rand::{thread_rng, Rng};
 use chrono::{Local, Timelike};
 use crate::aog::error::{AogError, Result, ErrorContext, log_error_with_context};
 use crate::retry_with_backoff;
+
+// Import pump safety module
+use crate::aog::pump_safety::{PumpSafetyMonitor, PumpType, SAFETY_MONITOR};
 
 
 #[derive(Debug, Clone)]
@@ -303,6 +306,15 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                     // need more water?
                     // oscillating_state_safety protects against faulty connections to float sensor
                     let mut oscillating_state_safety:u64 = 0;
+                    let mut oscillation_start_time = Instant::now();
+                    let max_oscillation_time = Duration::from_secs(300); // 5 minutes max
+                    
+                    // Register pump start with safety monitor
+                    SAFETY_MONITOR.register_pump_start(
+                        pump_thread_lock.id.clone(),
+                        PumpType::Fill  // Determine actual type based on GPIO pin
+                    );
+                    
                     while ovf_sensor_pin.is_high(){
                         // Double-check overflow status before each pump activation
                         let t1_check = crate::aog::sensors::get_value("t1_ovf");
@@ -323,15 +335,49 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                             }
                         }
                         
-                        if oscillating_state_safety > 10 && ovf_sensor_pin.is_high(){
-                            // pump on
-                            log::debug!("Pump On");
-                            pump_pin_out.set_low();
-                        } else {
-                            // pump off
-                            log::debug!("Pump Off");
+                        // Check oscillation time limit
+                        if oscillation_start_time.elapsed() > max_oscillation_time {
+                            log::warn!("Oscillation time limit exceeded - stopping pump");
                             pump_pin_out.set_high();
-                            oscillating_state_safety += 1;
+                            break;
+                        }
+                        
+                        // Enhanced oscillation safety with configurable speed
+                        let oscillation_period = 100; // milliseconds
+                        
+                        // Validate oscillation safety with pump safety monitor
+                        match SAFETY_MONITOR.check_oscillation_safety(&pump_thread_lock.id, oscillation_period) {
+                            Ok(true) => {
+                                if oscillating_state_safety > 10 && ovf_sensor_pin.is_high(){
+                                    // pump on
+                                    log::debug!("Pump On - Cycle {}", oscillating_state_safety);
+                                    pump_pin_out.set_low();
+                                    sleep(Duration::from_millis(oscillation_period));
+                                } else {
+                                    // pump off
+                                    log::debug!("Pump Off - Safety counter: {}", oscillating_state_safety);
+                                    pump_pin_out.set_high();
+                                    oscillating_state_safety += 1;
+                                    sleep(Duration::from_millis(oscillation_period));
+                                }
+                            },
+                            Ok(false) => {
+                                log::error!("Oscillation safety check failed");
+                                pump_pin_out.set_high();
+                                break;
+                            },
+                            Err(e) => {
+                                log::error!("Oscillation safety check failed: {}", e);
+                                pump_pin_out.set_high();
+                                break;
+                            }
+                        }
+                        
+                        // Check runtime limits
+                        if !SAFETY_MONITOR.check_runtime_limit(&pump_thread_lock.id, PumpType::Fill) {
+                            log::warn!("Runtime limit exceeded for pump {}", pump_thread_lock.id);
+                            pump_pin_out.set_high();
+                            break;
                         }
                     }
                 } 
@@ -342,8 +388,15 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                 // this should make the pump pin available
                 drop(pump_pin_out);
 
-                // TODO - test speed
-                // TODO - Make sure inbetween state doesn't disturb oscillating_state_safety
+                // Register pump stop with safety monitor
+                SAFETY_MONITOR.register_pump_stop(
+                    pump_thread_lock.id.clone(),
+                    "Normal operation complete".to_string()
+                );
+                
+                // Reset oscillation counter for next cycle
+                SAFETY_MONITOR.reset_oscillation_counter(&pump_thread_lock.id);
+                
                 stop_physical_pump(Arc::clone(&pump_thread));
         
                 // sleep for a random amount of time

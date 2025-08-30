@@ -30,13 +30,14 @@ error-chain = "0.12.4"
 sudo = "0.5"
 sha2 = "0.10.6"
 titlecase = "2.2.1"
+argon2 = "0.5"
 mime = "0.3.17"
 clap = { version = "4.3.3", features = ["derive"] }
 serial2 = "0.2.1"
 chrono = "0.4"
 thiserror = "1.0"
 anyhow = "1.0"
-lazy_static = "1.4"
+lazy_static = "1.4.0"
 tokio = { version = "1.0", features = ["time"] }
 
 [dev-dependencies]
