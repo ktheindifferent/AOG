@@ -143,14 +143,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.99"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0674a1ddeecb70197781e945de4b3b8ffb61fa939a5597bcf48503737663100"
+
+[[package]]
 name = "aog"
 version = "0.2.0"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "chrono",
  "clap 4.5.45",
  "error-chain",
  "i2cdev",
+ "lazy_static",
  "log",
  "machine-ip",
  "mime",
@@ -175,7 +183,9 @@ dependencies = [
  "simple_logger",
  "sudo",
  "tempfile",
+ "thiserror 1.0.69",
  "titlecase",
+ "tokio",
  "tokio-test",
  "zip",
 ]

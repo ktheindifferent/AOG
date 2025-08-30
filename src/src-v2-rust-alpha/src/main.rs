@@ -28,6 +28,8 @@
 pub mod setup;
 pub mod aog;
 
+use aog::error::{AogError, ErrorContext, log_error_with_context};
+
 // const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 extern crate qwiic_lcd_rs;
 extern crate qwiic_relay_rs;
@@ -44,7 +46,7 @@ use std::io::{stdin,stdout,Write};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
-use ::aog::Config;
+use ::aog::{Config, Session, Sessions};
 use std::thread;
 
 use error_chain::error_chain;
@@ -164,10 +166,17 @@ fn main() -> Result<()> {
                                     .form(&params)
                                     .send() {
                                     Ok(res) => {
-                                        let _body = res.text().unwrap_or_else(|e| {
-                                            log::error!("Failed to read response text: {}", e);
-                                            String::new()
-                                        });
+                                        match res.text() {
+                                            Ok(body) => {
+                                                log::debug!("Command response: {}", body);
+                                            },
+                                            Err(e) => {
+                                                let ctx = ErrorContext::new("main", "http_response")
+                                                    .with_details(format!("Failed to read response text: {}", e));
+                                                let error = AogError::HttpError(e.to_string());
+                                                log_error_with_context(&error, &ctx);
+                                            }
+                                        }
                                     },
                                     Err(e) => log::error!("Failed to send command request: {}", e),
                                 }

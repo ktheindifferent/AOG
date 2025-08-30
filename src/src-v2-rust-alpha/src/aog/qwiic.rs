@@ -344,7 +344,12 @@ impl QwiicRelayDevice {
                 match qwiic_relay_version {
                     Ok(v) => {
                         log::info!("Qwiic Relay Firmware Version: {}", v);
-                        qwiic_relay.set_all_relays_off().unwrap();
+                        match qwiic_relay.set_all_relays_off() {
+                            Ok(_) => log::info!("Successfully turned off all relays"),
+                            Err(e) => {
+                                log::error!("Failed to turn off all relays: {}", e);
+                            }
+                        }
                         std::thread::sleep(std::time::Duration::from_secs(2));
                     },
                     Err(err) => {
@@ -386,7 +391,10 @@ impl QwiicRelayDevice {
         let qwiic_relay_d = QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", self.id);
         match qwiic_relay_d {
             Ok(mut qwiic_relay) => {
-                qwiic_relay.set_all_relays_off().unwrap()
+                match qwiic_relay.set_all_relays_off() {
+                    Ok(_) => log::debug!("All relays turned off"),
+                    Err(e) => log::error!("Failed to turn off all relays: {}", e)
+                }
             }, 
             Err(err) => {
                 log::error!("{}", err);
