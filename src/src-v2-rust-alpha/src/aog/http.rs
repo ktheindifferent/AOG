@@ -108,7 +108,16 @@ pub fn init(){
                         input_username: String,
                         input_password: String,
                     }));
-                    if input.input_username == *"admin" && input.input_password == edit_aog_config.encrypted_password {
+                    // Use secure password verification instead of plain text comparison
+                    let password_valid = match crate::aog::auth::verify_password(&input.input_password, &edit_aog_config.encrypted_password) {
+                        Ok(valid) => valid,
+                        Err(e) => {
+                            log::error!("Password verification error: {}", e);
+                            false
+                        }
+                    };
+                    
+                    if input.input_username == *"admin" && password_valid {
                                             let session = crate::Session {
                                                 id: session_id.to_string(),
                                                 delta: 0
