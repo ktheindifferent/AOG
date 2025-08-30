@@ -29,6 +29,9 @@ pub mod pump;
 pub mod pump_safety;
 pub mod http;
 pub mod tools;
+pub mod error;
+pub mod retry;
+pub mod error_monitor;
 pub mod qwiic;
 pub mod auth;
 

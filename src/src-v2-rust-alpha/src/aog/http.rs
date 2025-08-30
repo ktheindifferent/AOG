@@ -209,6 +209,13 @@ pub fn init(){
                     return response;
                 }
                 
+                // Error monitoring dashboard endpoint
+                if request.url() == "/api/errors" {
+                    let dashboard = crate::aog::error_monitor::GLOBAL_ERROR_MONITOR.get_dashboard();
+                    let response = Response::json(&dashboard);
+                    return response.with_additional_header("Access-Control-Allow-Origin", "*");
+                }
+                
                 if request.url() == "/api/stats"{
                     #[derive(Serialize, Deserialize, Debug, Clone)]
                     struct WebApiStats {

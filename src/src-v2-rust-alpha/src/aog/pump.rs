@@ -38,6 +38,8 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
 use chrono::{Local, Timelike};
+use crate::aog::error::{AogError, Result, ErrorContext, log_error_with_context};
+use crate::retry_with_backoff;
 
 // Import pump safety module
 use crate::aog::pump_safety::{PumpSafetyMonitor, PumpType, SAFETY_MONITOR};
@@ -122,7 +124,16 @@ fn check_safety_pin(pin_number: u8) -> bool {
 
 pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx: std::sync::mpsc::Receiver<String>){
 
-    let pump_thread_lock = pump_thread.lock().unwrap();
+    let pump_thread_lock = match pump_thread.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            let ctx = ErrorContext::new("pump", "start")
+                .with_details(format!("Failed to acquire pump thread lock: {}", e));
+            let error = AogError::LockError(e.to_string());
+            log_error_with_context(&error, &ctx);
+            return;
+        }
+    };
 
 
     // Abort start if device doesn't have a GPIO bus (non-pi devices)
@@ -143,7 +154,17 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
         // while !term_now.load(Ordering::Relaxed)
 
 
-        let pump_thread_lock = pump_thread.lock().unwrap();
+        let pump_thread_lock = match pump_thread.lock() {
+            Ok(lock) => lock,
+            Err(e) => {
+                let ctx = ErrorContext::new("pump", "thread_loop")
+                    .with_details(format!("Failed to acquire pump thread lock: {}", e));
+                let error = AogError::LockError(e.to_string());
+                log_error_with_context(&error, &ctx);
+                sleep(Duration::from_secs(5));
+                continue;
+            }
+        };
 
         // Check if photo cycle is enabled and if we're within the allowed time
         if pump_thread_lock.photo_cycle_enabled {
@@ -187,14 +208,37 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
 
         let gpio = Gpio::new();
 
-        if gpio.is_ok() {
-            let u_gpio = gpio.unwrap();
-            let pump_pin = u_gpio.get(pump_thread_lock.gpio_pin);
-            let sensor_pin = u_gpio.get(16);
-                
-            if sensor_pin.is_ok() && pump_pin.is_ok() {
-                let mut pump_pin_out = pump_pin.unwrap().into_output();
-                let ovf_sensor_pin = sensor_pin.unwrap().into_input();
+        match gpio {
+            Ok(u_gpio) => {
+            
+            let pump_pin = match u_gpio.get(pump_thread_lock.gpio_pin) {
+                Ok(pin) => pin,
+                Err(e) => {
+                    let ctx = ErrorContext::new("pump", "pump_pin_get")
+                        .with_details(format!("Failed to get pump pin {}: {}", pump_thread_lock.gpio_pin, e));
+                    let error = AogError::GpioError(e.to_string());
+                    log_error_with_context(&error, &ctx);
+                    std::mem::drop(pump_thread_lock);
+                    sleep(Duration::from_secs(5));
+                    continue;
+                }
+            };
+            
+            let sensor_pin = match u_gpio.get(16) {
+                Ok(pin) => pin,
+                Err(e) => {
+                    let ctx = ErrorContext::new("pump", "sensor_pin_get")
+                        .with_details(format!("Failed to get sensor pin 16: {}", e));
+                    let error = AogError::GpioError(e.to_string());
+                    log_error_with_context(&error, &ctx);
+                    std::mem::drop(pump_thread_lock);
+                    sleep(Duration::from_secs(5));
+                    continue;
+                }
+            };
+            
+            let mut pump_pin_out = pump_pin.into_output();
+            let ovf_sensor_pin = sensor_pin.into_input();
 
                
 
@@ -363,28 +407,15 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                 // sleep(Duration::from_millis(n3));
                 //sleep(Duration::from_millis(2000))
 
-            } else {
-                match sensor_pin {
-                    Ok(_v) => {},
-                    Err(e) => log::error!("{:?}", e),
-                }
-                match pump_pin {
-                    Ok(_v) => {},
-                    Err(e) => log::error!("{:?}", e),
-                }
             }
-
-
-          
-      
-        } else {
-            match gpio {
-                Ok(_v) => {},
-                Err(e) => log::error!("{:?}", e),
+            Err(e) => {
+                let ctx = ErrorContext::new("pump", "gpio_init")
+                    .with_details(format!("GPIO initialization failed: {}", e));
+                let error = AogError::GpioError(e.to_string());
+                log_error_with_context(&error, &ctx);
+                // If we can't communicate with the GPIO bus...stop the pump...try again
+                stop_physical_pump(Arc::clone(&pump_thread));
             }
-
-            // If we can't communicate with the GPIO bus...stop the pump...try again
-            stop_physical_pump(Arc::clone(&pump_thread));
         }
         
         // If thread recieves stop signal terminate the thread immediately
@@ -401,7 +432,16 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
 }
 
 pub fn stop_pump_thread(pump_thread: Arc<Mutex<PumpThread>>){
-    let pump_thread_lock = pump_thread.lock().unwrap();
+    let pump_thread_lock = match pump_thread.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            let ctx = ErrorContext::new("pump", "stop_pump_thread")
+                .with_details(format!("Failed to acquire lock: {}", e));
+            let error = AogError::LockError(e.to_string());
+            log_error_with_context(&error, &ctx);
+            return;
+        }
+    };
     log::warn!("Halting Pump Thread: {}", pump_thread_lock.id);
     std::mem::drop(pump_thread_lock);
     stop_physical_pump(Arc::clone(&pump_thread));
@@ -409,22 +449,63 @@ pub fn stop_pump_thread(pump_thread: Arc<Mutex<PumpThread>>){
 }
 
 pub fn stop_physical_pump(pump_thread: Arc<Mutex<PumpThread>>){
-    let pump_thread_lock = pump_thread.lock().unwrap();
-    let gpio = Gpio::new();
-    if gpio.is_ok() {
-        let pin = gpio.unwrap().get(pump_thread_lock.gpio_pin);
-        if pin.is_ok(){
-            let mut pin_out = pin.unwrap().into_output();
-            pin_out.set_high();
+    let pump_thread_lock = match pump_thread.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            let ctx = ErrorContext::new("pump", "stop_physical_pump")
+                .with_details(format!("Failed to acquire lock: {}", e));
+            let error = AogError::LockError(e.to_string());
+            log_error_with_context(&error, &ctx);
+            return;
+        }
+    };
+    
+    match Gpio::new() {
+        Ok(gpio) => {
+            match gpio.get(pump_thread_lock.gpio_pin) {
+                Ok(pin) => {
+                    let mut pin_out = pin.into_output();
+                    pin_out.set_high();
+                },
+                Err(e) => {
+                    let ctx = ErrorContext::new("pump", "stop_physical_pump")
+                        .with_details(format!("Failed to get GPIO pin {}: {}", pump_thread_lock.gpio_pin, e));
+                    let error = AogError::GpioError(e.to_string());
+                    log_error_with_context(&error, &ctx);
+                }
+            }
+        },
+        Err(e) => {
+            let ctx = ErrorContext::new("pump", "stop_physical_pump")
+                .with_details(format!("GPIO init failed: {}", e));
+            let error = AogError::GpioError(e.to_string());
+            log_error_with_context(&error, &ctx);
         }
     }
+    
     let _ = crate::aog::command::run(format!("gpio off {}", pump_thread_lock.gpio_pin));
     std::mem::drop(pump_thread_lock);
 }
 
 pub fn stop(pump_thread: Arc<Mutex<PumpThread>>){
-    let pump_thread_lock = pump_thread.lock().unwrap();
-    let _ = pump_thread_lock.tx.send("stop".to_string());
+    let pump_thread_lock = match pump_thread.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            let ctx = ErrorContext::new("pump", "stop")
+                .with_details(format!("Failed to acquire lock: {}", e));
+            let error = AogError::LockError(e.to_string());
+            log_error_with_context(&error, &ctx);
+            return;
+        }
+    };
+    
+    if let Err(e) = pump_thread_lock.tx.send("stop".to_string()) {
+        let ctx = ErrorContext::new("pump", "stop")
+            .with_details(format!("Failed to send stop signal: {}", e));
+        let error = AogError::ThreadError(e.to_string());
+        log_error_with_context(&error, &ctx);
+    }
+    
     std::mem::drop(pump_thread_lock);
 }
 
