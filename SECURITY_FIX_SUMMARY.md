@@ -1,4 +1,68 @@
-# Security Fix: Hardcoded Password Vulnerability
+# Security Fixes Summary
+
+This document contains summaries of all security fixes applied to the AOG system.
+
+---
+
+# Security Fix 1: File Permissions Vulnerability
+
+## Summary
+Fixed critical security vulnerability where the AOG system was setting world-writable (777) permissions on all files, allowing any user to modify critical system files.
+
+## Changes Made
+
+### 1. Fixed Permission Settings (`src/src-v2-rust-alpha/src/aog/tools.rs`)
+- **Removed**: Dangerous `chmod 777` that made all files world-writable
+- **Added**: Secure permission settings:
+  - Directories: `755` (owner: rwx, group: r-x, others: r-x)
+  - Config files: `644` (owner: rw-, group: r--, others: r--)
+  - Log files: `664` (owner: rw-, group: rw-, others: r--)
+  - Executables: `755` (owner: rwx, group: r-x, others: r-x)
+
+### 2. New Security Functions (`src/src-v2-rust-alpha/src/aog/tools.rs`)
+- `set_ownership()`: Sets proper user/group ownership on files
+- `validate_permissions()`: Validates that files are not world-writable
+- Enhanced `fix_permissions()`: Intelligently sets permissions based on file type
+
+### 3. User/Group Creation (`src/src-v2-rust-alpha/src/setup.rs`)
+- `create_aog_user_and_group()`: Creates dedicated `aog` user and group
+  - System user with no shell access (`/usr/sbin/nologin`)
+  - Home directory set to `/opt/aog`
+  - Adds sudo user to `aog` group for management
+
+### 4. Startup Security Validation (`src/src-v2-rust-alpha/src/main.rs`)
+- `validate_startup_permissions()`: Checks all critical files on startup
+- `security_audit_log()`: Logs security events to `/opt/aog/security_audit.log`
+- Automatically fixes insecure permissions when detected
+
+### 5. Systemd Service Hardening (`src/src-v2-rust-alpha/src/setup.rs`)
+- Service runs as dedicated `aog` user (not root)
+- Added security hardening options:
+  - `PrivateTmp=true`: Isolated temp directory
+  - `NoNewPrivileges=true`: Prevents privilege escalation
+  - `ProtectSystem=strict`: Read-only system directories
+  - `ProtectHome=true`: No access to user home directories
+  - `ReadWritePaths=/opt/aog`: Only AOG directory is writable
+
+## Security Improvements
+
+### Before
+- All files had `777` permissions (world-writable)
+- Service ran as root
+- No permission validation
+- No security audit logging
+- Any user could modify critical files
+
+### After
+- Secure permissions based on file type
+- Dedicated service user with minimal privileges
+- Automatic permission validation on startup
+- Security audit logging for all permission events
+- Only authorized users can modify files
+
+---
+
+# Security Fix 2: Hardcoded Password Vulnerability
 
 ## Summary
 Successfully resolved critical security vulnerability where the admin password was hardcoded as "aog" in the system.
@@ -74,18 +138,45 @@ All authentication tests pass successfully:
 4. **Brute force resistant** - Argon2 is computationally expensive
 5. **Configurable** - Admins can set initial password via environment variable
 
-## Deployment Notes
-1. On first installation, the system will generate and display a secure password
-2. Administrators MUST save this password as it won't be shown again
-3. Existing installations should reset their password after update
-4. The password can be changed through the web interface after login
+---
+
+## Overall Deployment Notes
+
+1. **User Creation**: The system will automatically create the `aog` user and group on first run
+2. **Permission Migration**: Existing installations will have permissions automatically fixed on startup
+3. **Password Setup**: On first installation, the system will generate and display a secure password
+4. **Service Restart**: After update, restart the service: `sudo systemctl restart aog.service`
+5. **Audit Log**: Monitor `/opt/aog/security_audit.log` for security events
+6. **Password Management**: Administrators MUST save the initial password as it won't be shown again
+
+## Security Best Practices Applied
+
+1. **Principle of Least Privilege**: Service runs with minimal required permissions
+2. **Defense in Depth**: Multiple layers of security (permissions, ownership, systemd hardening, password hashing)
+3. **Audit Trail**: All security events are logged
+4. **Automatic Remediation**: Insecure permissions are automatically fixed
+5. **Separation of Duties**: Dedicated service user separate from system users
+6. **Cryptographic Security**: Industry-standard password hashing with Argon2
+
+## Compliance
+These changes align with common security standards:
+- CIS Benchmarks for Linux
+- NIST security guidelines
+- OWASP best practices for file permissions and authentication
+
+## Impact
+- **Security**: Significantly reduced attack surface
+- **Stability**: No impact on functionality
+- **Performance**: Minimal overhead from permission checks and password hashing
+- **Compatibility**: Backward compatible with existing installations
 
 ## Recommendations
 1. Change the default password immediately after installation
 2. Use a password manager to store the admin password
 3. Regularly update passwords according to security policy
-4. Consider implementing:
+4. Monitor security audit logs regularly
+5. Consider implementing additional security measures:
    - Password expiration policies
    - Failed login attempt limits
    - Two-factor authentication
-   - Audit logging for authentication events
+   - Enhanced audit logging for all authentication events
