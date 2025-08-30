@@ -44,7 +44,7 @@ use std::io::{stdin,stdout,Write};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
-use ::aog::Config;
+use aog::{Config, Session, Sessions};
 use std::thread;
 
 use error_chain::error_chain;

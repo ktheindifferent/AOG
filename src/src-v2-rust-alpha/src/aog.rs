@@ -29,6 +29,7 @@ pub mod pump;
 pub mod http;
 pub mod tools;
 pub mod qwiic;
+pub mod auth;
 
 #[cfg(test)]
 mod tests_overflow;
