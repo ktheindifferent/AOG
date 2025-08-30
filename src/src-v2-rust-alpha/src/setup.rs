@@ -43,6 +43,9 @@ error_chain! {
 }
 
 pub fn install(_args: aog::Args) -> Result<()> {
+    
+    // Create dedicated aog user and group for the service
+    create_aog_user_and_group()?;
 
     match crate::aog::tools::mkdir("/opt"){
         Ok(_) => {},
@@ -54,9 +57,16 @@ pub fn install(_args: aog::Args) -> Result<()> {
         Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to create /opt/aog directory").into()),
     }
 
+    // Set secure permissions on the AOG directory
     match crate::aog::tools::fix_permissions("/opt/aog"){
         Ok(_) => {},
-        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to chmod /opt/aog").into()),
+        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to set permissions on /opt/aog").into()),
+    }
+    
+    // Set ownership to aog user and group
+    match crate::aog::tools::set_ownership("/opt/aog", "aog", "aog"){
+        Ok(_) => {},
+        Err(e) => log::warn!("Failed to set ownership (running as non-root?): {}", e),
     }
 
     match crate::aog::tools::mkdir("/opt/aog/bak"){
@@ -123,7 +133,111 @@ pub fn install(_args: aog::Args) -> Result<()> {
             log::warn!("Failed to remove www.zip: {}", e);
         }    
     }
+    
+    // Final permission validation
+    validate_installation_permissions()?;
 
+    Ok(())
+}
+
+/// Creates a dedicated aog user and group for running the service
+fn create_aog_user_and_group() -> Result<()> {
+    // Check if group exists, create if not
+    let group_check = Command::new("getent")
+        .arg("group")
+        .arg("aog")
+        .output()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to check group: {}", e)))?;
+    
+    if !group_check.status.success() {
+        log::info!("Creating aog group...");
+        let group_add = Command::new("groupadd")
+            .arg("-r")  // System group
+            .arg("aog")
+            .output()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to create group: {}", e)))?;
+        
+        if !group_add.status.success() {
+            let stderr = String::from_utf8_lossy(&group_add.stderr);
+            if !stderr.contains("already exists") {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, 
+                    format!("Failed to create aog group: {}", stderr)).into());
+            }
+        }
+    }
+    
+    // Check if user exists, create if not
+    let user_check = Command::new("id")
+        .arg("aog")
+        .output()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to check user: {}", e)))?;
+    
+    if !user_check.status.success() {
+        log::info!("Creating aog user...");
+        let user_add = Command::new("useradd")
+            .arg("-r")  // System user
+            .arg("-g")
+            .arg("aog")  // Primary group
+            .arg("-d")
+            .arg("/opt/aog")  // Home directory
+            .arg("-s")
+            .arg("/usr/sbin/nologin")  // No shell access
+            .arg("-c")
+            .arg("AOG System User")
+            .arg("aog")
+            .output()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to create user: {}", e)))?;
+        
+        if !user_add.status.success() {
+            let stderr = String::from_utf8_lossy(&user_add.stderr);
+            if !stderr.contains("already exists") {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, 
+                    format!("Failed to create aog user: {}", stderr)).into());
+            }
+        }
+    }
+    
+    // Add current user to aog group for management (if not root)
+    if let Ok(current_user) = std::env::var("SUDO_USER") {
+        log::info!("Adding {} to aog group for management...", current_user);
+        let _ = Command::new("usermod")
+            .arg("-a")
+            .arg("-G")
+            .arg("aog")
+            .arg(&current_user)
+            .output();
+    }
+    
+    Ok(())
+}
+
+/// Validates that all AOG files have secure permissions
+fn validate_installation_permissions() -> Result<()> {
+    log::info!("Validating installation permissions...");
+    
+    let paths_to_check = vec![
+        "/opt/aog",
+        "/opt/aog/config.json",
+        "/opt/aog/output.log",
+    ];
+    
+    for path in paths_to_check {
+        if Path::new(path).exists() {
+            match crate::aog::tools::validate_permissions(path) {
+                Ok(valid) => {
+                    if !valid {
+                        log::warn!("Fixing insecure permissions on {}", path);
+                        crate::aog::tools::fix_permissions(path)?;
+                    }
+                },
+                Err(e) => {
+                    log::warn!("Could not validate permissions for {}: {}", path, e);
+                }
+            }
+        }
+    }
+    
+    log::info!("Permission validation complete");
     Ok(())
 }
 
@@ -271,11 +385,21 @@ pub fn install_service(args: aog::Args) -> Result<()> {
 pub fn update_linux_service_file(args: aog::Args){
     let mut data = String::new();
     data.push_str("[Unit]\n");
-    data.push_str("Description=aog\n");
+    data.push_str("Description=AOG - Algae Oxygen Reactor Control System\n");
     data.push_str("After=network.target\n");
     data.push_str("After=systemd-user-sessions.service\n");
     data.push_str("After=network-online.target\n\n");
     data.push_str("[Service]\n");
+    data.push_str("Type=simple\n");
+    data.push_str("User=aog\n");
+    data.push_str("Group=aog\n");
+    data.push_str("WorkingDirectory=/opt/aog\n");
+    // Security hardening options
+    data.push_str("PrivateTmp=true\n");
+    data.push_str("NoNewPrivileges=true\n");
+    data.push_str("ProtectSystem=strict\n");
+    data.push_str("ProtectHome=true\n");
+    data.push_str("ReadWritePaths=/opt/aog\n");
     if args.encrypt{
         data.push_str(format!("ExecStart=/opt/aog/bin/aog --max-threads {} --http-port {} --encrypt --key {}\n", args.max_threads, args.port, args.key).as_str());
     } else {

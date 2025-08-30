@@ -454,21 +454,90 @@ pub fn mkdir(apath: &str) -> Result<String>{
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
 
+/// Sets secure permissions for AOG files and directories
+/// Directories: 755 (owner: rwx, group: r-x, others: r-x)
+/// Config files: 644 (owner: rw-, group: r--, others: r--)
+/// Log files: 664 (owner: rw-, group: rw-, others: r--)
 pub fn fix_permissions(apath: &str) -> Result<String>{
+    use std::path::Path;
+    
+    // Set directory permissions to 755
+    let dir_perms = if Path::new(apath).is_dir() {
+        "755"
+    } else if apath.ends_with(".log") {
+        "664"  // Log files need group write for rotation
+    } else if apath.ends_with(".json") || apath.ends_with(".conf") {
+        "644"  // Config files: owner write, others read
+    } else {
+        "644"  // Default for other files
+    };
+    
     let child = Command::new("/bin/chmod")
     .arg("-R")
-    .arg("777")
+    .arg(dir_perms)
     .arg(apath)
     .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
     .spawn()
-    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute command: {}", e)))?;
-
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute chmod: {}", e)))?;
 
     let output = child
     .wait_with_output()
     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
-
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, 
+            format!("chmod failed: {}", stderr)).into());
+    }
+    
+    log::info!("Set permissions {} on {}", dir_perms, apath);
     return Ok(String::from_utf8_lossy(&output.stdout).to_string()); 
+}
+
+/// Sets ownership to the aog user and group
+pub fn set_ownership(apath: &str, user: &str, group: &str) -> Result<String> {
+    let child = Command::new("/bin/chown")
+    .arg("-R")
+    .arg(format!("{}:{}", user, group))
+    .arg(apath)
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute chown: {}", e)))?;
+
+    let output = child
+    .wait_with_output()
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, 
+            format!("chown failed: {}", stderr)).into());
+    }
+    
+    log::info!("Set ownership {}:{} on {}", user, group, apath);
+    return Ok(String::from_utf8_lossy(&output.stdout).to_string());
+}
+
+/// Validates that file permissions are secure (not world-writable)
+pub fn validate_permissions(apath: &str) -> Result<bool> {
+    use std::os::unix::fs::PermissionsExt;
+    
+    let metadata = fs::metadata(apath)?;
+    let permissions = metadata.permissions();
+    let mode = permissions.mode();
+    
+    // Check if world-writable (last 3 bits for 'others' permissions)
+    let world_writable = (mode & 0o002) != 0;
+    
+    if world_writable {
+        log::error!("SECURITY WARNING: {} is world-writable (mode: {:o})", apath, mode);
+        return Ok(false);
+    }
+    
+    log::debug!("Permissions validated for {} (mode: {:o})", apath, mode);
+    return Ok(true);
 }
 
 pub fn mark_as_executable(apath: &str) -> Result<String>{

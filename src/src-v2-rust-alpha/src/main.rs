@@ -63,6 +63,9 @@ fn main() -> Result<()> {
     sudo::with_env(&["LIBTORCH", "LD_LIBRARY_PATH", "PG_DBNAME", "PG_USER", "PG_PASS", "PG_ADDRESS"])
         .map_err(|e| format!("Failed to set environment: {}", e))?;
     setup::install(args.clone())?;
+    
+    // Validate permissions on startup
+    validate_startup_permissions()?;
 
     let _config = Arc::new(Mutex::new(Config::load(0)
         .map_err(|e| format!("Failed to load config: {}", e))?));
@@ -202,4 +205,80 @@ fn main() -> Result<()> {
     // aog::gpio::thread::stop(Arc::clone(&gpio_22_thread));
 
     Ok(())
+}
+
+/// Validates critical file permissions on startup
+fn validate_startup_permissions() -> Result<()> {
+    use std::path::Path;
+    
+    log::info!("Performing security audit of file permissions...");
+    
+    let critical_paths = vec![
+        ("/opt/aog", "directory"),
+        ("/opt/aog/config.json", "config"),
+        ("/opt/aog/output.log", "log"),
+        ("/opt/aog/sensors", "directory"),
+        ("/opt/aog/crt", "directory"),
+        ("/opt/aog/dat", "directory"),
+    ];
+    
+    let mut issues_found = false;
+    
+    for (path, file_type) in critical_paths {
+        if Path::new(path).exists() {
+            match crate::aog::tools::validate_permissions(path) {
+                Ok(valid) => {
+                    if !valid {
+                        log::error!("SECURITY ISSUE: {} {} has insecure permissions", file_type, path);
+                        security_audit_log(&format!("Insecure permissions detected on {} {}", file_type, path));
+                        issues_found = true;
+                        
+                        // Attempt to fix the permissions
+                        log::info!("Attempting to fix permissions on {}", path);
+                        if let Err(e) = crate::aog::tools::fix_permissions(path) {
+                            log::error!("Failed to fix permissions on {}: {}", path, e);
+                        } else {
+                            security_audit_log(&format!("Fixed permissions on {} {}", file_type, path));
+                        }
+                    } else {
+                        log::debug!("{} {} has valid permissions", file_type, path);
+                    }
+                },
+                Err(e) => {
+                    log::warn!("Could not validate {} {}: {}", file_type, path, e);
+                }
+            }
+        }
+    }
+    
+    if issues_found {
+        log::warn!("Security issues were found and fixed. Please review the security audit log.");
+        security_audit_log("Permission validation completed with issues fixed");
+    } else {
+        log::info!("All file permissions validated successfully");
+        security_audit_log("Permission validation completed successfully");
+    }
+    
+    Ok(())
+}
+
+/// Logs security-related events to a dedicated audit log
+fn security_audit_log(message: &str) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    use chrono::Local;
+    
+    let audit_path = "/opt/aog/security_audit.log";
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+    let log_entry = format!("[{}] {}\n", timestamp, message);
+    
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(audit_path)
+    {
+        let _ = file.write_all(log_entry.as_bytes());
+        // Set secure permissions on audit log
+        let _ = crate::aog::tools::fix_permissions(audit_path);
+    }
 }
