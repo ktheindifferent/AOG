@@ -61,6 +61,10 @@ pub struct Config {
     pub sensor_kit_config: Option<SensorKitConfig>,
     pub sensor_logs: Vec<SensorLog>,
     pub pump_config: Option<PumpConfig>,  // New pump configuration
+    pub https_bind_address: Option<String>,  // HTTPS server bind address (default: 127.0.0.1)
+    pub https_bind_port: Option<u16>,  // HTTPS server port (default: 8443)
+    pub command_api_bind_address: Option<String>,  // Command API bind address (default: 127.0.0.1)
+    pub command_api_bind_port: Option<u16>,  // Command API port (default: 9443)
 }
 impl Config {
     pub fn new() -> Config {
@@ -73,7 +77,43 @@ impl Config {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_else(|_| std::time::Duration::from_secs(0));
 
-        Config{id: random_id, encrypted_password: format!("aog"), version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, pump_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
+        // Generate a secure password hash for new installations
+        let password_hash = match aog::auth::get_initial_password() {
+            Ok(pwd) => match aog::auth::hash_password(&pwd) {
+                Ok(hash) => hash,
+                Err(_) => {
+                    // Fallback: generate a random hash if initial password generation fails
+                    // This ensures the system still initializes but with an unusable password
+                    format!("$argon2$invalid${}$", random_id)
+                }
+            },
+            Err(_) => {
+                // Fallback: generate a random hash if initial password generation fails
+                format!("$argon2$invalid${}$", random_id)
+            }
+        };
+        
+        Config{
+            id: random_id, 
+            encrypted_password: password_hash, 
+            version_installed: VERSION.unwrap_or("unknown").to_string(), 
+            boot_time: since_the_epoch.as_secs(), 
+            sensor_logs, 
+            is_hvac_kit_installed: false, 
+            is_sensor_kit_installed: false, 
+            photo_cycle_start: 6, 
+            photo_cycle_end: 24, 
+            sensor_kit_config: None, 
+            pump_config: None, 
+            power_type: "".to_string(), 
+            tank_one_to_two_pump_pin: 17, 
+            uv_light_pin: 27, 
+            air_circulation_pin: 22,
+            https_bind_address: Some("127.0.0.1".to_string()),
+            https_bind_port: Some(8443),
+            command_api_bind_address: Some("127.0.0.1".to_string()),
+            command_api_bind_port: Some(9443),
+        }
     }
     pub fn save(&self) -> Result<(), Box<dyn Error>>{
         std::fs::File::create("/opt/aog/data.json")
@@ -322,7 +362,9 @@ mod tests {
         let config = Config::new();
         assert!(!config.id.is_empty());
         assert_eq!(config.id.len(), 100);
-        assert_eq!(config.encrypted_password, "aog");
+        // Verify password is hashed, not plaintext
+        assert!(config.encrypted_password.starts_with("$argon2") || config.encrypted_password.starts_with("$argon2$invalid$"));
+        assert_ne!(config.encrypted_password, "aog");
         assert_eq!(config.photo_cycle_start, 6);
         assert_eq!(config.photo_cycle_end, 24);
         assert_eq!(config.tank_one_to_two_pump_pin, 17);
@@ -347,7 +389,8 @@ mod tests {
         
         let loaded_config = Config::load(0).expect("Failed to load config");
         assert_eq!(loaded_config.id, original_id);
-        assert_eq!(loaded_config.encrypted_password, "aog");
+        // Verify password remains hashed after loading
+        assert!(loaded_config.encrypted_password.starts_with("$argon2") || loaded_config.encrypted_password.starts_with("$argon2$invalid$"));
         
         cleanup_test_files();
     }
