@@ -26,6 +26,7 @@ pub mod gpio;
 pub mod lcd;
 pub mod video;
 pub mod pump;
+pub mod pump_safety;
 pub mod http;
 pub mod tools;
 pub mod qwiic;
