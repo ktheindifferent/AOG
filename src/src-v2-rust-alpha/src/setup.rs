@@ -58,6 +58,43 @@ pub fn install(_args: aog::Args) -> Result<()> {
         Ok(_) => {},
         Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to chmod /opt/aog").into()),
     }
+    
+    // Generate secure initial password if config doesn't exist
+    if !Path::new("/opt/aog/data.json").exists() {
+        let initial_password = match crate::aog::auth::get_initial_password() {
+            Ok(pwd) => pwd,
+            Err(e) => {
+                eprintln!("Failed to generate initial password: {}", e);
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to generate initial password: {}", e)).into());
+            }
+        };
+        
+        // Display the password to the user during installation
+        println!("\n===============================================");
+        println!("IMPORTANT: Initial Admin Password");
+        println!("===============================================");
+        println!("Username: admin");
+        println!("Password: {}", initial_password);
+        println!("===============================================");
+        println!("Please save this password securely!");
+        println!("You can change it through the web interface.");
+        println!("===============================================\n");
+        
+        // Create initial config with hashed password
+        let mut config = crate::Config::new();
+        match crate::aog::auth::hash_password(&initial_password) {
+            Ok(hash) => config.encrypted_password = hash,
+            Err(e) => {
+                eprintln!("Failed to hash password: {}", e);
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to hash password: {}", e)).into());
+            }
+        }
+        
+        if let Err(e) = config.save() {
+            eprintln!("Failed to save initial configuration: {}", e);
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to save config: {}", e)).into());
+        }
+    }
 
     match crate::aog::tools::mkdir("/opt/aog/bak"){
         Ok(_) => {},
