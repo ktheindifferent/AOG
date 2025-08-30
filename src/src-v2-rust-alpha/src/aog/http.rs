@@ -78,7 +78,16 @@ pub fn init(){
         }
     };
     
-    rouille::Server::new_ssl("0.0.0.0:8443", move |request| {
+    // Get binding configuration from config
+    let bind_config = config.lock().unwrap();
+    let bind_address = bind_config.https_bind_address.clone().unwrap_or_else(|| "127.0.0.1".to_string());
+    let bind_port = bind_config.https_bind_port.unwrap_or(8443);
+    let bind_addr = format!("{}:{}", bind_address, bind_port);
+    drop(bind_config);
+    
+    log::info!("Starting HTTPS server on {}", bind_addr);
+    
+    rouille::Server::new_ssl(bind_addr, move |request| {
         {
             session::session(request, "SID", 3600, |session| {
                 let session_id: &str = session.id();
@@ -267,7 +276,7 @@ pub fn init_command_api(){
 
 
 
-    let _config = Arc::new(Mutex::new(match Config::load(0) {
+    let config = Arc::new(Mutex::new(match Config::load(0) {
         Ok(cfg) => cfg,
         Err(e) => {
             log::error!("Failed to load config: {}", e);
@@ -291,7 +300,16 @@ pub fn init_command_api(){
         }
     };
     
-    rouille::Server::new_ssl("0.0.0.0:9443", move |request| {
+    // Get binding configuration from config
+    let bind_config = config.lock().unwrap();
+    let bind_address = bind_config.command_api_bind_address.clone().unwrap_or_else(|| "127.0.0.1".to_string());
+    let bind_port = bind_config.command_api_bind_port.unwrap_or(9443);
+    let bind_addr = format!("{}:{}", bind_address, bind_port);
+    drop(bind_config);
+    
+    log::info!("Starting Command API server on {}", bind_addr);
+    
+    rouille::Server::new_ssl(bind_addr, move |request| {
         {
        
             #[derive(Serialize, Deserialize, Debug, Clone)]
