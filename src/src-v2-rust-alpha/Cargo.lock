@@ -152,6 +152,7 @@ dependencies = [
  "clap 4.5.45",
  "error-chain",
  "i2cdev",
+ "lazy_static",
  "log",
  "machine-ip",
  "mime",
