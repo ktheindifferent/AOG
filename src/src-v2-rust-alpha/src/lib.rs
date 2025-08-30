@@ -61,6 +61,10 @@ pub struct Config {
     pub sensor_kit_config: Option<SensorKitConfig>,
     pub sensor_logs: Vec<SensorLog>,
     pub pump_config: Option<PumpConfig>,  // New pump configuration
+    pub https_bind_address: Option<String>,  // HTTPS server bind address (default: 127.0.0.1)
+    pub https_bind_port: Option<u16>,  // HTTPS server port (default: 8443)
+    pub command_api_bind_address: Option<String>,  // Command API bind address (default: 127.0.0.1)
+    pub command_api_bind_port: Option<u16>,  // Command API port (default: 9443)
 }
 impl Config {
     pub fn new() -> Config {
@@ -89,7 +93,27 @@ impl Config {
             }
         };
         
-        Config{id: random_id, encrypted_password: password_hash, version_installed: VERSION.unwrap_or("unknown").to_string(), boot_time: since_the_epoch.as_secs(), sensor_logs, is_hvac_kit_installed: false, is_sensor_kit_installed: false, photo_cycle_start: 6, photo_cycle_end: 24, sensor_kit_config: None, pump_config: None, power_type: "".to_string(), tank_one_to_two_pump_pin: 17, uv_light_pin: 27, air_circulation_pin: 22}
+        Config{
+            id: random_id, 
+            encrypted_password: password_hash, 
+            version_installed: VERSION.unwrap_or("unknown").to_string(), 
+            boot_time: since_the_epoch.as_secs(), 
+            sensor_logs, 
+            is_hvac_kit_installed: false, 
+            is_sensor_kit_installed: false, 
+            photo_cycle_start: 6, 
+            photo_cycle_end: 24, 
+            sensor_kit_config: None, 
+            pump_config: None, 
+            power_type: "".to_string(), 
+            tank_one_to_two_pump_pin: 17, 
+            uv_light_pin: 27, 
+            air_circulation_pin: 22,
+            https_bind_address: Some("127.0.0.1".to_string()),
+            https_bind_port: Some(8443),
+            command_api_bind_address: Some("127.0.0.1".to_string()),
+            command_api_bind_port: Some(9443),
+        }
     }
     pub fn save(&self) -> Result<(), Box<dyn Error>>{
         std::fs::File::create("/opt/aog/data.json")
