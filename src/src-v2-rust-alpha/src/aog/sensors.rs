@@ -454,10 +454,10 @@ mod tests {
     use std::io::Write;
 
     fn setup_test_sensor_dir() -> TempDir {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temp directory for test");
         let sensor_dir = temp_dir.path().join("sensors");
-        fs::create_dir_all(&sensor_dir).unwrap();
-        std::env::set_var("AOG_SENSOR_DIR", sensor_dir.to_str().unwrap());
+        fs::create_dir_all(&sensor_dir).expect("Failed to create sensor directory for test");
+        std::env::set_var("AOG_SENSOR_DIR", sensor_dir.to_str().expect("Failed to convert path to string"));
         temp_dir
     }
 
@@ -498,15 +498,15 @@ mod tests {
 
     #[test]
     fn test_get_value_existing_file() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temp directory for test");
         let sensors_dir = temp_dir.path().join("sensors");
-        fs::create_dir_all(&sensors_dir).unwrap();
+        fs::create_dir_all(&sensors_dir).expect("Failed to create sensors directory for test");
         
         let test_file = sensors_dir.join("test_sensor");
-        let mut file = fs::File::create(&test_file).unwrap();
-        file.write_all(b"42.5").unwrap();
+        let mut file = fs::File::create(&test_file).expect("Failed to create test sensor file");
+        file.write_all(b"42.5").expect("Failed to write test data");
         
-        std::env::set_var("TEST_SENSOR_PATH", test_file.to_str().unwrap());
+        std::env::set_var("TEST_SENSOR_PATH", test_file.to_str().expect("Failed to convert path to string"));
         
         let mut data = String::new();
         if let Ok(mut f) = fs::File::open(test_file) {

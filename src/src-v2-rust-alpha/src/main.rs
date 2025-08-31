@@ -28,7 +28,7 @@
 pub mod setup;
 pub mod aog;
 
-use aog::error::{AogError, ErrorContext, log_error_with_context};
+use ::aog::error::{AogError, AogResult};
 
 // const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 extern crate qwiic_lcd_rs;
