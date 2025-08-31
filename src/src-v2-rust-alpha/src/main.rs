@@ -69,10 +69,21 @@ fn main() -> Result<()> {
     // Validate permissions on startup
     validate_startup_permissions()?;
 
-    let _config = Arc::new(Mutex::new(Config::load(0)
+    let config = Arc::new(Mutex::new(Config::load(0)
         .map_err(|e| format!("Failed to load config: {}", e))?));
 
     crate::aog::sensors::init();
+    
+    // Initialize water level monitoring system
+    if let Some(water_config) = config.lock().unwrap().water_level_config.clone() {
+        if let Err(e) = crate::aog::water_level::init_water_level_system(water_config) {
+            log::warn!("Failed to initialize water level system: {}", e);
+        } else {
+            log::info!("Water level monitoring system initialized");
+        }
+    } else {
+        log::info!("No water level configuration found, using overflow sensors only");
+    }
 
     // Initialize the LCD
     crate::aog::lcd::init();

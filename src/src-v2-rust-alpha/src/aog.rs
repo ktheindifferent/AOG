@@ -27,6 +27,7 @@ pub mod lcd;
 pub mod video;
 pub mod pump;
 pub mod pump_safety;
+pub mod water_level;
 pub mod http;
 pub mod tools;
 pub mod error;
