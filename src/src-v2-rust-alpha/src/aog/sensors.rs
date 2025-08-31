@@ -51,6 +51,8 @@ use std::fs::File;
 use std::io::Write;
 use std::io::Read;
 
+use crate::aog::ph_sensor;
+
 pub fn init(){
 
     let _ = thread::Builder::new().name("pm1025_thread".to_string()).spawn(move || loop {
@@ -87,6 +89,9 @@ pub fn init(){
 
 
     });
+    
+    // Initialize pH monitoring
+    ph_sensor::init_ph_monitoring();
   
 }
 

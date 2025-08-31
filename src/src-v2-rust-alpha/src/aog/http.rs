@@ -227,9 +227,19 @@ pub fn init(){
                         hum: String,
                         t1_ovf: String,
                         t2_ovf: String,
-                        overflow_error: bool
+                        overflow_error: bool,
+                        ph: String,
+                        ph_status: Option<crate::aog::ph_sensor::PhSensorStatus>
                     }
                    
+                    // Get pH status if available
+                    let ph_status = if std::path::Path::new("/opt/aog/ph_calibration.json").exists() {
+                        let sensor = crate::aog::ph_sensor::PhSensor::new(crate::aog::ph_sensor::PhSensorType::Arduino);
+                        Some(sensor.get_status())
+                    } else {
+                        None
+                    };
+                    
                     let overflow_error = std::path::Path::new("/opt/aog/sensors/overflow_error").exists();
                     let response = Response::json(&WebApiStats { 
                         co2: crate::aog::sensors::get_value("co2"), 
@@ -240,7 +250,9 @@ pub fn init(){
                         pm10: crate::aog::sensors::get_value("pm10"),
                         t1_ovf: crate::aog::sensors::get_value("t1_ovf"),
                         t2_ovf: crate::aog::sensors::get_value("t2_ovf"),
-                        overflow_error: overflow_error
+                        overflow_error: overflow_error,
+                        ph: crate::aog::sensors::get_value("ph_calibrated"),
+                        ph_status: ph_status
                     });
                     return response;
                 }

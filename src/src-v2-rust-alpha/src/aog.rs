@@ -34,6 +34,7 @@ pub mod retry;
 pub mod error_monitor;
 pub mod qwiic;
 pub mod auth;
+pub mod ph_sensor;
 
 #[cfg(test)]
 mod tests_overflow;
