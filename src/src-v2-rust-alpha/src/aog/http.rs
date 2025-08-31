@@ -330,7 +330,8 @@ pub fn init_command_api(){
        
             #[derive(Serialize, Deserialize, Debug, Clone)]
             struct CommandStatus {
-                status: String
+                status: String,
+                output: Option<String>
             }
             
             let input = try_or_400!(post_input!(request, {
@@ -356,7 +357,10 @@ pub fn init_command_api(){
             
             if !is_safe {
                 log::warn!("Blocked potentially unsafe command: {}", command);
-                let response = Response::json(&CommandStatus { status: "blocked: unauthorized command".to_string() });
+                let response = Response::json(&CommandStatus { 
+                    status: "blocked: unauthorized command".to_string(),
+                    output: None
+                });
                 return response;
             }
             
@@ -367,7 +371,10 @@ pub fn init_command_api(){
                     // Validate pin/relay number is numeric
                     if parts[2].parse::<u8>().is_err() {
                         log::warn!("Invalid pin/relay number in command: {}", command);
-                        let response = Response::json(&CommandStatus { status: "error: invalid pin/relay number".to_string() });
+                        let response = Response::json(&CommandStatus { 
+                            status: "error: invalid pin/relay number".to_string(),
+                            output: None
+                        });
                         return response;
                     }
                 }
@@ -378,10 +385,22 @@ pub fn init_command_api(){
             }
 
 
-            let _ = aog::command::run(input.input_command);
+            // Execute command and capture output
+            let output = match aog::command_exec::execute_with_output(input.input_command.clone()) {
+                Ok(out) => Some(out),
+                Err(e) => {
+                    log::error!("Command execution failed: {}", e);
+                    // Fallback to original command execution
+                    let _ = aog::command::run(input.input_command);
+                    None
+                }
+            };
 
             // let arduino_response = crate::aog::sensors::get_arduino_raw();
-            let response = Response::json(&CommandStatus { status: "success".to_string() });
+            let response = Response::json(&CommandStatus { 
+                status: "success".to_string(),
+                output
+            });
             return response;
 
 

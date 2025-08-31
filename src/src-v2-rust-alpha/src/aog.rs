@@ -21,6 +21,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 pub mod command;
+pub mod command_exec;
 pub mod sensors;
 pub mod gpio;
 pub mod lcd;
@@ -34,6 +35,7 @@ pub mod retry;
 pub mod error_monitor;
 pub mod qwiic;
 pub mod auth;
+pub mod instance;
 
 #[cfg(test)]
 mod tests_overflow;

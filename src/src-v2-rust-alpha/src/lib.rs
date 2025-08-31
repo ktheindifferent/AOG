@@ -25,6 +25,8 @@ pub struct Args {
     pub encrypt: bool,
     #[arg(short, long, default_value = "aog")]
     pub key: String,
+    #[arg(short, long, default_value_t = false, help = "Force start even if another instance is running")]
+    pub force: bool,
 }
 
 

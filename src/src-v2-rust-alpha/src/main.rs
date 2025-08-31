@@ -68,6 +68,21 @@ fn main() -> Result<()> {
     
     // Validate permissions on startup
     validate_startup_permissions()?;
+    
+    // Check for running instance
+    if !aog::instance::handle_instance_check(args.force)
+        .map_err(|e| format!("Instance check failed: {}", e))? {
+        // Another instance is running and force flag not set
+        return Ok(());
+    }
+    
+    // Acquire lock for this instance
+    if !aog::instance::acquire_lock()
+        .map_err(|e| format!("Failed to acquire instance lock: {}", e))? {
+        log::error!("Another instance is already running");
+        println!("Another AOG instance is already running. Use --force to override.");
+        return Ok(());
+    }
 
     let _config = Arc::new(Mutex::new(Config::load(0)
         .map_err(|e| format!("Failed to load config: {}", e))?));
@@ -145,53 +160,30 @@ fn main() -> Result<()> {
             s.pop();
         } 
 
-        // Note: Some commands need to be on the main loop for now.
+        // Check if command should be forwarded to background instance
         // ----------------------------------------------------------------
-
-
-
-        // TODO
-        // If localhost:9443 is available then notify that their is a running background instance.
-        // Forward all commands to localhost:8443
-
-        let params = [("input_command", s)];
-        // let client = reqwest::Client::new();
-        match std::fs::read("/opt/aog/crt/default/aog.local.der") {
-            Ok(der) => {
-                match reqwest::Certificate::from_der(&der) {
-                    Ok(cert) => {
-                        match reqwest::blocking::Client::builder()
-                            .add_root_certificate(cert)
-                            .danger_accept_invalid_certs(true)
-                            .build() {
-                            Ok(client) => {
-                                match client.post(format!("https://localhost:9443").as_str())
-                                    .form(&params)
-                                    .send() {
-                                    Ok(res) => {
-                                        match res.text() {
-                                            Ok(body) => {
-                                                log::debug!("Command response: {}", body);
-                                            },
-                                            Err(e) => {
-                                                let ctx = ErrorContext::new("main", "http_response")
-                                                    .with_details(format!("Failed to read response text: {}", e));
-                                                let error = AogError::HttpError(e.to_string());
-                                                log_error_with_context(&error, &ctx);
-                                            }
-                                        }
-                                    },
-                                    Err(e) => log::error!("Failed to send command request: {}", e),
-                                }
-                            },
-                            Err(e) => log::error!("Failed to build HTTP client: {}", e),
-                        }
-                    },
-                    Err(e) => log::error!("Failed to parse certificate: {}", e),
+        if aog::instance::check_running_instance() && !args.force {
+            // Forward command to running instance
+            match aog::instance::forward_command_with_retry(
+                &s,
+                Some("/opt/aog/crt/default/aog.local.der"),
+            ) {
+                Ok(response) => {
+                    println!("{}", response);
+                    continue;
                 }
-            },
-            Err(e) => log::error!("Failed to read certificate file: {}", e),
+                Err(e) => {
+                    log::warn!("Failed to forward command to background instance: {}", e);
+                    println!("Warning: Failed to forward command to background instance");
+                    println!("Error: {}", e);
+                    println!("You may need to restart the background instance or use --force");
+                    continue;
+                }
+            }
         }
+        
+        // Execute command locally
+        // ----------------------------------------------------------------
 
 
 
@@ -212,6 +204,11 @@ fn main() -> Result<()> {
     // aog::pump::stop(Arc::clone(&pump_thread));
     // aog::gpio::thread::stop(Arc::clone(&gpio_27_thread));
     // aog::gpio::thread::stop(Arc::clone(&gpio_22_thread));
+    
+    // Release instance lock
+    if let Err(e) = aog::instance::release_lock() {
+        log::warn!("Failed to release instance lock: {}", e);
+    }
 
     Ok(())
 }
