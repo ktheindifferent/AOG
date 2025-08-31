@@ -65,6 +65,7 @@ pub struct Config {
     pub sensor_kit_config: Option<SensorKitConfig>,
     pub sensor_logs: Vec<SensorLog>,
     pub pump_config: Option<PumpConfig>,  // New pump configuration
+    pub ph_config: Option<PhConfig>,  // pH sensor configuration
     pub water_level_config: Option<WaterLevelConfig>,  // Water level sensor configuration
     pub https_bind_address: Option<String>,  // HTTPS server bind address (default: 127.0.0.1)
     pub https_bind_port: Option<u16>,  // HTTPS server port (default: 8443)
@@ -110,7 +111,8 @@ impl Config {
             photo_cycle_start: 6, 
             photo_cycle_end: 24, 
             sensor_kit_config: None, 
-            pump_config: None, 
+            pump_config: None,
+            ph_config: None, 
             water_level_config: None,
             power_type: "".to_string(), 
             tank_one_to_two_pump_pin: 17, 
@@ -232,6 +234,41 @@ impl Default for PumpConfig {
             safety_gpio_pin: None,
             pump_runtime_limit_seconds: 300,  // 5 minutes default
             pump_cooldown_seconds: 60,  // 1 minute cooldown
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PhConfig {
+    pub enabled: bool,  // Enable pH monitoring
+    pub sensor_type: String,  // "arduino", "serial", or "i2c"
+    pub serial_port: Option<String>,  // Serial port for direct pH sensor connection
+    pub i2c_address: Option<u8>,  // I2C address for I2C pH sensors
+    pub optimal_min: f32,  // Minimum optimal pH (default 6.5)
+    pub optimal_max: f32,  // Maximum optimal pH (default 7.5)
+    pub critical_min: f32,  // Minimum critical pH (default 5.5)
+    pub critical_max: f32,  // Maximum critical pH (default 8.5)
+    pub alert_enabled: bool,  // Enable pH alerts
+    pub auto_adjustment_enabled: bool,  // Enable automatic pH adjustment suggestions
+    pub monitoring_interval_seconds: u64,  // How often to check pH (default 60)
+    pub history_size: usize,  // Number of readings to keep in history (default 1440)
+}
+
+impl Default for PhConfig {
+    fn default() -> Self {
+        PhConfig {
+            enabled: true,
+            sensor_type: "arduino".to_string(),
+            serial_port: None,
+            i2c_address: None,
+            optimal_min: 6.5,
+            optimal_max: 7.5,
+            critical_min: 5.5,
+            critical_max: 8.5,
+            alert_enabled: true,
+            auto_adjustment_enabled: true,
+            monitoring_interval_seconds: 60,
+            history_size: 1440,
         }
     }
 }

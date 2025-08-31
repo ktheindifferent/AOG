@@ -28,6 +28,47 @@ function getStats(){
                 $("#tvoc_stat").html(data["tvoc"]);
                 $("#temp_stat").html(data["temp"]);
                 $("#hum_stat").html(data["hum"]);
+                
+                // pH sensor data
+                if(data["ph_status"]) {
+                    var phStatus = data["ph_status"];
+                    
+                    // Display current pH value
+                    if(phStatus.current_ph) {
+                        $("#ph_stat").html(phStatus.current_ph.toFixed(2));
+                        
+                        // Color code based on alert level
+                        if(phStatus.alert_level === "Critical") {
+                            $("#ph_stat").addClass("text-danger").removeClass("text-warning text-success");
+                            $("#ph_alert").html("⚠️ Critical").addClass("text-danger");
+                        } else if(phStatus.alert_level === "Warning") {
+                            $("#ph_stat").addClass("text-warning").removeClass("text-danger text-success");
+                            $("#ph_alert").html("⚠️ Warning").addClass("text-warning");
+                        } else {
+                            $("#ph_stat").addClass("text-success").removeClass("text-danger text-warning");
+                            $("#ph_alert").html("✓ Normal").addClass("text-success");
+                        }
+                    } else {
+                        $("#ph_stat").html("N/A");
+                    }
+                    
+                    // Display trend
+                    if(phStatus.trend === "Rising") {
+                        $("#ph_trend").html("↑ Rising");
+                    } else if(phStatus.trend === "Falling") {
+                        $("#ph_trend").html("↓ Falling");
+                    } else {
+                        $("#ph_trend").html("→ Stable");
+                    }
+                    
+                    // Display adjustment suggestion
+                    if(phStatus.adjustment_suggestion) {
+                        $("#ph_suggestion").html(phStatus.adjustment_suggestion);
+                    }
+                } else if(data["ph"]) {
+                    // Fallback to simple pH value
+                    $("#ph_stat").html(data["ph"]);
+                }
             }
 
         }
