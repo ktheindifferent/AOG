@@ -46,6 +46,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::aog;
 use crate::Config;
+use crate::error::{recover_mutex_lock, safe_mutex_access};
 
 
 
@@ -79,7 +80,13 @@ pub fn init(){
     };
     
     // Get binding configuration from config
-    let bind_config = config.lock().unwrap();
+    let bind_config = match config.lock() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            log::error!("Failed to acquire config lock: {} - using defaults", e);
+            return;
+        }
+    };
     let bind_address = bind_config.https_bind_address.clone().unwrap_or_else(|| "127.0.0.1".to_string());
     let bind_port = bind_config.https_bind_port.unwrap_or(8443);
     let bind_addr = format!("{}:{}", bind_address, bind_port);
@@ -96,7 +103,13 @@ pub fn init(){
     
     
                 if Path::new("/opt/aog/dat/sessions.bin").exists() {
-                    sessions = crate::Sessions::load(0).unwrap().sessions;
+                    match crate::Sessions::load(0) {
+                        Ok(loaded_sessions) => sessions = loaded_sessions.sessions,
+                        Err(e) => {
+                            log::error!("Failed to load sessions: {}", e);
+                            // Continue with empty sessions list
+                        }
+                    }
                 }
     
                 for session in &sessions{
@@ -107,7 +120,14 @@ pub fn init(){
     
  
     
-                let edit_aog_config = &mut *config.lock().unwrap();
+                let edit_aog_config = match config.lock() {
+                    Ok(cfg) => cfg,
+                    Err(e) => {
+                        log::error!("Failed to acquire config lock: {}", e);
+                        return Response::text("Internal server error").with_status_code(500);
+                    }
+                };
+                let edit_aog_config = &*edit_aog_config;
     
     
     
@@ -317,7 +337,13 @@ pub fn init_command_api(){
     };
     
     // Get binding configuration from config
-    let bind_config = config.lock().unwrap();
+    let bind_config = match config.lock() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            log::error!("Failed to acquire config lock for command API: {} - using defaults", e);
+            return;
+        }
+    };
     let bind_address = bind_config.command_api_bind_address.clone().unwrap_or_else(|| "127.0.0.1".to_string());
     let bind_port = bind_config.command_api_bind_port.unwrap_or(9443);
     let bind_addr = format!("{}:{}", bind_address, bind_port);

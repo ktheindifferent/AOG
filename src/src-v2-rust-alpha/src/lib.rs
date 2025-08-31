@@ -1,7 +1,9 @@
 pub mod aog;
+pub mod error;
 
 // Re-export commonly used types for convenience
 pub use aog::qwiic::{QwiicRelayDevice, RecoveryConfig, RelayHealthStatus, RelayError};
+pub use error::{AogError, AogResult};
 
 use clap::Parser;
 use rand::distributions::Alphanumeric;
@@ -506,7 +508,7 @@ mod tests {
         });
         
         assert!(config.sensor_kit_config.is_some());
-        let sensor_kit = config.sensor_kit_config.unwrap();
+        let sensor_kit = config.sensor_kit_config.expect("Sensor kit config should be present");
         assert_eq!(sensor_kit.dht11_pin, 8);
         assert_eq!(sensor_kit.analog_co2_pin, "A1");
     }
@@ -548,7 +550,7 @@ mod tests {
         });
         
         assert!(config.pump_config.is_some());
-        let pump_config = config.pump_config.unwrap();
+        let pump_config = config.pump_config.expect("Pump config should be present");
         assert!(pump_config.continuous_mode);
         assert!(pump_config.photo_cycle_enabled);
         assert_eq!(pump_config.photo_cycle_start_hour, 8);

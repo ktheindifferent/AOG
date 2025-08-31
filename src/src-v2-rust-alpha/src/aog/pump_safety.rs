@@ -13,6 +13,7 @@ use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use crate::error::{AogError, AogResult, recover_mutex_lock, safe_mutex_access};
 
 /// Maximum runtime limits for different pump types (in seconds)
 pub const MAX_RUNTIME_FILL_PUMP: u64 = 300;  // 5 minutes max for fill pump
@@ -122,12 +123,19 @@ impl PumpSafetyMonitor {
     /// Check if pump can safely start
     pub fn can_start_pump(&self, pump_id: &str, pump_type: PumpType) -> Result<bool, String> {
         // Check emergency stop
-        if *self.emergency_stop_active.lock().unwrap() {
+        let emergency_active = safe_mutex_access(
+            &self.emergency_stop_active,
+            "can_start_pump::emergency_stop",
+            |active| *active,
+            true // Default to safe state (emergency active) on error
+        );
+        if emergency_active {
             return Err("Emergency stop is active - all pumps disabled".to_string());
         }
 
         // Check current state
-        let states = self.pump_states.lock().unwrap();
+        let states = recover_mutex_lock(&self.pump_states, "can_start_pump::pump_states")
+            .map_err(|e| format!("Failed to check pump state: {}", e))?;
         if let Some(state) = states.get(pump_id) {
             match state {
                 PumpState::Running | PumpState::Oscillating => {
@@ -147,7 +155,8 @@ impl PumpSafetyMonitor {
         }
 
         // Check cooldown period
-        let last_times = self.last_operation_times.lock().unwrap();
+        let last_times = recover_mutex_lock(&self.last_operation_times, "can_start_pump::last_times")
+            .map_err(|e| format!("Failed to check cooldown: {}", e))?;
         if let Some(last_time) = last_times.get(pump_id) {
             let elapsed = last_time.elapsed();
             if elapsed < Duration::from_secs(MIN_COOLDOWN_PERIOD) {
@@ -175,7 +184,8 @@ impl PumpSafetyMonitor {
         }
 
         // Check maintenance schedule
-        let maintenance = self.maintenance_hours.lock().unwrap();
+        let maintenance = recover_mutex_lock(&self.maintenance_hours, "can_start_pump::maintenance")
+            .map_err(|e| format!("Failed to check maintenance: {}", e))?;
         if let Some(hours) = maintenance.get(pump_id) {
             if *hours > 1000 {
                 // 1000 hours of operation
@@ -188,11 +198,18 @@ impl PumpSafetyMonitor {
 
     /// Register pump start
     pub fn register_pump_start(&self, pump_id: String, pump_type: PumpType) {
-        let mut states = self.pump_states.lock().unwrap();
-        states.insert(pump_id.clone(), PumpState::Running);
+        // Use recover_mutex_lock to handle poisoned locks
+        if let Ok(mut states) = recover_mutex_lock(&self.pump_states, "register_pump_start::states") {
+            states.insert(pump_id.clone(), PumpState::Running);
+        } else {
+            log::error!("Failed to update pump state for {}", pump_id);
+        }
 
-        let mut last_times = self.last_operation_times.lock().unwrap();
-        last_times.insert(pump_id.clone(), Instant::now());
+        if let Ok(mut last_times) = recover_mutex_lock(&self.last_operation_times, "register_pump_start::times") {
+            last_times.insert(pump_id.clone(), Instant::now());
+        } else {
+            log::error!("Failed to update last operation time for {}", pump_id);
+        }
 
         let event = SafetyEvent::PumpStarted {
             pump_id,
@@ -205,25 +222,39 @@ impl PumpSafetyMonitor {
 
     /// Register pump stop
     pub fn register_pump_stop(&self, pump_id: String, reason: String) {
-        let mut states = self.pump_states.lock().unwrap();
-        states.insert(pump_id.clone(), PumpState::Cooldown);
-
-        let last_times = self.last_operation_times.lock().unwrap();
-        let runtime = if let Some(start_time) = last_times.get(&pump_id) {
-            start_time.elapsed()
+        // Update state with error recovery
+        if let Ok(mut states) = recover_mutex_lock(&self.pump_states, "register_pump_stop::states") {
+            states.insert(pump_id.clone(), PumpState::Cooldown);
         } else {
+            log::error!("Failed to set cooldown state for pump {}", pump_id);
+        }
+
+        let runtime = if let Ok(last_times) = recover_mutex_lock(&self.last_operation_times, "register_pump_stop::times") {
+            if let Some(start_time) = last_times.get(&pump_id) {
+                start_time.elapsed()
+            } else {
+                Duration::from_secs(0)
+            }
+        } else {
+            log::error!("Failed to calculate runtime for pump {}", pump_id);
             Duration::from_secs(0)
         };
 
         // Update total runtime
-        let mut totals = self.total_runtimes.lock().unwrap();
-        let total = totals.entry(pump_id.clone()).or_insert(Duration::from_secs(0));
-        *total += runtime;
+        if let Ok(mut totals) = recover_mutex_lock(&self.total_runtimes, "register_pump_stop::totals") {
+            let total = totals.entry(pump_id.clone()).or_insert(Duration::from_secs(0));
+            *total += runtime;
+        } else {
+            log::error!("Failed to update total runtime for pump {}", pump_id);
+        }
 
         // Update maintenance hours
-        let mut maintenance = self.maintenance_hours.lock().unwrap();
-        let hours = maintenance.entry(pump_id.clone()).or_insert(0);
-        *hours += runtime.as_secs() / 3600;
+        if let Ok(mut maintenance) = recover_mutex_lock(&self.maintenance_hours, "register_pump_stop::maintenance") {
+            let hours = maintenance.entry(pump_id.clone()).or_insert(0);
+            *hours += runtime.as_secs() / 3600;
+        } else {
+            log::error!("Failed to update maintenance hours for pump {}", pump_id);
+        }
 
         let event = SafetyEvent::PumpStopped {
             pump_id: pump_id.clone(),
@@ -239,18 +270,27 @@ impl PumpSafetyMonitor {
         let pump_id_clone = pump_id.clone();
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(MIN_COOLDOWN_PERIOD));
-            let mut states = states_clone.lock().unwrap();
-            if let Some(state) = states.get_mut(&pump_id_clone) {
-                if *state == PumpState::Cooldown {
-                    *state = PumpState::Idle;
+            if let Ok(mut states) = recover_mutex_lock(&states_clone, "cooldown_completion") {
+                if let Some(state) = states.get_mut(&pump_id_clone) {
+                    if *state == PumpState::Cooldown {
+                        *state = PumpState::Idle;
+                    }
                 }
+            } else {
+                log::error!("Failed to reset cooldown state for pump {}", pump_id_clone);
             }
         });
     }
 
     /// Check runtime limit for pump
     pub fn check_runtime_limit(&self, pump_id: &str, pump_type: PumpType) -> bool {
-        let last_times = self.last_operation_times.lock().unwrap();
+        let last_times = match recover_mutex_lock(&self.last_operation_times, "check_runtime_limit") {
+            Ok(times) => times,
+            Err(e) => {
+                log::error!("Failed to check runtime limit: {} - defaulting to safe state", e);
+                return false; // Safe default: assume limit exceeded
+            }
+        };
         if let Some(start_time) = last_times.get(pump_id) {
             let runtime = start_time.elapsed().as_secs();
             let max_runtime = match pump_type {
@@ -278,7 +318,12 @@ impl PumpSafetyMonitor {
         }
 
         // Check oscillation count
-        let mut counters = self.oscillation_counters.lock().unwrap();
+        let mut counters = match recover_mutex_lock(&self.oscillation_counters, "check_oscillation_safety") {
+            Ok(c) => c,
+            Err(e) => {
+                return Err(format!("Failed to check oscillation counter: {}", e));
+            }
+        };
         let count = counters.entry(pump_id.to_string()).or_insert(0);
         *count += 1;
 
@@ -292,26 +337,42 @@ impl PumpSafetyMonitor {
 
     /// Reset oscillation counter
     pub fn reset_oscillation_counter(&self, pump_id: &str) {
-        let mut counters = self.oscillation_counters.lock().unwrap();
-        counters.insert(pump_id.to_string(), 0);
+        if let Ok(mut counters) = recover_mutex_lock(&self.oscillation_counters, "reset_oscillation_counter") {
+            counters.insert(pump_id.to_string(), 0);
+        } else {
+            log::error!("Failed to reset oscillation counter for pump {}", pump_id);
+        }
     }
 
     /// Trigger emergency shutdown
     pub fn emergency_shutdown(&self, reason: String) {
-        *self.emergency_stop_active.lock().unwrap() = true;
+        // Set emergency stop - critical operation, log but continue on error
+        if let Ok(mut stop_active) = recover_mutex_lock(&self.emergency_stop_active, "emergency_shutdown::stop") {
+            *stop_active = true;
+        } else {
+            log::error!("CRITICAL: Failed to set emergency stop flag!");
+        }
 
-        let states = self.pump_states.lock().unwrap();
-        let affected_pumps: Vec<String> = states
-            .iter()
-            .filter(|(_, state)| **state == PumpState::Running || **state == PumpState::Oscillating)
-            .map(|(id, _)| id.clone())
-            .collect();
+        let affected_pumps = if let Ok(states) = recover_mutex_lock(&self.pump_states, "emergency_shutdown::states") {
+            let pumps: Vec<String> = states
+                .iter()
+                .filter(|(_, state)| **state == PumpState::Running || **state == PumpState::Oscillating)
+                .map(|(id, _)| id.clone())
+                .collect();
+            drop(states);
+            pumps
+        } else {
+            log::error!("Failed to get affected pumps list during emergency shutdown");
+            Vec::new()
+        };
 
         // Set all pumps to emergency stop state
-        drop(states);
-        let mut states = self.pump_states.lock().unwrap();
-        for pump_id in &affected_pumps {
-            states.insert(pump_id.clone(), PumpState::EmergencyStop);
+        if let Ok(mut states) = recover_mutex_lock(&self.pump_states, "emergency_shutdown::set_states") {
+            for pump_id in &affected_pumps {
+                states.insert(pump_id.clone(), PumpState::EmergencyStop);
+            }
+        } else {
+            log::error!("CRITICAL: Failed to set pumps to emergency stop state!");
         }
 
         let event = SafetyEvent::EmergencyShutdown {
@@ -332,15 +393,25 @@ impl PumpSafetyMonitor {
 
     /// Reset emergency stop
     pub fn reset_emergency_stop(&self) {
-        *self.emergency_stop_active.lock().unwrap() = false;
+        // Reset emergency flag
+        if let Ok(mut stop_active) = recover_mutex_lock(&self.emergency_stop_active, "reset_emergency_stop::flag") {
+            *stop_active = false;
+        } else {
+            log::error!("Failed to reset emergency stop flag");
+            return;
+        }
+        
         let _ = fs::remove_file("/opt/aog/emergency_stop");
         
         // Reset all emergency stopped pumps to idle
-        let mut states = self.pump_states.lock().unwrap();
-        for (_, state) in states.iter_mut() {
-            if *state == PumpState::EmergencyStop {
-                *state = PumpState::Idle;
+        if let Ok(mut states) = recover_mutex_lock(&self.pump_states, "reset_emergency_stop::states") {
+            for (_, state) in states.iter_mut() {
+                if *state == PumpState::EmergencyStop {
+                    *state = PumpState::Idle;
+                }
             }
+        } else {
+            log::error!("Failed to reset pump states after emergency stop");
         }
         
         log::info!("Emergency stop reset - pumps can now be restarted");
@@ -365,12 +436,15 @@ impl PumpSafetyMonitor {
 
     /// Log safety event
     fn log_safety_event(&self, event: SafetyEvent) {
-        let mut history = self.operation_history.lock().unwrap();
-        history.push(event.clone());
+        if let Ok(mut history) = recover_mutex_lock(&self.operation_history, "log_safety_event") {
+            history.push(event.clone());
 
-        // Keep only last 1000 events
-        if history.len() > 1000 {
-            history.drain(0..100);
+            // Keep only last 1000 events
+            if history.len() > 1000 {
+                history.drain(0..100);
+            }
+        } else {
+            log::error!("Failed to log safety event to history");
         }
 
         // Also write to log file
@@ -392,27 +466,31 @@ impl PumpSafetyMonitor {
         let mut stats = HashMap::new();
 
         // Current state
-        let states = self.pump_states.lock().unwrap();
-        if let Some(state) = states.get(pump_id) {
-            stats.insert("current_state".to_string(), format!("{:?}", state));
+        if let Ok(states) = recover_mutex_lock(&self.pump_states, "get_pump_stats::states") {
+            if let Some(state) = states.get(pump_id) {
+                stats.insert("current_state".to_string(), format!("{:?}", state));
+            }
         }
 
         // Total runtime
-        let totals = self.total_runtimes.lock().unwrap();
-        if let Some(total) = totals.get(pump_id) {
-            stats.insert("total_runtime_seconds".to_string(), total.as_secs().to_string());
+        if let Ok(totals) = recover_mutex_lock(&self.total_runtimes, "get_pump_stats::totals") {
+            if let Some(total) = totals.get(pump_id) {
+                stats.insert("total_runtime_seconds".to_string(), total.as_secs().to_string());
+            }
         }
 
         // Maintenance hours
-        let maintenance = self.maintenance_hours.lock().unwrap();
-        if let Some(hours) = maintenance.get(pump_id) {
-            stats.insert("maintenance_hours".to_string(), hours.to_string());
+        if let Ok(maintenance) = recover_mutex_lock(&self.maintenance_hours, "get_pump_stats::maintenance") {
+            if let Some(hours) = maintenance.get(pump_id) {
+                stats.insert("maintenance_hours".to_string(), hours.to_string());
+            }
         }
 
         // Oscillation count
-        let counters = self.oscillation_counters.lock().unwrap();
-        if let Some(count) = counters.get(pump_id) {
-            stats.insert("oscillation_count".to_string(), count.to_string());
+        if let Ok(counters) = recover_mutex_lock(&self.oscillation_counters, "get_pump_stats::counters") {
+            if let Some(count) = counters.get(pump_id) {
+                stats.insert("oscillation_count".to_string(), count.to_string());
+            }
         }
 
         stats
@@ -489,7 +567,13 @@ mod tests {
     #[test]
     fn test_pump_safety_monitor_creation() {
         let monitor = PumpSafetyMonitor::new();
-        assert!(!*monitor.emergency_stop_active.lock().unwrap());
+        let emergency_active = safe_mutex_access(
+            &monitor.emergency_stop_active,
+            "test_creation",
+            |active| *active,
+            false
+        );
+        assert!(!emergency_active);
     }
 
     #[test]
@@ -593,7 +677,10 @@ mod tests {
         // Should be in cooldown
         let result = monitor.can_start_pump(pump_id, PumpType::Auxiliary);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("cooldown"));
+        assert!(result.is_err());
+        if let Err(msg) = result {
+            assert!(msg.contains("cooldown"));
+        }
     }
 
     #[test]
@@ -613,14 +700,20 @@ mod tests {
         let pump_id = "maint_pump";
         
         // Simulate many hours of operation
-        let mut maintenance = monitor.maintenance_hours.lock().unwrap();
-        maintenance.insert(pump_id.to_string(), 1001);
-        drop(maintenance);
+        if let Ok(mut maintenance) = recover_mutex_lock(&monitor.maintenance_hours, "test_maintenance") {
+            maintenance.insert(pump_id.to_string(), 1001);
+            drop(maintenance);
+        } else {
+            panic!("Failed to set maintenance hours in test");
+        }
         
         // Should not be able to start due to maintenance
         let result = monitor.can_start_pump(pump_id, PumpType::Fill);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("maintenance"));
+        assert!(result.is_err());
+        if let Err(msg) = result {
+            assert!(msg.contains("maintenance"));
+        }
     }
 
     #[test]
@@ -631,7 +724,7 @@ mod tests {
         let result = monitor.calibrate_pump(pump_id, PumpType::Fill);
         assert!(result.is_ok());
         
-        let cal_data = result.unwrap();
+        let cal_data = result.expect("Calibration should succeed");
         assert!(cal_data.contains_key("flow_rate_lpm"));
         assert!(cal_data.contains_key("optimal_speed_percent"));
     }
