@@ -1,7 +1,9 @@
 pub mod aog;
+pub mod error;
 
 // Re-export commonly used types for convenience
 pub use aog::qwiic::{QwiicRelayDevice, RecoveryConfig, RelayHealthStatus, RelayError};
+pub use error::{AogError, AogResult};
 
 use clap::Parser;
 use rand::distributions::Alphanumeric;
@@ -25,6 +27,8 @@ pub struct Args {
     pub encrypt: bool,
     #[arg(short, long, default_value = "aog")]
     pub key: String,
+    #[arg(short, long, default_value_t = false, help = "Force start even if another instance is running")]
+    pub force: bool,
 }
 
 
@@ -61,6 +65,7 @@ pub struct Config {
     pub sensor_kit_config: Option<SensorKitConfig>,
     pub sensor_logs: Vec<SensorLog>,
     pub pump_config: Option<PumpConfig>,  // New pump configuration
+    pub water_level_config: Option<WaterLevelConfig>,  // Water level sensor configuration
     pub https_bind_address: Option<String>,  // HTTPS server bind address (default: 127.0.0.1)
     pub https_bind_port: Option<u16>,  // HTTPS server port (default: 8443)
     pub command_api_bind_address: Option<String>,  // Command API bind address (default: 127.0.0.1)
@@ -106,6 +111,7 @@ impl Config {
             photo_cycle_end: 24, 
             sensor_kit_config: None, 
             pump_config: None, 
+            water_level_config: None,
             power_type: "".to_string(), 
             tank_one_to_two_pump_pin: 17, 
             uv_light_pin: 27, 
@@ -226,6 +232,56 @@ impl Default for PumpConfig {
             safety_gpio_pin: None,
             pump_runtime_limit_seconds: 300,  // 5 minutes default
             pump_cooldown_seconds: 60,  // 1 minute cooldown
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WaterLevelConfig {
+    pub sensor_type: WaterLevelSensorType,  // Type of sensor (ultrasonic, pressure, float)
+    pub tank1_sensor_pin: Option<u8>,  // GPIO pin for tank 1 sensor
+    pub tank2_sensor_pin: Option<u8>,  // GPIO pin for tank 2 sensor
+    pub tank1_serial_port: Option<String>,  // Serial port for tank 1 sensor (if using serial)
+    pub tank2_serial_port: Option<String>,  // Serial port for tank 2 sensor (if using serial)
+    pub tank1_i2c_address: Option<u8>,  // I2C address for tank 1 sensor (if using I2C)
+    pub tank2_i2c_address: Option<u8>,  // I2C address for tank 2 sensor (if using I2C)
+    pub calibration_offset: f32,  // Calibration offset in cm
+    pub calibration_factor: f32,  // Calibration multiplier
+    pub tank_height_cm: f32,  // Total tank height in cm
+    pub max_fill_level_cm: f32,  // Maximum safe fill level in cm
+    pub min_level_cm: f32,  // Minimum level in cm
+    pub moving_average_samples: usize,  // Number of samples for moving average
+    pub sensor_timeout_ms: u64,  // Timeout for sensor readings in milliseconds
+    pub enable_fallback_mode: bool,  // Enable fallback to overflow sensors if primary fails
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum WaterLevelSensorType {
+    Ultrasonic,  // HC-SR04 or similar
+    Pressure,    // Pressure transducer
+    Float,       // Float switch array
+    Capacitive,  // Capacitive sensor
+    Mock,        // Mock sensor for testing
+}
+
+impl Default for WaterLevelConfig {
+    fn default() -> Self {
+        WaterLevelConfig {
+            sensor_type: WaterLevelSensorType::Ultrasonic,
+            tank1_sensor_pin: Some(23),  // Default GPIO pin for tank 1
+            tank2_sensor_pin: Some(24),  // Default GPIO pin for tank 2
+            tank1_serial_port: None,
+            tank2_serial_port: None,
+            tank1_i2c_address: None,
+            tank2_i2c_address: None,
+            calibration_offset: 0.0,
+            calibration_factor: 1.0,
+            tank_height_cm: 100.0,  // 1 meter default
+            max_fill_level_cm: 90.0,  // 90cm max fill
+            min_level_cm: 10.0,  // 10cm minimum
+            moving_average_samples: 5,
+            sensor_timeout_ms: 1000,
+            enable_fallback_mode: true,
         }
     }
 }
@@ -508,7 +564,7 @@ mod tests {
         });
         
         assert!(config.sensor_kit_config.is_some());
-        let sensor_kit = config.sensor_kit_config.unwrap();
+        let sensor_kit = config.sensor_kit_config.expect("Sensor kit config should be present");
         assert_eq!(sensor_kit.dht11_pin, 8);
         assert_eq!(sensor_kit.analog_co2_pin, "A1");
     }
@@ -550,7 +606,7 @@ mod tests {
         });
         
         assert!(config.pump_config.is_some());
-        let pump_config = config.pump_config.unwrap();
+        let pump_config = config.pump_config.expect("Pump config should be present");
         assert!(pump_config.continuous_mode);
         assert!(pump_config.photo_cycle_enabled);
         assert_eq!(pump_config.photo_cycle_start_hour, 8);

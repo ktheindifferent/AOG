@@ -48,6 +48,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::aog;
 use crate::Config;
+use crate::error::{recover_mutex_lock, safe_mutex_access};
 
 
 
@@ -81,7 +82,13 @@ pub fn init(){
     };
     
     // Get binding configuration from config
-    let bind_config = config.lock().unwrap();
+    let bind_config = match config.lock() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            log::error!("Failed to acquire config lock: {} - using defaults", e);
+            return;
+        }
+    };
     let bind_address = bind_config.https_bind_address.clone().unwrap_or_else(|| "127.0.0.1".to_string());
     let bind_port = bind_config.https_bind_port.unwrap_or(8443);
     let bind_addr = format!("{}:{}", bind_address, bind_port);
@@ -98,7 +105,13 @@ pub fn init(){
     
     
                 if Path::new("/opt/aog/dat/sessions.bin").exists() {
-                    sessions = crate::Sessions::load(0).unwrap().sessions;
+                    match crate::Sessions::load(0) {
+                        Ok(loaded_sessions) => sessions = loaded_sessions.sessions,
+                        Err(e) => {
+                            log::error!("Failed to load sessions: {}", e);
+                            // Continue with empty sessions list
+                        }
+                    }
                 }
     
                 for session in &sessions{
@@ -109,7 +122,14 @@ pub fn init(){
     
  
     
-                let edit_aog_config = &mut *config.lock().unwrap();
+                let edit_aog_config = match config.lock() {
+                    Ok(cfg) => cfg,
+                    Err(e) => {
+                        log::error!("Failed to acquire config lock: {}", e);
+                        return Response::text("Internal server error").with_status_code(500);
+                    }
+                };
+                let edit_aog_config = &*edit_aog_config;
     
     
     
@@ -354,7 +374,13 @@ pub fn init_command_api(){
     };
     
     // Get binding configuration from config - FORCE localhost only for security
-    let bind_config = config.lock().unwrap();
+    let bind_config = match config.lock() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            log::error!("Failed to acquire config lock for command API: {} - using defaults", e);
+            return;
+        }
+    };
     // Always bind to localhost regardless of config for security
     let bind_address = "127.0.0.1".to_string();
     let bind_port = bind_config.command_api_bind_port.unwrap_or(9443);
@@ -427,7 +453,8 @@ pub fn init_command_api(){
        
             #[derive(Serialize, Deserialize, Debug, Clone)]
             struct CommandStatus {
-                status: String
+                status: String,
+                output: Option<String>
             }
             
             let input = try_or_400!(post_input!(request, {
@@ -453,7 +480,10 @@ pub fn init_command_api(){
             
             if !is_safe {
                 log::warn!("Blocked potentially unsafe command: {}", command);
-                let response = Response::json(&CommandStatus { status: "blocked: unauthorized command".to_string() });
+                let response = Response::json(&CommandStatus { 
+                    status: "blocked: unauthorized command".to_string(),
+                    output: None
+                });
                 return response;
             }
             
@@ -464,7 +494,10 @@ pub fn init_command_api(){
                     // Validate pin/relay number is numeric
                     if parts[2].parse::<u8>().is_err() {
                         log::warn!("Invalid pin/relay number in command: {}", command);
-                        let response = Response::json(&CommandStatus { status: "error: invalid pin/relay number".to_string() });
+                        let response = Response::json(&CommandStatus { 
+                            status: "error: invalid pin/relay number".to_string(),
+                            output: None
+                        });
                         return response;
                     }
                 }
@@ -475,10 +508,22 @@ pub fn init_command_api(){
             }
 
 
-            let _ = aog::command::run(input.input_command);
+            // Execute command and capture output
+            let output = match aog::command_exec::execute_with_output(input.input_command.clone()) {
+                Ok(out) => Some(out),
+                Err(e) => {
+                    log::error!("Command execution failed: {}", e);
+                    // Fallback to original command execution
+                    let _ = aog::command::run(input.input_command);
+                    None
+                }
+            };
 
             // let arduino_response = crate::aog::sensors::get_arduino_raw();
-            let response = Response::json(&CommandStatus { status: "success".to_string() });
+            let response = Response::json(&CommandStatus { 
+                status: "success".to_string(),
+                output
+            });
             return response;
 
 
