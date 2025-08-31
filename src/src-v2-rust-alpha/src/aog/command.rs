@@ -46,6 +46,42 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
 
     let command = cmd.clone();
 
+    // Command API token management commands
+    if command == "api token generate" {
+        match crate::aog::auth::set_api_token() {
+            Ok(token) => {
+                println!("New Command API token generated: {}", token);
+                println!("Store this token securely. It will be required for all API requests.");
+                return Ok(());
+            },
+            Err(e) => {
+                eprintln!("Failed to generate API token: {}", e);
+                return Err(e);
+            }
+        }
+    } else if command == "api token remove" {
+        match crate::aog::auth::remove_api_token() {
+            Ok(_) => {
+                println!("Command API token removed. API will work without authentication.");
+                println!("WARNING: This reduces security. Consider generating a new token.");
+                return Ok(());
+            },
+            Err(e) => {
+                eprintln!("Failed to remove API token: {}", e);
+                return Err(e);
+            }
+        }
+    } else if command == "api token status" {
+        let config = crate::Config::load(0)?;
+        if config.command_api_token.is_some() {
+            println!("Command API token is configured");
+            println!("API requires authentication with the configured token");
+        } else {
+            println!("No Command API token configured");
+            println!("API works without authentication (less secure)");
+        }
+        return Ok(());
+    }
 
     if command.starts_with("cls") || command.starts_with("clear"){
         aog::cls();
@@ -146,6 +182,9 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
         println!("gpio status:                  prints status of the gpio bus");
         println!("gpio [on/off] [gpio_bdm]:     change state of a gpio pin");
         println!("clear/cls:                    clears screen");
+        println!("api token generate:           generate new API authentication token");
+        println!("api token remove:             remove API authentication requirement");
+        println!("api token status:             check API token configuration status");
         println!("help [command]:               shows help");
     }
 

@@ -168,6 +168,47 @@ pub fn change_password(current_password: &str, new_password: &str) -> Result<(),
     Ok(())
 }
 
+pub fn generate_api_token() -> String {
+    let mut rng = thread_rng();
+    let token: String = (0..32)
+        .map(|_| rng.sample(Alphanumeric))
+        .map(char::from)
+        .collect();
+    token
+}
+
+pub fn set_api_token() -> Result<String, Box<dyn Error>> {
+    let token = generate_api_token();
+    
+    // Load existing config
+    let mut config = crate::Config::load(0)?;
+    
+    // Set the new token
+    config.command_api_token = Some(token.clone());
+    
+    // Save the updated config
+    config.save()?;
+    
+    log::info!("New Command API token generated and saved");
+    
+    Ok(token)
+}
+
+pub fn remove_api_token() -> Result<(), Box<dyn Error>> {
+    // Load existing config
+    let mut config = crate::Config::load(0)?;
+    
+    // Remove the token
+    config.command_api_token = None;
+    
+    // Save the updated config
+    config.save()?;
+    
+    log::info!("Command API token removed");
+    
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

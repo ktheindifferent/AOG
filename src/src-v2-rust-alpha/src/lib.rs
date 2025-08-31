@@ -70,6 +70,7 @@ pub struct Config {
     pub https_bind_port: Option<u16>,  // HTTPS server port (default: 8443)
     pub command_api_bind_address: Option<String>,  // Command API bind address (default: 127.0.0.1)
     pub command_api_bind_port: Option<u16>,  // Command API port (default: 9443)
+    pub command_api_token: Option<String>,  // API token for command API authentication
 }
 impl Config {
     pub fn new() -> Config {
@@ -119,6 +120,7 @@ impl Config {
             https_bind_port: Some(8443),
             command_api_bind_address: Some("127.0.0.1".to_string()),
             command_api_bind_port: Some(9443),
+            command_api_token: None,  // No token by default for backward compatibility
         }
     }
     pub fn save(&self) -> Result<(), Box<dyn Error>>{

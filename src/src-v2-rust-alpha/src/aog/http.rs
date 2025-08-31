@@ -35,6 +35,8 @@ use std::sync::Mutex;
 
 
 use std::sync::Arc;
+use std::collections::HashMap;
+use std::time::{SystemTime, Duration};
 
 
 
@@ -307,10 +309,45 @@ pub fn init(){
 }
 
 
-// TODO - Add Security flag to only allow connections from localhost
+// Rate limiting for API endpoints
+struct RateLimiter {
+    requests: HashMap<String, Vec<SystemTime>>,
+    max_requests: usize,
+    window: Duration,
+}
+
+impl RateLimiter {
+    fn new(max_requests: usize, window_seconds: u64) -> Self {
+        RateLimiter {
+            requests: HashMap::new(),
+            max_requests,
+            window: Duration::from_secs(window_seconds),
+        }
+    }
+    
+    fn check_rate_limit(&mut self, client_id: &str) -> bool {
+        let now = SystemTime::now();
+        let window_start = now - self.window;
+        
+        // Get or create request history for this client
+        let requests = self.requests.entry(client_id.to_string()).or_insert_with(Vec::new);
+        
+        // Remove old requests outside the window
+        requests.retain(|&req_time| req_time > window_start);
+        
+        // Check if limit exceeded
+        if requests.len() >= self.max_requests {
+            return false;
+        }
+        
+        // Add current request
+        requests.push(now);
+        true
+    }
+}
+
+// Command API with enhanced security - localhost only + token authentication
 pub fn init_command_api(){
-
-
 
     let config = Arc::new(Mutex::new(match Config::load(0) {
         Ok(cfg) => cfg,
@@ -336,7 +373,7 @@ pub fn init_command_api(){
         }
     };
     
-    // Get binding configuration from config
+    // Get binding configuration from config - FORCE localhost only for security
     let bind_config = match config.lock() {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -344,15 +381,75 @@ pub fn init_command_api(){
             return;
         }
     };
-    let bind_address = bind_config.command_api_bind_address.clone().unwrap_or_else(|| "127.0.0.1".to_string());
+    // Always bind to localhost regardless of config for security
+    let bind_address = "127.0.0.1".to_string();
     let bind_port = bind_config.command_api_bind_port.unwrap_or(9443);
     let bind_addr = format!("{}:{}", bind_address, bind_port);
+    let api_token = bind_config.command_api_token.clone();
     drop(bind_config);
     
-    log::info!("Starting Command API server on {}", bind_addr);
+    // Initialize rate limiter: 10 requests per 60 seconds
+    let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(10, 60)));
+    
+    log::info!("Starting Command API server on {} (localhost-only)", bind_addr);
     
     rouille::Server::new_ssl(bind_addr, move |request| {
         {
+            // IP filtering - reject non-localhost connections
+            let remote_addr = request.remote_addr();
+            let is_localhost = match remote_addr {
+                std::net::SocketAddr::V4(addr) => {
+                    let ip = addr.ip();
+                    ip.is_loopback() || ip.to_string() == "127.0.0.1"
+                },
+                std::net::SocketAddr::V6(addr) => {
+                    let ip = addr.ip();
+                    ip.is_loopback() || ip.to_string() == "::1"
+                }
+            };
+            
+            if !is_localhost {
+                log::warn!("Rejected non-localhost connection from: {}", remote_addr);
+                return Response::text("Forbidden: localhost connections only")
+                    .with_status_code(403);
+            }
+            
+            // Token authentication check
+            let auth_header = request.header("Authorization");
+            let token_valid = if let Some(ref expected_token) = api_token {
+                match auth_header {
+                    Some(header_value) => {
+                        // Support both "Bearer <token>" and plain token formats
+                        let token = if header_value.starts_with("Bearer ") {
+                            &header_value[7..]
+                        } else {
+                            header_value
+                        };
+                        token == expected_token
+                    },
+                    None => false
+                }
+            } else {
+                // If no token configured, authentication is not required (backward compatibility)
+                true
+            };
+            
+            if !token_valid {
+                log::warn!("Invalid or missing API token from: {}", remote_addr);
+                return Response::text("Unauthorized: Invalid API token")
+                    .with_status_code(401);
+            }
+            
+            // Rate limiting check
+            let client_id = remote_addr.to_string();
+            let mut limiter = rate_limiter.lock().unwrap();
+            if !limiter.check_rate_limit(&client_id) {
+                log::warn!("Rate limit exceeded for client: {}", client_id);
+                return Response::text("Too Many Requests")
+                    .with_status_code(429)
+                    .with_additional_header("Retry-After", "60");
+            }
+            drop(limiter);
        
             #[derive(Serialize, Deserialize, Debug, Clone)]
             struct CommandStatus {
