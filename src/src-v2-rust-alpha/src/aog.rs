@@ -38,8 +38,6 @@ pub mod qwiic;
 pub mod auth;
 pub mod ph_sensor;
 pub mod instance;
-pub mod command_exec;
-pub mod water_level;
 
 #[cfg(test)]
 mod tests_overflow;
