@@ -13,7 +13,7 @@ use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use crate::error::{AogError, AogResult, recover_mutex_lock, safe_mutex_access};
+use crate::aog::error::{AogError, AogResult, recover_mutex_lock, safe_mutex_access};
 
 /// Maximum runtime limits for different pump types (in seconds)
 pub const MAX_RUNTIME_FILL_PUMP: u64 = 300;  // 5 minutes max for fill pump
