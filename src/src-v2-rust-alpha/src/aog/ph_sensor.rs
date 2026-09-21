@@ -141,8 +141,7 @@ impl PhHistory {
         let window_size = window_minutes.min(self.readings.len());
         let recent_readings: Vec<f32> = self.readings
             .iter()
-            .rev()
-            .take(window_size)
+            .skip(self.readings.len() - window_size)
             .map(|r| r.ph_value)
             .collect();
         
@@ -262,7 +261,7 @@ impl PhSensor {
     }
     
     fn read_serial_sensor(&self, port: &str) -> Result<f32, String> {
-        let mut serial_port = SerialPort::open(port, 9600)
+        let serial_port = SerialPort::open(port, 9600)
             .map_err(|e| format!("Failed to open serial port: {}", e))?;
         
         serial_port.write(b"R\r")
@@ -331,8 +330,9 @@ impl PhSensor {
         Ok(reading)
     }
     
-    fn calculate_alert_level(ph_value: f32) -> PhAlertLevel {
-        if ph_value < PH_CRITICAL_MIN || ph_value > PH_CRITICAL_MAX {
+    /// Classify a pH reading using the optimal and critical thresholds.
+    pub fn calculate_alert_level(ph_value: f32) -> PhAlertLevel {
+        if ph_value <= PH_CRITICAL_MIN || ph_value >= PH_CRITICAL_MAX {
             PhAlertLevel::Critical
         } else if ph_value < PH_OPTIMAL_MIN || ph_value > PH_OPTIMAL_MAX {
             PhAlertLevel::Warning
@@ -378,7 +378,10 @@ impl PhSensor {
     
     pub fn get_adjustment_suggestion(&self) -> String {
         let history = self.history.lock().unwrap();
-        
+        Self::adjustment_suggestion_from_history(&history)
+    }
+
+    fn adjustment_suggestion_from_history(history: &PhHistory) -> String {
         if let Some(avg_ph) = history.get_average(60) {
             let trend = history.get_trend(60);
             
@@ -419,7 +422,7 @@ impl PhSensor {
                 .unwrap_or(PhAlertLevel::Normal),
             last_calibration: calibration.last_calibration,
             calibration_valid: calibration.point_7.is_some(),
-            adjustment_suggestion: self.get_adjustment_suggestion(),
+            adjustment_suggestion: Self::adjustment_suggestion_from_history(&history),
         }
     }
 }

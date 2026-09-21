@@ -13,8 +13,8 @@ use std::fs;
 use std::io::Write;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
-use rppal::gpio::{Gpio, InputPin, OutputPin, Level};
-use ::aog::{WaterLevelConfig, WaterLevelSensorType};
+use rppal::gpio::{Gpio, InputPin, OutputPin};
+use crate::{WaterLevelConfig, WaterLevelSensorType};
 
 /// Water level reading with metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]

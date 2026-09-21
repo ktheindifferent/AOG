@@ -1,6 +1,5 @@
-use aog::{Config, SensorLog, Sessions, Session, SensorKitConfig, Args};
+use aog::{Config, SensorLog, Sessions, Session, SensorKitConfig};
 use std::fs;
-use std::path::Path;
 use tempfile::TempDir;
 
 fn setup_test_environment() -> TempDir {
@@ -9,22 +8,6 @@ fn setup_test_environment() -> TempDir {
     fs::create_dir_all(&aog_dir).unwrap();
     std::env::set_var("AOG_TEST_DIR", aog_dir.to_str().unwrap());
     temp_dir
-}
-
-fn cleanup_test_files(dir: &Path) {
-    let test_files = [
-        "data.json",
-        "data.bak.json",
-        "sessions.json",
-        "sessions.bak.json",
-    ];
-    
-    for file in test_files.iter() {
-        let file_path = dir.join(file);
-        if file_path.exists() {
-            let _ = fs::remove_file(file_path);
-        }
-    }
 }
 
 #[test]
@@ -218,7 +201,7 @@ fn test_session_delta_values() {
     // Test various delta values
     let deltas = vec![0, 1, 10, 50, 100, 255];
     
-    for delta in deltas {
+    for &delta in &deltas {
         sessions.sessions.push(Session {
             id: format!("delta_{}", delta),
             delta,

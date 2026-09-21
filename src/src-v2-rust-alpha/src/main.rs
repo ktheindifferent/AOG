@@ -26,9 +26,7 @@
 // Relay 4: Aux Tank Pump
 
 pub mod setup;
-pub mod aog;
-
-use ::aog::error::{AogError, AogResult};
+pub use ::aog::aog;
 
 // const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 extern crate qwiic_lcd_rs;
@@ -36,7 +34,6 @@ extern crate qwiic_relay_rs;
 
 use clap::Parser;
 
-use qwiic_relay_rs::*;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag;
 use simple_logger::SimpleLogger;
@@ -46,7 +43,7 @@ use std::io::{stdin,stdout,Write};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
-use ::aog::{Config, Session, Sessions};
+use ::aog::Config;
 use std::thread;
 
 use error_chain::error_chain;

@@ -4,7 +4,7 @@
 
 use aog::{WaterLevelConfig, WaterLevelSensorType};
 use aog::aog::water_level::{WaterLevelMonitor, MockSensor, WaterLevelSystem, get_water_level_percent};
-use aog::aog::pump_safety::{PumpSafetyMonitor, PumpType, PumpState, SAFETY_MONITOR};
+use aog::aog::pump_safety::{PumpSafetyMonitor, PumpType};
 use std::thread;
 use std::time::Duration;
 
@@ -61,7 +61,7 @@ fn test_overflow_prevention() {
 #[test]
 fn test_sensor_failure_handling() {
     // Create a sensor that will fail
-    let mut sensor = MockSensor::new(30.0);
+    let sensor = MockSensor::new(30.0);
     
     let config = WaterLevelConfig {
         sensor_type: WaterLevelSensorType::Mock,
@@ -194,7 +194,7 @@ fn test_concurrent_sensor_access() {
     let mut handles = vec![];
     
     // Spawn multiple threads reading the sensor simultaneously
-    for i in 0..5 {
+    for _ in 0..5 {
         let monitor_clone = Arc::clone(&monitor);
         let handle = thread::spawn(move || {
             for _ in 0..10 {

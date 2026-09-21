@@ -38,11 +38,10 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
 use chrono::{Local, Timelike};
-use crate::aog::error::{AogError, Result, ErrorContext, log_error_with_context};
-use crate::retry_with_backoff;
+use crate::aog::error::{AogError, ErrorContext, log_error_with_context};
 
 // Import pump safety module
-use crate::aog::pump_safety::{PumpSafetyMonitor, PumpType, SAFETY_MONITOR};
+use crate::aog::pump_safety::{PumpType, SAFETY_MONITOR};
 
 
 #[derive(Debug, Clone)]
@@ -306,7 +305,7 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                     // need more water?
                     // oscillating_state_safety protects against faulty connections to float sensor
                     let mut oscillating_state_safety:u64 = 0;
-                    let mut oscillation_start_time = Instant::now();
+                    let oscillation_start_time = Instant::now();
                     let max_oscillation_time = Duration::from_secs(300); // 5 minutes max
                     
                     // Register pump start with safety monitor
@@ -557,15 +556,15 @@ mod tests {
 
     #[test]
     fn test_stop_function() {
-        let pump = Arc::new(Mutex::new(PumpThread::default()));
-        let pump_clone = Arc::clone(&pump);
-        
-        // This should send stop signal through channel
-        stop(pump_clone);
-        
-        // Verify the channel can still be accessed
-        let pump_lock = pump.lock().unwrap();
-        assert!(pump_lock.tx.send("test".to_string()).is_ok());
+        let (tx, rx) = mpsc::channel();
+        let pump = Arc::new(Mutex::new(PumpThread {
+            tx,
+            ..PumpThread::default()
+        }));
+
+        stop(pump);
+
+        assert_eq!(rx.recv_timeout(Duration::from_secs(1)).unwrap(), "stop");
     }
 
     #[test]

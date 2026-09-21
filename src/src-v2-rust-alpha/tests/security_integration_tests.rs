@@ -1,8 +1,5 @@
 #[cfg(test)]
 mod command_api_security_tests {
-    use std::process::Command;
-    use std::thread;
-    use std::time::Duration;
     
     #[test]
     fn test_localhost_only_connection() {
@@ -99,7 +96,7 @@ mod command_api_security_tests {
     }
     
     // Helper functions
-    fn test_connection(host: &str, port: u16) -> Result<String, String> {
+    fn test_connection(host: &str, _port: u16) -> Result<String, String> {
         // Simulated connection test
         // In reality, this would use an HTTP client
         if host == "127.0.0.1" || host == "::1" || host == "localhost" {
@@ -109,7 +106,7 @@ mod command_api_security_tests {
         }
     }
     
-    fn make_api_request(host: &str, port: u16, token: Option<&str>) -> Result<String, String> {
+    fn make_api_request(_host: &str, _port: u16, _token: Option<&str>) -> Result<String, String> {
         // Simulated API request with rate limiting logic
         // In reality, this would use reqwest or similar
         
@@ -127,7 +124,7 @@ mod command_api_security_tests {
         Ok("success".to_string())
     }
     
-    fn send_command(command: &str, token: Option<&str>) -> String {
+    fn send_command(command: &str, _token: Option<&str>) -> String {
         // Simulated command sending
         // Check if command is in whitelist
         let allowed = vec!["help", "gpio status", "pump status", "relay status"];
@@ -281,7 +278,7 @@ mod integration_tests {
         println!("Full API security integration test completed successfully!");
     }
     
-    fn send_https_request(url: &str, token: Option<&str>, body: &str) -> String {
+    fn send_https_request(_url: &str, token: Option<&str>, _body: &str) -> String {
         // This would use a real HTTPS client in production
         // For testing, we simulate the response
         if token.is_some() {

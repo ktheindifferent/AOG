@@ -48,7 +48,6 @@ use serde::{Serialize, Deserialize};
 
 use crate::aog;
 use crate::Config;
-use crate::aog::error::{recover_mutex_lock, safe_mutex_access};
 
 
 

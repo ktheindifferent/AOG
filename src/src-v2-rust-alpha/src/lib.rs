@@ -194,7 +194,9 @@ impl Config {
                 } else {
                     log::warn!("Unable to read save file after 10 attempts....creating new save file.");
                     let new_c = Config::new();
-                    new_c.save();
+                    if let Err(e) = new_c.save() {
+                        log::warn!("Failed to save new config: {}", e);
+                    }
                     return Ok(new_c);
                 }
             }
@@ -402,7 +404,9 @@ impl Sessions {
                 } else {
                     log::warn!("Unable to read save file after 10 attempts....creating new save file.");
                     let new_c = Sessions::new();
-                    new_c.save();
+                    if let Err(e) = new_c.save() {
+                        log::warn!("Failed to save new sessions: {}", e);
+                    }
                     return Ok(new_c);
                 }
             }
@@ -653,4 +657,3 @@ mod tests {
         assert_eq!(pump_config.pump_cooldown_seconds, 120);
     }
 }
-

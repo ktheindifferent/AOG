@@ -25,8 +25,6 @@ use std::fs::File;
 use std::io::Write;
 use std::thread;
 use std::time::Duration;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 pub fn init_all(){
     // Start video0 Thread

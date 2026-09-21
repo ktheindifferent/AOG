@@ -98,13 +98,16 @@ proptest! {
     }
     
     #[test]
-    fn test_session_delta_values(delta in 0u8..=255u8) {
+    fn test_session_delta_serialization(delta in 0u8..=255u8) {
         let session = Session {
             id: "prop_session".to_string(),
             delta,
         };
         
-        prop_assert!(session.delta <= 255);
+        let json = serde_json::to_string(&session).unwrap();
+        let restored: Session = serde_json::from_str(&json).unwrap();
+        prop_assert_eq!(restored.id, session.id);
+        prop_assert_eq!(restored.delta, delta);
     }
     
     #[test]
@@ -127,7 +130,7 @@ proptest! {
     #[test]
     fn test_config_id_generation(seed in any::<u64>()) {
         // Seed the RNG for reproducibility in tests
-        use rand::{SeedableRng, distributions::Alphanumeric};
+        use rand::{Rng, SeedableRng, distributions::Alphanumeric};
         use rand::rngs::StdRng;
         
         let mut rng = StdRng::seed_from_u64(seed);

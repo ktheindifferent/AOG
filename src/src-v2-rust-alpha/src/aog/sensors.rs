@@ -31,7 +31,6 @@ use std::str;
 
 
 use std::thread;
-use std::sync::mpsc;
 
 
 // TODO - ADD PH Sensor
@@ -191,17 +190,12 @@ pub fn get_value(sensor: &str) -> String {
 
 use serial2::SerialPort;
 
-#[cfg(test)]
-use mockall::automock;
-
 // device_type: DUAL_OVF_SENSOR, SENSORKIT_MK1
 pub fn fetch_arduino(device_type: String) {
 
  
     let _ = thread::Builder::new().name("fetch_arduino_thread".to_string()).spawn(move || {
         let mut tty_port = 0;
-        let tty_quit = 10;
-        let mut tty_found = false;
 
         // let ports = serialport::available_ports().expect("No ports found!");
         // for p in ports {
@@ -209,7 +203,7 @@ pub fn fetch_arduino(device_type: String) {
         // }
 
 
-        while !tty_found{
+        loop {
 
             if tty_port > 10 {
                 tty_port = 0;
@@ -221,15 +215,14 @@ pub fn fetch_arduino(device_type: String) {
                 tty_port += 1;
             } else {
                 let baud_rate = 9600;
-                let mut ttsport = SerialPort::open(port_name.clone(), baud_rate);
+                let ttsport = SerialPort::open(port_name.clone(), baud_rate);
     
             
                 match ttsport {
-                    Ok(mut port) => {
+                    Ok(port) => {
                         
                   
                             let mut serial_buf: Vec<u8> = vec![0; 256];
-                            let mut response = String::new();
         
                             loop {
                                 match port.read(serial_buf.as_mut_slice()) {
@@ -458,14 +451,6 @@ mod tests {
     use tempfile::TempDir;
     use std::io::Write;
 
-    fn setup_test_sensor_dir() -> TempDir {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory for test");
-        let sensor_dir = temp_dir.path().join("sensors");
-        fs::create_dir_all(&sensor_dir).expect("Failed to create sensor directory for test");
-        std::env::set_var("AOG_SENSOR_DIR", sensor_dir.to_str().expect("Failed to convert path to string"));
-        temp_dir
-    }
-
     #[test]
     fn test_parse_arduino_valid_input() {
         let raw = "BEGIN\nDEVICE_ID: SENSORKIT_MK1\nCO2: 450ppm\nTEMP: 25C\nEND".to_string();
@@ -556,5 +541,4 @@ mod tests {
         assert_eq!(empty_result, "");
     }
 }
-
 

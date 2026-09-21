@@ -354,10 +354,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "buf_redux"
+name = "buf_redux_ng"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b953a6887648bb07a535631f2bc00fbdb2a2216f135552cb3f534ed136b9c07f"
+checksum = "419d015fc606c8aa6d136dafafa42cb3b74a2c75a6bfbeedb4d89a33fe42b252"
 dependencies = [
  "memchr",
  "safemem",
@@ -1430,10 +1430,17 @@ dependencies = [
 [[package]]
 name = "multipart"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00dec633863867f29cb39df64a397cdf4a6354708ddd7759f70c7fb51c5f9182"
 dependencies = [
- "buf_redux",
+ "multipart_ng",
+]
+
+[[package]]
+name = "multipart_ng"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3b563469925a8f51d572fd3575760687a14b8506f5692822d9abc968671bd69"
+dependencies = [
+ "buf_redux_ng",
  "httparse",
  "log",
  "mime",

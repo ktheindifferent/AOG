@@ -2,24 +2,11 @@
 
 use aog::aog::ph_sensor::*;
 use std::fs;
-use std::path::Path;
 use tempfile::TempDir;
 
 #[cfg(test)]
 mod ph_sensor_tests {
     use super::*;
-    
-    fn setup_test_environment() -> TempDir {
-        let temp_dir = TempDir::new().unwrap();
-        let sensors_dir = temp_dir.path().join("sensors");
-        fs::create_dir_all(&sensors_dir).unwrap();
-        
-        // Create mock sensor files
-        fs::write(sensors_dir.join("ph"), "7.2").unwrap();
-        fs::write(sensors_dir.join("temp"), "25.0").unwrap();
-        
-        temp_dir
-    }
     
     #[test]
     fn test_ph_range_validation() {
@@ -309,7 +296,10 @@ mod ph_sensor_tests {
     #[test]
     fn test_sensor_status_generation() {
         let sensor = PhSensor::new(PhSensorType::Arduino);
-        let status = sensor.get_status();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || tx.send(sensor.get_status()).unwrap());
+        let status = rx.recv_timeout(std::time::Duration::from_secs(1))
+            .expect("pH status generation must not deadlock");
         
         // Status should have default values
         assert!(status.adjustment_suggestion.len() > 0);

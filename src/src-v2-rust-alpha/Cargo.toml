@@ -47,3 +47,12 @@ tokio-test = "0.4.3"
 serial_test = "3.0.0"
 tempfile = "3.8.0"
 assert_matches = "1.5.0"
+
+[lints.rust]
+# error-chain expands this compatibility cfg inside the calling crate.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(has_error_description_deprecated)'] }
+
+[patch.crates-io]
+# Rouille 3.6.2 still uses multipart's old package name. Forward it to the
+# compatible release with the macro fixes; see compat/multipart/README.md.
+multipart = { path = "compat/multipart" }

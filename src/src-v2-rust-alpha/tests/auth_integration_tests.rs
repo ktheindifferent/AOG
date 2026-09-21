@@ -171,9 +171,6 @@ fn test_invalid_hash_format_handling() {
 
 #[cfg(test)]
 mod password_reset_tests {
-    use super::*;
-    use std::fs;
-    use std::path::Path;
     
     #[test]
     #[ignore] // This test requires full application context

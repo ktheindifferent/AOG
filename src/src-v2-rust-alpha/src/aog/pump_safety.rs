@@ -13,7 +13,7 @@ use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use crate::aog::error::{AogError, AogResult, recover_mutex_lock, safe_mutex_access};
+use crate::error::{recover_mutex_lock, safe_mutex_access};
 
 /// Maximum runtime limits for different pump types (in seconds)
 pub const MAX_RUNTIME_FILL_PUMP: u64 = 300;  // 5 minutes max for fill pump
@@ -719,8 +719,6 @@ mod tests {
 
     #[test]
     fn test_pump_type_safety() {
-        let monitor = PumpSafetyMonitor::new();
-        
         // Different pump types should have different runtime limits
         assert_eq!(MAX_RUNTIME_FILL_PUMP, 300);
         assert_eq!(MAX_RUNTIME_DRAIN_PUMP, 600);

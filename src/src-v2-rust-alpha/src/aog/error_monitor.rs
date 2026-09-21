@@ -5,7 +5,6 @@ use serde::{Serialize, Deserialize};
 use crate::aog::error::AogError;
 
 const MAX_ERROR_HISTORY: usize = 100;
-const MAX_ERRORS_PER_MODULE: usize = 50;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorEntry {

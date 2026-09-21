@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod instance_tests {
+    use aog::aog::instance;
     use std::fs;
     use std::path::Path;
     use std::thread;
@@ -14,11 +15,11 @@ mod instance_tests {
         cleanup_instance_files();
         
         // Test that no instance is detected initially
-        assert!(!aog::instance::check_running_instance());
+        assert!(!instance::check_running_instance());
         
         // Test port checking
-        assert!(aog::instance::check_port_available(9443));
-        assert!(aog::instance::check_port_available(8443));
+        assert!(instance::check_port_available(9443));
+        assert!(instance::check_port_available(8443));
     }
     
     #[test]
@@ -26,19 +27,19 @@ mod instance_tests {
         cleanup_instance_files();
         
         // First acquisition should succeed
-        assert!(aog::instance::acquire_lock().unwrap());
+        assert!(instance::acquire_lock().unwrap());
         
         // Second acquisition should fail
-        assert!(!aog::instance::acquire_lock().unwrap());
+        assert!(!instance::acquire_lock().unwrap());
         
         // Release lock
-        aog::instance::release_lock().unwrap();
+        instance::release_lock().unwrap();
         
         // Now acquisition should succeed again
-        assert!(aog::instance::acquire_lock().unwrap());
+        assert!(instance::acquire_lock().unwrap());
         
         // Clean up
-        aog::instance::release_lock().unwrap();
+        instance::release_lock().unwrap();
     }
     
     #[test]
@@ -46,15 +47,15 @@ mod instance_tests {
         cleanup_instance_files();
         
         // Write PID file
-        aog::instance::write_pid_file().unwrap();
+        instance::write_pid_file().unwrap();
         
         // Read it back
-        let info = aog::instance::read_pid_file().unwrap();
+        let info = instance::read_pid_file().unwrap();
         assert_eq!(info.pid, std::process::id());
         assert_eq!(info.port, 9443);
         
         // Remove PID file
-        aog::instance::remove_pid_file().unwrap();
+        instance::remove_pid_file().unwrap();
         
         // Verify it's gone
         assert!(!Path::new("/opt/aog/aog.pid").exists());
@@ -65,7 +66,7 @@ mod instance_tests {
         // This test simulates command forwarding with retries
         // Note: Requires a mock server or actual running instance
         
-        let result = aog::instance::forward_command_with_retry(
+        let result = instance::forward_command_with_retry(
             "test command",
             None,
         );
@@ -78,14 +79,15 @@ mod instance_tests {
     fn test_force_flag_behavior() {
         cleanup_instance_files();
         
-        // Acquire lock to simulate running instance
-        aog::instance::acquire_lock().unwrap();
+        // Simulate both the lock and the command API of a running instance.
+        instance::acquire_lock().unwrap();
+        let _listener = std::net::TcpListener::bind("127.0.0.1:9443").unwrap();
         
         // Without force flag, should detect existing instance
-        assert!(!aog::instance::handle_instance_check(false).unwrap());
+        assert!(!instance::handle_instance_check(false).unwrap());
         
         // With force flag, should bypass check
-        assert!(aog::instance::handle_instance_check(true).unwrap());
+        assert!(instance::handle_instance_check(true).unwrap());
         
         // Clean up
         cleanup_instance_files();
@@ -99,7 +101,7 @@ mod instance_tests {
         fs::create_dir_all("/opt/aog").ok();
         
         // Write a PID file with non-existent process
-        let fake_info = aog::instance::InstanceInfo {
+        let fake_info = instance::InstanceInfo {
             pid: 99999,  // Very unlikely to be a real PID
             port: 9443,
             start_time: chrono::Local::now().to_rfc3339(),
@@ -110,10 +112,10 @@ mod instance_tests {
         fs::write("/opt/aog/aog.lock", "").unwrap();
         
         // Should detect stale lock and clean it up
-        assert!(aog::instance::acquire_lock().unwrap());
+        assert!(instance::acquire_lock().unwrap());
         
         // Clean up
-        aog::instance::release_lock().unwrap();
+        instance::release_lock().unwrap();
     }
     
     #[test]
@@ -122,23 +124,23 @@ mod instance_tests {
         
         // Spawn thread that acquires lock
         let handle = thread::spawn(|| {
-            aog::instance::acquire_lock().unwrap();
+            instance::acquire_lock().unwrap();
             thread::sleep(Duration::from_millis(500));
-            aog::instance::release_lock().unwrap();
+            instance::release_lock().unwrap();
         });
         
         // Give first thread time to acquire lock
         thread::sleep(Duration::from_millis(100));
         
         // Try to acquire lock from main thread - should fail
-        assert!(!aog::instance::acquire_lock().unwrap());
+        assert!(!instance::acquire_lock().unwrap());
         
         // Wait for first thread to release
         handle.join().unwrap();
         
         // Now should succeed
-        assert!(aog::instance::acquire_lock().unwrap());
-        aog::instance::release_lock().unwrap();
+        assert!(instance::acquire_lock().unwrap());
+        instance::release_lock().unwrap();
     }
     
     fn cleanup_instance_files() {

@@ -1,6 +1,6 @@
 use std::thread;
 use std::time::Duration;
-use crate::aog::error::{AogError, Result};
+use crate::aog::error::Result;
 
 pub struct RetryConfig {
     pub max_retries: u32,
@@ -144,6 +144,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::aog::error::AogError;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     

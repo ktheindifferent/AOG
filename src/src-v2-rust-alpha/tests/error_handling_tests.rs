@@ -7,7 +7,7 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use aog::error::{AogError, AogResult, recover_mutex_lock, safe_mutex_access};
+use aog::error::{AogError, recover_mutex_lock, safe_mutex_access};
 use aog::aog::pump_safety::{PumpSafetyMonitor, PumpType};
 
 #[test]
