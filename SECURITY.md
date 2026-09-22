@@ -2,11 +2,13 @@
 
 ## Network Security
 
-### Default Configuration (Secure)
-By default, the AOG system binds to localhost (127.0.0.1) only, preventing remote access. This is the most secure configuration and recommended for most deployments.
+### Default Configuration
+Rust v2 defaults to `0.0.0.0` so devices on the same network can connect.
+Dashboard pages require an admin login. Remote command requests require a
+configured API token; tokenless command access is limited to loopback.
 
-- **HTTPS Admin Interface**: `https://127.0.0.1:8443`
-- **Command API**: `https://127.0.0.1:9443`
+- **HTTPS Admin Interface**: `https://<device-ip>:8443`
+- **Command API**: `https://<device-ip>:9443/api/command`
 
 ### Configuring Network Bindings
 
@@ -14,15 +16,16 @@ The network binding addresses can be configured in `/opt/aog/data.json`:
 
 ```json
 {
-  ...
-  "https_bind_address": "127.0.0.1",
+  "https_bind_address": "0.0.0.0",
   "https_bind_port": 8443,
-  "command_api_bind_address": "127.0.0.1", 
+  "command_api_bind_address": "0.0.0.0",
   "command_api_bind_port": 9443
 }
 ```
 
-⚠️ **WARNING**: Changing the bind address from `127.0.0.1` to `0.0.0.0` or a specific network interface IP will expose the admin interface to the network. Only do this if you understand the security implications.
+Existing installations keep their saved settings. Restart AOG after editing
+them. To limit connections to this device or an SSH tunnel, set both addresses
+to `127.0.0.1`.
 
 ## Secure Remote Access Setup
 

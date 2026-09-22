@@ -132,19 +132,25 @@ pub fn install(_args: aog::Args) -> Result<()> {
     }
     
 
-    let openssh = Command::new("/bin/bash")
-    .arg("-c")
-    .arg(" openssl req -x509 -out /opt/aog/crt/default/aog.local.cert -keyout /opt/aog/crt/default/aog.local.key \
-    -newkey rsa:2048 -nodes -sha256 \
-    -subj '/CN=localhost' -extensions EXT -config <( \
-        printf \"[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\")")
-    .output()
-    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to generate SSL certificate: {}", e)))?;
-    if openssh.status.success() {
-        println!();
-    } else {
-        let er = String::from_utf8_lossy(&openssh.stderr);
-        println!("{}", er);
+    // Preserve the installed identity across restarts (including custom certificates).
+    // Replacing it on every launch invalidates browser certificate exceptions.
+    if !Path::new("/opt/aog/crt/default/aog.local.cert").is_file()
+        || !Path::new("/opt/aog/crt/default/aog.local.key").is_file()
+    {
+        let openssh = Command::new("/bin/bash")
+        .arg("-c")
+        .arg(" openssl req -x509 -out /opt/aog/crt/default/aog.local.cert -keyout /opt/aog/crt/default/aog.local.key \
+        -newkey rsa:2048 -nodes -sha256 \
+        -subj '/CN=localhost' -extensions EXT -config <( \
+            printf \"[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\")")
+        .output()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to generate SSL certificate: {}", e)))?;
+        if openssh.status.success() {
+            println!();
+        } else {
+            let er = String::from_utf8_lossy(&openssh.stderr);
+            println!("{}", er);
+        }
     }
 
     let openssh_der = Command::new("/bin/bash")

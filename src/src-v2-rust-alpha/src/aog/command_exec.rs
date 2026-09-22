@@ -1,5 +1,4 @@
 use crate::aog;
-use qwiic_relay_rs::*;
 use std::error::Error;
 
 /// Execute a command and return the output as a string
@@ -72,25 +71,9 @@ pub fn execute_with_output(cmd: String) -> Result<String, Box<dyn Error>> {
         output.push_str("GPIO pins configured and active\n");
     }
 
-    if command.starts_with("relay status") {
-        let qwiic_relay_config = QwiicRelayConfig::default();
-        match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", 0x25) {
-            Ok(mut relay) => {
-                for i in 1..=4 {
-                    match relay.get_relay_state(Some(i)) {
-                        Ok(state) => {
-                            output.push_str(&format!("Relay {}: {}\n", i, if state { "ON" } else { "OFF" }));
-                        }
-                        Err(e) => {
-                            output.push_str(&format!("Relay {}: Error reading state: {}\n", i, e));
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                output.push_str(&format!("Failed to connect to relay board: {}\n", e));
-            }
-        }
+    if command.split_whitespace().next() == Some("relay") {
+        return aog::web_control::relay_command(&command)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error).into());
     }
 
     if command.starts_with("pump status") {
@@ -108,7 +91,9 @@ pub fn execute_with_output(cmd: String) -> Result<String, Box<dyn Error>> {
         output.push_str("  pm25      - Show PM2.5 level\n");
         output.push_str("  pm10      - Show PM10 level\n");
         output.push_str("  gpio status  - Show GPIO status\n");
-        output.push_str("  relay status - Show relay status\n");
+        output.push_str("  relay status - Show relay states and assignments\n");
+        output.push_str("  relay on <1-4> <seconds> - Start a timed run\n");
+        output.push_str("  relay off <1-4|all> - Stop outputs and pause schedules\n");
         output.push_str("  pump status  - Show pump status\n");
         output.push_str("  cls/clear    - Clear screen\n");
         output.push_str("  help         - Show this help\n");
@@ -116,7 +101,7 @@ pub fn execute_with_output(cmd: String) -> Result<String, Box<dyn Error>> {
 
     if output.is_empty() {
         // Still execute the original command for side effects
-        let _ = aog::command::run(cmd);
+        aog::command::run(cmd)?;
         output.push_str("Command executed");
     }
 

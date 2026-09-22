@@ -250,7 +250,7 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                 let sensor_error = std::path::Path::new("/opt/aog/sensors/overflow_error").exists();
                 
                 // If any overflow condition exists, DO NOT operate pump
-                if t1_ovf.contains("OVERFLOW") || t2_ovf.contains("OVERFLOW") || sensor_error {
+                if !crate::aog::sensors::overflow_allows_pumping() {
                     log::error!("CRITICAL SAFETY: Overflow condition detected - pump operation blocked!");
                     log::error!("Tank 1: {}, Tank 2: {}, Sensor Error: {}", t1_ovf, t2_ovf, sensor_error);
                     
@@ -271,10 +271,7 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                         sleep(Duration::from_secs(1));
                         
                         // Check for overflow during continuous operation
-                        let t1_check = crate::aog::sensors::get_value("t1_ovf");
-                        let t2_check = crate::aog::sensors::get_value("t2_ovf");
-                        
-                        if t1_check.contains("OVERFLOW") || t2_check.contains("OVERFLOW") {
+                        if !crate::aog::sensors::overflow_allows_pumping() {
                             log::error!("CRITICAL: Overflow detected during continuous pump operation - emergency shutdown!");
                             pump_pin_out.set_high();
                             break;
@@ -316,10 +313,7 @@ pub fn start(pump_thread: Arc<Mutex<PumpThread>>, _term_now: Arc<AtomicBool>, rx
                     
                     while ovf_sensor_pin.is_high(){
                         // Double-check overflow status before each pump activation
-                        let t1_check = crate::aog::sensors::get_value("t1_ovf");
-                        let t2_check = crate::aog::sensors::get_value("t2_ovf");
-                        
-                        if t1_check.contains("OVERFLOW") || t2_check.contains("OVERFLOW") {
+                        if !crate::aog::sensors::overflow_allows_pumping() {
                             log::error!("CRITICAL: Overflow detected during pump operation - emergency shutdown!");
                             pump_pin_out.set_high();
                             break;

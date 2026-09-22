@@ -1,0 +1,19 @@
+[Unit]
+Description=AOG Rust v2 grow controller
+Wants=network-online.target time-sync.target
+After=network-online.target time-sync.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/aog
+ExecStart=/usr/local/bin/aog-v2
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=15
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

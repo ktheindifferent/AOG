@@ -30,6 +30,7 @@ pub mod pump;
 pub mod pump_safety;
 pub mod water_level;
 pub mod http;
+pub mod web_control;
 pub mod tools;
 pub mod error;
 pub mod retry;
@@ -98,7 +99,7 @@ pub fn print_stats(){
     // let arduino_raw = sensors::get_arduino_raw();
 
     println!("           PM2.5:    {}", sensors::get_value("pm25"));
-    println!("            PM10:    {}", sensors::get_value("pm_10"));
+    println!("            PM10:    {}", sensors::get_value("pm10"));
     println!("             CO2:    {}", sensors::get_value("co2"));
     println!("            TVOC:    {}", sensors::get_value("tvoc")); 
     println!("        HUMIDITY:    {}", sensors::get_value("hum")); 

@@ -1,13 +1,18 @@
 use std::fs::{self, File};
 use std::io::{self, Write, Read};
 use std::net::TcpStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
-const PID_FILE: &str = "/opt/aog/aog.pid";
-const LOCK_FILE: &str = "/opt/aog/aog.lock";
+fn instance_file(name: &str) -> PathBuf {
+    // Test processes use private directories instead of the live instance files.
+    std::env::var_os("AOG_TEST_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/opt/aog"))
+        .join(name)
+}
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY_MS: u64 = 500;
 
@@ -41,13 +46,15 @@ pub fn write_pid_file() -> io::Result<()> {
     };
     
     let content = serde_json::to_string_pretty(&info)?;
-    let mut file = File::create(PID_FILE)?;
+    let path = instance_file("aog.pid");
+    fs::create_dir_all(path.parent().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing instance directory"))?)?;
+    let mut file = File::create(path)?;
     file.write_all(content.as_bytes())?;
     Ok(())
 }
 
 pub fn read_pid_file() -> io::Result<InstanceInfo> {
-    let mut file = File::open(PID_FILE)?;
+    let mut file = File::open(instance_file("aog.pid"))?;
     let mut content = String::new();
     file.read_to_string(&mut content)?;
     let info: InstanceInfo = serde_json::from_str(&content)?;
@@ -55,34 +62,46 @@ pub fn read_pid_file() -> io::Result<InstanceInfo> {
 }
 
 pub fn remove_pid_file() -> io::Result<()> {
-    if Path::new(PID_FILE).exists() {
-        fs::remove_file(PID_FILE)?;
+    if instance_file("aog.pid").exists() {
+        fs::remove_file(instance_file("aog.pid"))?;
     }
     Ok(())
 }
 
 pub fn acquire_lock() -> io::Result<bool> {
-    if Path::new(LOCK_FILE).exists() {
+    if instance_file("aog.lock").exists() {
         if let Ok(info) = read_pid_file() {
             if !is_process_running(info.pid) {
                 log::info!("Removing stale lock file from PID {}", info.pid);
-                fs::remove_file(LOCK_FILE).ok();
+                fs::remove_file(instance_file("aog.lock")).ok();
                 remove_pid_file().ok();
             } else {
                 return Ok(false);
             }
+        } else {
+            // Another process may still be publishing its PID after claiming the lock.
+            return Ok(false);
         }
     }
-    
-    File::create(LOCK_FILE)?;
-    write_pid_file()?;
+
+    let lock_path = instance_file("aog.lock");
+    fs::create_dir_all(lock_path.parent().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing instance directory"))?)?;
+    match fs::OpenOptions::new().write(true).create_new(true).open(&lock_path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => return Ok(false),
+        Err(error) => return Err(error),
+    }
+    if let Err(error) = write_pid_file() {
+        fs::remove_file(lock_path).ok();
+        return Err(error);
+    }
     Ok(true)
 }
 
 pub fn release_lock() -> io::Result<()> {
     remove_pid_file()?;
-    if Path::new(LOCK_FILE).exists() {
-        fs::remove_file(LOCK_FILE)?;
+    if instance_file("aog.lock").exists() {
+        fs::remove_file(instance_file("aog.lock"))?;
     }
     Ok(())
 }

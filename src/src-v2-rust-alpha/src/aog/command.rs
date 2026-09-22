@@ -22,7 +22,6 @@
 
 use crate::aog;
 
-use qwiic_relay_rs::*;
 use rppal::gpio::Gpio;
 
 use std::error::Error;
@@ -137,47 +136,13 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
     }
 
 
-    if command.starts_with("relay"){
-
-        let qwiic_relay_config = QwiicRelayConfig::default();
-        let mut qwiic_relay = match QwiicRelay::new(qwiic_relay_config, "/dev/i2c-1", 0x25) {
-            Ok(relay) => relay,
-            Err(e) => {
-                log::error!("Failed to initialize Qwiic relay device: {:?}", e);
-                return Err(Box::new(e));
-            }
-        };
-
-     
-    
-        if command.contains("off"){
-            if command.contains("2"){
-                let _ = qwiic_relay.set_relay_off(Some(2));
-            }
-            if command.contains("3"){
-                let _ = qwiic_relay.set_relay_off(Some(3));
-            }
-            if command.contains("4"){
-                let _ = qwiic_relay.set_relay_off(Some(4));
-            }
-        }
-
-        if command.contains("on"){
-            if command.contains("2"){
-                let _ = qwiic_relay.set_relay_on(Some(2));
-            }
-            if command.contains("3"){
-                let _ = qwiic_relay.set_relay_on(Some(3));
-            }
-            if command.contains("4"){
-                let _ = qwiic_relay.set_relay_on(Some(4));
-            }
-        }
-
-
+    if command.split_whitespace().next() == Some("relay") {
+        let message = aog::web_control::relay_command(&command)
+            .map_err(|error| io::Error::new(io::ErrorKind::Other, error))?;
+        println!("{}", message);
+        return Ok(());
     }
 
-    
     if command.clone() == *"help"{
         println!("gpio status:                  prints status of the gpio bus");
         println!("gpio [on/off] [gpio_bdm]:     change state of a gpio pin");
@@ -185,6 +150,9 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>>{
         println!("api token generate:           generate new API authentication token");
         println!("api token remove:             remove API authentication requirement");
         println!("api token status:             check API token configuration status");
+        println!("relay on <1-4> <seconds>:     start a supervised timed run");
+        println!("relay off <1-4|all>:          stop outputs and pause schedules");
+        println!("relay status:                show states and assigned functions");
         println!("help [command]:               shows help");
     }
 

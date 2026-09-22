@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1410" viewBox="0 0 1600 1410" role="img" aria-labelledby="title desc">
+  <title id="title">AOG Rust v2 exact signal pin map</title>
+  <desc id="desc">Raspberry Pi physical pins 1, 3, 5 and 6 carry 3V3, SDA, SCL and ground to the LCD at 0x72 and relay controller at 0x25. A separate sensor-kit Arduino uses D7 for DHT11, A0 for analog CO2, and A4 and A5 for CCS811 I2C. The overflow and pH Arduino uses D2 and D4 for tank switches closing to ground when safe, and A0 for the analog pH interface output. Each Arduino connects to the Pi over USB serial at 9600 baud.</desc>
+  <defs>
+    <style>
+      text { font-family: "DejaVu Sans", Arial, sans-serif; fill: #183347; }
+      .title { font-size: 40px; font-weight: 700; }
+      .heading { font-size: 27px; font-weight: 700; }
+      .body { font-size: 22px; }
+      .small { font-size: 19px; }
+      .muted { fill: #526575; }
+      .white { fill: #fff; }
+      .pin { font-size: 25px; font-weight: 700; fill: #fff; }
+      .panel { fill: #fff; stroke: #c8dce3; stroke-width: 2; }
+      .module { fill: #eaf5f4; stroke: #9fc9c3; stroke-width: 2; }
+      .signal { fill: none; stroke: #008577; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+      .ground { fill: none; stroke: #526575; stroke-width: 4; stroke-linecap: round; }
+      .contact { fill: #fff; stroke: #008577; stroke-width: 3; }
+    </style>
+  </defs>
+  <rect width="1600" height="1410" fill="#f4f8fa"/>
+  <text x="48" y="62" class="title">AOG • Rust v2 / Signal pin map</text>
+  <text x="50" y="101" class="body muted">Two separate Arduino boards • Pin assignments from the checked-in firmware</text>
+
+  <rect x="40" y="134" width="1520" height="305" rx="22" class="panel"/>
+  <text x="70" y="181" class="heading">Raspberry Pi 4 → shared I²C bus</text>
+  <text x="70" y="214" class="small muted">Physical header pin → signal / BCM GPIO</text>
+  <rect x="70" y="234" width="350" height="173" rx="12" fill="#183347"/>
+  <text x="94" y="271" class="body white">1 → 3V3</text>
+  <text x="94" y="308" class="body white">3 → GPIO2 / SDA</text>
+  <text x="94" y="345" class="body white">5 → GPIO3 / SCL</text>
+  <text x="94" y="382" class="body white">6 → GND</text>
+  <path d="M420 265 H606" stroke="#b55c27" stroke-width="5"/>
+  <path d="M420 302 H606" stroke="#008577" stroke-width="5"/>
+  <path d="M420 339 H606" stroke="#2377b8" stroke-width="5"/>
+  <path d="M420 376 H606" stroke="#526575" stroke-width="5"/>
+  <rect x="606" y="234" width="370" height="173" rx="12" fill="#eaf1f6"/>
+  <text x="630" y="272" class="body" font-weight="700">/dev/i2c-1 · 10 kHz</text>
+  <text x="630" y="309" class="body">Same four signals</text>
+  <text x="630" y="342" class="body">to each Qwiic connector</text>
+  <text x="630" y="382" class="small muted">3V3 · SDA · SCL · GND</text>
+  <path d="M976 277 H1040" class="signal"/>
+  <path d="M976 363 H1040" class="signal"/>
+  <rect x="1040" y="241" width="480" height="72" rx="12" class="module"/>
+  <text x="1060" y="271" class="body" font-weight="700">Status LCD · 0x72</text>
+  <text x="1060" y="298" class="small">3.3 V logic and Qwiic power</text>
+  <rect x="1040" y="326" width="480" height="83" rx="12" class="module"/>
+  <text x="1060" y="357" class="body" font-weight="700">4-relay controller · 0x25</text>
+  <text x="1060" y="386" class="small">Separate relay / load supply per board</text>
+
+  <rect x="40" y="465" width="740" height="795" rx="22" class="panel"/>
+  <text x="70" y="511" class="heading">Sensor-kit Arduino</text>
+  <text x="70" y="544" class="small muted">SENSORKIT_MK1 · USB → Pi · 9600 baud</text>
+  <rect x="80" y="578" width="220" height="450" rx="18" fill="#183347"/>
+  <text x="100" y="616" class="body white">Classic Nano</text>
+  <text x="100" y="644" class="small white">5 V / ATmega328P</text>
+  <text x="232" y="708" class="pin">D7</text>
+  <text x="232" y="803" class="pin">A0</text>
+  <text x="232" y="898" class="pin">A4</text>
+  <text x="232" y="977" class="pin">A5</text>
+  <circle cx="300" cy="700" r="7" fill="#008577"/>
+  <circle cx="300" cy="795" r="7" fill="#008577"/>
+  <circle cx="300" cy="890" r="7" fill="#008577"/>
+  <circle cx="300" cy="969" r="7" fill="#2377b8"/>
+  <path d="M300 700 H496" class="signal"/>
+  <path d="M300 795 H496" class="signal"/>
+  <path d="M300 890 H496" class="signal"/>
+  <path d="M300 969 H496" fill="none" stroke="#2377b8" stroke-width="5"/>
+  <text x="345" y="686" class="small">DATA</text>
+  <text x="327" y="781" class="small">Analog output</text>
+  <text x="356" y="876" class="small">SDA</text>
+  <text x="356" y="955" class="small">SCL</text>
+  <rect x="496" y="665" width="252" height="70" rx="12" class="module"/>
+  <text x="520" y="709" class="body" font-weight="700">DHT11</text>
+  <rect x="496" y="760" width="252" height="70" rx="12" class="module"/>
+  <text x="515" y="802" font-size="20" font-weight="700">Analog CO₂ sensor</text>
+  <rect x="496" y="855" width="252" height="155" rx="12" class="module"/>
+  <text x="520" y="900" class="body" font-weight="700">CCS811 breakout</text>
+  <text x="520" y="944" class="small">Nano-compatible</text>
+  <text x="520" y="974" class="small">I²C voltage levels</text>
+  <rect x="70" y="1054" width="680" height="174" rx="14" fill="#eef4f7"/>
+  <text x="92" y="1089" class="body" font-weight="700">Power and ground</text>
+  <text x="92" y="1124" class="small">Sensor signal GND → this Arduino's GND.</text>
+  <text x="92" y="1157" class="small">Supply each module per its exact board specification.</text>
+  <text x="92" y="1190" class="small">Use level conversion for a 3.3 V-only CCS811 board.</text>
+
+  <rect x="820" y="465" width="740" height="795" rx="22" class="panel"/>
+  <text x="850" y="511" class="heading">Overflow + pH Arduino</text>
+  <text x="850" y="544" class="small muted">DUAL_OVF_SENSOR · USB → Pi · 9600 baud</text>
+  <rect x="860" y="578" width="200" height="450" rx="18" fill="#183347"/>
+  <text x="878" y="616" class="body white">Separate Nano</text>
+  <text x="878" y="644" class="small white">Internal pull-ups</text>
+  <text x="992" y="708" class="pin">D2</text>
+  <text x="992" y="803" class="pin">D4</text>
+  <text x="992" y="957" class="pin">A0</text>
+  <path d="M1060 700 H1270 M1330 700 H1480" class="signal"/>
+  <path d="M1060 795 H1270 M1330 795 H1480" class="signal"/>
+  <circle cx="1270" cy="700" r="6" class="contact"/>
+  <circle cx="1330" cy="700" r="6" class="contact"/>
+  <path d="M1276 700 H1324" class="signal"/>
+  <circle cx="1270" cy="795" r="6" class="contact"/>
+  <circle cx="1330" cy="795" r="6" class="contact"/>
+  <path d="M1276 795 H1324" class="signal"/>
+  <text x="1100" y="680" class="body" font-weight="700">Tank 1 switch</text>
+  <text x="1100" y="775" class="body" font-weight="700">Tank 2 switch</text>
+  <path d="M1480 700 V720 M1463 720 H1497 M1469 729 H1491 M1475 738 H1485" class="ground"/>
+  <path d="M1480 795 V815 M1463 815 H1497 M1469 824 H1491 M1475 833 H1485" class="ground"/>
+  <text x="1390" y="687" class="small">GND</text>
+  <text x="1390" y="782" class="small">GND</text>
+  <text x="1100" y="871" class="small muted">Shown closed: LOW → NONE (safe)</text>
+  <path d="M1060 949 H1200" class="signal"/>
+  <text x="1090" y="932" class="small">OUT</text>
+  <rect x="1200" y="910" width="170" height="79" rx="12" class="module"/>
+  <text x="1210" y="943" font-size="20" font-weight="700">pH interface</text>
+  <text x="1218" y="971" class="small">Analog mode</text>
+  <path d="M1370 949 H1414" class="signal"/>
+  <rect x="1414" y="910" width="120" height="79" rx="12" class="module"/>
+  <text x="1430" y="943" class="body" font-weight="700">pH</text>
+  <text x="1430" y="971" class="small">probe</text>
+  <rect x="850" y="1054" width="680" height="174" rx="14" fill="#eef4f7"/>
+  <text x="872" y="1089" class="body" font-weight="700">Overflow logic and pH</text>
+  <text x="872" y="1124" class="small">Switch open / wire disconnected → HIGH → OVERFLOW.</text>
+  <text x="872" y="1157" class="small">pH interface signal GND → this Arduino's GND.</text>
+  <text x="872" y="1190" class="small">Supply the pH interface per its board specification.</text>
+
+  <text x="50" y="1310" class="body" font-weight="700">Arduino A0 appears twice because these are two different boards.</text>
+  <text x="50" y="1347" class="body muted">Signal map, not connector positions. Read the README for power, firmware, and relay assignments.</text>
+  <text x="50" y="1380" class="small muted">Legacy firmware at 1200 baud is also discovered. USB device numbering can change.</text>
+</svg>

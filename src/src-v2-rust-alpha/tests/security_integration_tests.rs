@@ -175,8 +175,9 @@ mod security_config_tests {
     fn test_config_defaults() {
         let config = Config::new();
         
-        // Command API should default to localhost only
-        assert_eq!(config.command_api_bind_address, Some("127.0.0.1".to_string()));
+        // Both web listeners should be reachable on the local network.
+        assert_eq!(config.https_bind_address, Some("0.0.0.0".to_string()));
+        assert_eq!(config.command_api_bind_address, Some("0.0.0.0".to_string()));
         
         // Token should be None by default for backward compatibility
         assert_eq!(config.command_api_token, None);

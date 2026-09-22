@@ -1,14 +1,14 @@
 # Qwiic Relay Recovery Mechanism Documentation
 
 ## Overview
-The Qwiic relay recovery mechanism provides automatic detection and recovery from relay communication failures, firmware incompatibilities, and hardware issues. This ensures the A.O.G. system can maintain operation without manual intervention.
+The Qwiic relay recovery mechanism detects relay communication failures and retries failed operations. AOG uses the quad relay board at address `0x25`.
 
 ## Features
 
-### 1. Firmware Version Checking
-- **Version Range**: Supports firmware versions 1.0 to 2.0
-- **Automatic Detection**: Checks firmware version on initialization
-- **Incompatibility Handling**: Alerts and prevents operation with unsupported firmware
+### 1. Quad Relay Initialization
+- **Startup**: Switches all four outputs off, waits for the board to settle, and verifies their status.
+- **Health checks**: Read the four status registers without changing outputs.
+- **Firmware version**: Remains `None`. The dependency's `get_version()` uses register `0x04`, which toggles relay 4 on the quad board. It must not be called on this board.
 
 ### 2. Automatic Retry with Exponential Backoff
 - **Initial Delay**: 100ms
@@ -22,7 +22,7 @@ The Qwiic relay recovery mechanism provides automatic detection and recovery fro
   - Health state (healthy/unhealthy)
   - Last successful operation timestamp
   - Consecutive failure count
-  - Current firmware version
+  - Firmware version field (unused for quad boards)
   - Last error details
 
 ### 4. System Reboot Recovery
@@ -36,7 +36,7 @@ The Qwiic relay recovery mechanism provides automatic detection and recovery fro
 - **Webhook Support**: Optional webhook URL for external notifications
 - **Alert Types**:
   - Communication failures
-  - Firmware incompatibility
+  - Failed startup output verification
   - Critical failures requiring reboot
 
 ## Configuration
@@ -87,7 +87,7 @@ let qwiic_device = QwiicRelayDevice::new_with_config(0x25, recovery_config);
 ```rust
 let health_status = qwiic_device.get_health_status();
 if health_status.is_healthy {
-    println!("Relay is healthy, firmware: {:?}", health_status.firmware_version);
+    println!("Quad relay communication is healthy");
 } else {
     println!("Relay unhealthy: {:?}", health_status.last_error);
 }
@@ -112,7 +112,7 @@ match qwiic_device.get_relay_state(1) {
 
 ### RelayError Enum
 - **CommunicationFailure**: I2C communication errors
-- **FirmwareIncompatible**: Firmware version outside supported range
+- **FirmwareIncompatible**: Retained for API compatibility; unused for quad boards
 - **InitializationFailure**: Failed to initialize relay module
 - **OperationFailure**: Failed to execute relay operation
 
@@ -129,7 +129,7 @@ match qwiic_device.get_relay_state(1) {
 
 ### Log Messages
 ```
-INFO: Qwiic Relay Firmware Version: 1.2
+INFO: Relay test completed successfully
 DEBUG: Attempting relay test (attempt 1/5)
 WARN: relay test failed on attempt 1: Communication failure
 INFO: Retrying relay test after 100ms delay
@@ -141,7 +141,7 @@ ERROR: Triggering system reboot due to critical relay failure
 
 ### Health Check Logs
 ```
-DEBUG: Health check successful, firmware version: 1.2
+DEBUG: Quad relay health check successful
 WARN: Health check failed: Communication error
 ERROR: Health check: Maximum consecutive failures reached
 ```
@@ -154,10 +154,12 @@ The module includes comprehensive unit tests:
 - Recovery configuration defaults
 - Device initialization
 - Exponential backoff calculation
+- Read-only health checks for all four channels
+- Startup shutdown verification and I²C error propagation
 
 Run tests with:
 ```bash
-cargo test --lib aog::qwiic::tests
+sh ./test-on-device.sh --lib aog::qwiic::tests
 ```
 
 ## Migration from Legacy Code
@@ -201,9 +203,10 @@ let qwiic_device = QwiicRelayDevice::new_with_config(0x25, recovery_config);
    - Check network connectivity
    - Review log files for webhook errors
 
-4. **Firmware Incompatibility**
-   - Update relay firmware
-   - Adjust `MIN_FIRMWARE_VERSION` and `MAX_FIRMWARE_VERSION` constants
+4. **Startup Output Verification Failure**
+   - Check the quad board's power and I²C wiring
+   - Check that its configured address matches the hardware
+   - Do not probe firmware using the single-relay version register
 
 ## Future Enhancements
 

@@ -195,13 +195,13 @@ mod ph_sensor_tests {
     fn test_average_calculation() {
         let mut history = PhHistory::default();
         
-        // Add known values
+        // One reading per minute: windows use timestamps, not sample counts.
         for i in 0..5 {
             history.add_reading(PhReading {
                 ph_value: 6.0 + i as f32,
                 raw_value: 200.0,
                 temperature: 25.0,
-                timestamp: i,
+                timestamp: i * 60,
                 alert_level: PhAlertLevel::Normal,
             });
         }
@@ -214,8 +214,8 @@ mod ph_sensor_tests {
         // Test with smaller window
         let avg_small = history.get_average(2);
         assert!(avg_small.is_some());
-        // Should average last 2 readings (9 and 10)
-        assert!((avg_small.unwrap() - 9.5).abs() < 0.01);
+        // The inclusive two-minute window contains readings at 120, 180, 240.
+        assert!((avg_small.unwrap() - 9.0).abs() < 0.01);
     }
     
     #[test]

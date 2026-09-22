@@ -1,6 +1,12 @@
 use proptest::prelude::*;
 use aog::{Config, SensorLog, Session};
 
+fn config_fixture() -> Config {
+    // These properties vary pins and times, so one password hash is sufficient.
+    static CONFIG: std::sync::OnceLock<Config> = std::sync::OnceLock::new();
+    CONFIG.get_or_init(Config::new).clone()
+}
+
 proptest! {
     #[test]
     fn test_sensor_log_co2_values(
@@ -72,7 +78,7 @@ proptest! {
         start in 0u8..24u8,
         end in 0u8..24u8,
     ) {
-        let mut config = Config::new();
+        let mut config = config_fixture();
         config.photo_cycle_start = start;
         config.photo_cycle_end = end;
         
@@ -86,7 +92,7 @@ proptest! {
         pin2 in 0u8..40u8,
         pin3 in 0u8..40u8,
     ) {
-        let mut config = Config::new();
+        let mut config = config_fixture();
         config.tank_one_to_two_pump_pin = pin1 as usize;
         config.uv_light_pin = pin2 as usize;
         config.air_circulation_pin = pin3 as usize;

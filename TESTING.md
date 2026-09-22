@@ -105,11 +105,29 @@ trait SensorReader {
 ## Running Tests Locally
 
 ### Prerequisites
-```bash
-# Create required directories
-sudo mkdir -p /opt/aog/sensors
-sudo chmod -R 777 /opt/aog
 
+Serial sensor, configuration, session, and instance tests use temporary
+directories. Instance tests set `AOG_TEST_DIR` for their process and serialize
+tests that share environment variables and localhost ports.
+
+Some legacy pump-safety and water-level tests still write to `/opt/aog`.
+On the AOG device, use the helper below to mount a temporary runtime directory
+in a private mount namespace for the test process. A separate network namespace
+also keeps test requests and localhost listeners away from the running service.
+The device's live data remains outside those namespaces. The helper fetches
+dependencies first, runs Cargo as the calling user,
+limits build concurrency for the Raspberry Pi, and removes its test data on
+exit:
+
+```sh
+cd src/src-v2-rust-alpha
+sh ./test-on-device.sh
+```
+
+This runs the default suite; tests marked `ignored` that launch the full
+hardware application remain excluded.
+
+```bash
 # Install development dependencies
 cargo install cargo-tarpaulin
 cargo install cargo-audit
@@ -131,6 +149,30 @@ cargo test test_sensor_log_valid_input
 # Run tests in parallel
 cargo test -- --test-threads=4
 ```
+
+To check real serial devices with AOG stopped, see the
+[sensor diagnostics instructions](src/src-v2-rust-alpha/README.md#serial-sensor-diagnostics).
+The diagnostics executable reads sensors without initializing actuators.
+
+### Dashboard browser checks
+
+The Rust v2 browser checks serve the real web assets with simulated API
+responses. They cover pH history without calibration, empty/error states,
+lighting and watering schedules, output controls, password changes, and
+desktop/mobile layout. They never send commands to real hardware.
+
+```sh
+python3 -m venv /tmp/aog-browser-env
+/tmp/aog-browser-env/bin/pip install playwright
+# Use the system Chromium package; override its path with CHROMIUM if needed.
+/tmp/aog-browser-env/bin/python src/src-v2-rust-alpha/tests/web_ui_test.py
+```
+
+Chromium must be installed (`sudo apt-get install chromium` on Raspberry Pi
+OS). Screenshots are written to `/tmp/aog-ui-*.png`. Controller unit tests use
+fake relays to check overflow shutdown, cooldown, deadlines, overnight
+lighting, watering intervals, and persistent pause. HTTP tests use temporary
+configuration to verify password/session handling, CSRF, and schedule saves.
 
 ### Coverage Analysis
 ```bash
@@ -158,9 +200,9 @@ cargo test --release
 - Clean up test artifacts automatically
 
 ### Environment Variables
-Tests may set these for isolation:
-- `AOG_TEST_DIR`: Override `/opt/aog/` path
-- `AOG_SENSOR_DIR`: Override sensor data directory
+Instance tests set `AOG_TEST_DIR` to redirect PID and lock files to a temporary
+directory. Sensor, configuration, and session unit tests pass temporary
+directories directly to the implementation under test.
 
 ## Writing New Tests
 
@@ -204,11 +246,8 @@ fn test_feature_description() {
 ### Common Issues
 
 **Permission Errors:**
-```bash
-# Fix: Ensure test directories exist and have proper permissions
-sudo mkdir -p /opt/aog/sensors
-sudo chmod -R 777 /opt/aog
-```
+On the device, use `sh ./test-on-device.sh` from the Rust v2 directory. It
+provides writable temporary runtime data without changing live permissions.
 
 **Serial Port Tests Failing:**
 ```bash

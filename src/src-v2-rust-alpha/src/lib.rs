@@ -2,18 +2,19 @@ pub mod aog;
 pub mod error;
 
 // Re-export commonly used types for convenience
-pub use aog::qwiic::{QwiicRelayDevice, RecoveryConfig, RelayHealthStatus, RelayError};
+pub use aog::qwiic::{QwiicRelayDevice, RecoveryConfig, RelayError, RelayHealthStatus};
 pub use error::{AogError, AogResult};
 
 use clap::Parser;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::error::Error;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
+pub const DEFAULT_BIND_ADDRESS: &str = "0.0.0.0";
 
 /// Simple program to greet a person
 #[derive(Parser, Debug, Clone)]
@@ -27,11 +28,14 @@ pub struct Args {
     pub encrypt: bool,
     #[arg(short, long, default_value = "aog")]
     pub key: String,
-    #[arg(short, long, default_value_t = false, help = "Force start even if another instance is running")]
+    #[arg(
+        short,
+        long,
+        default_value_t = false,
+        help = "Force start even if another instance is running"
+    )]
     pub force: bool,
 }
-
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SensorLog {
@@ -43,10 +47,8 @@ pub struct SensorLog {
     pub humidity: String,
     pub temperature: String,
     pub is_tank_one_overflowed: bool,
-    pub is_tank_two_overflowed: bool
+    pub is_tank_two_overflowed: bool,
 }
-
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
@@ -54,30 +56,38 @@ pub struct Config {
     pub version_installed: String,
     pub boot_time: u64,
     pub encrypted_password: String,
-    pub is_hvac_kit_installed: bool, 
+    pub is_hvac_kit_installed: bool,
     pub is_sensor_kit_installed: bool,
-    pub photo_cycle_start: u8, //default 6
-    pub photo_cycle_end: u8, //default 24
-    pub power_type: String, // Grid, Solar, Etc.
+    pub photo_cycle_start: u8,           //default 6
+    pub photo_cycle_end: u8,             //default 24
+    pub power_type: String,              // Grid, Solar, Etc.
     pub tank_one_to_two_pump_pin: usize, // default 17
-    pub uv_light_pin: usize,  // default 27
-    pub air_circulation_pin: usize,  // default 22
+    pub uv_light_pin: usize,             // default 27
+    pub air_circulation_pin: usize,      // default 22
     pub sensor_kit_config: Option<SensorKitConfig>,
     pub sensor_logs: Vec<SensorLog>,
-    pub pump_config: Option<PumpConfig>,  // New pump configuration
-    pub ph_config: Option<PhConfig>,  // pH sensor configuration
-    pub water_level_config: Option<WaterLevelConfig>,  // Water level sensor configuration
-    pub https_bind_address: Option<String>,  // HTTPS server bind address (default: 127.0.0.1)
-    pub https_bind_port: Option<u16>,  // HTTPS server port (default: 8443)
-    pub command_api_bind_address: Option<String>,  // Command API bind address (default: 127.0.0.1)
-    pub command_api_bind_port: Option<u16>,  // Command API port (default: 9443)
-    pub command_api_token: Option<String>,  // API token for command API authentication
+    pub pump_config: Option<PumpConfig>, // New pump configuration
+    pub ph_config: Option<PhConfig>,     // pH sensor configuration
+    pub water_level_config: Option<WaterLevelConfig>, // Water level sensor configuration
+    pub https_bind_address: Option<String>, // HTTPS server bind address (default: 0.0.0.0)
+    pub https_bind_port: Option<u16>,    // HTTPS server port (default: 8443)
+    pub command_api_bind_address: Option<String>, // Command API bind address (default: 0.0.0.0)
+    pub command_api_bind_port: Option<u16>, // Command API port (default: 9443)
+    pub command_api_token: Option<String>, // API token for command API authentication
+    #[serde(default)]
+    pub dashboard_config: DashboardConfig,
+    #[serde(default)]
+    pub schedules: ScheduleConfig,
 }
 impl Config {
     pub fn new() -> Config {
-        let sensor_logs :Vec<SensorLog> = Vec::new();
+        let sensor_logs: Vec<SensorLog> = Vec::new();
 
-        let random_id: String = thread_rng().sample_iter(&Alphanumeric).take(100).map(char::from).collect();
+        let random_id: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(100)
+            .map(char::from)
+            .collect();
 
         let start = SystemTime::now();
         let since_the_epoch = start
@@ -99,46 +109,50 @@ impl Config {
                 format!("$argon2$invalid${}$", random_id)
             }
         };
-        
-        Config{
-            id: random_id, 
-            encrypted_password: password_hash, 
-            version_installed: VERSION.unwrap_or("unknown").to_string(), 
-            boot_time: since_the_epoch.as_secs(), 
-            sensor_logs, 
-            is_hvac_kit_installed: false, 
-            is_sensor_kit_installed: false, 
-            photo_cycle_start: 6, 
-            photo_cycle_end: 24, 
-            sensor_kit_config: None, 
+
+        Config {
+            id: random_id,
+            encrypted_password: password_hash,
+            version_installed: VERSION.unwrap_or("unknown").to_string(),
+            boot_time: since_the_epoch.as_secs(),
+            sensor_logs,
+            is_hvac_kit_installed: false,
+            is_sensor_kit_installed: false,
+            photo_cycle_start: 6,
+            photo_cycle_end: 24,
+            sensor_kit_config: None,
             pump_config: None,
-            ph_config: None, 
+            ph_config: None,
             water_level_config: None,
-            power_type: "".to_string(), 
-            tank_one_to_two_pump_pin: 17, 
-            uv_light_pin: 27, 
+            power_type: "".to_string(),
+            tank_one_to_two_pump_pin: 17,
+            uv_light_pin: 27,
             air_circulation_pin: 22,
-            https_bind_address: Some("127.0.0.1".to_string()),
+            https_bind_address: Some(DEFAULT_BIND_ADDRESS.to_string()),
             https_bind_port: Some(8443),
-            command_api_bind_address: Some("127.0.0.1".to_string()),
+            command_api_bind_address: Some(DEFAULT_BIND_ADDRESS.to_string()),
             command_api_bind_port: Some(9443),
-            command_api_token: None,  // No token by default for backward compatibility
+            command_api_token: None, // No token by default for backward compatibility
+            dashboard_config: DashboardConfig::default(),
+            schedules: ScheduleConfig::default(),
         }
     }
-    pub fn save(&self) -> Result<(), Box<dyn Error>>{
-        std::fs::File::create("/opt/aog/data.json")
-            .map_err(|e| format!("Failed to create data.json: {}", e))?;
+    pub fn save(&self) -> Result<(), Box<dyn Error>> {
+        self.save_in(std::path::Path::new("/opt/aog"))
+    }
+
+    pub(crate) fn save_in(&self, directory: &std::path::Path) -> Result<(), Box<dyn Error>> {
+        std::fs::create_dir_all(directory)?;
         let j = serde_json::to_string(&self)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        std::fs::write("/opt/aog/data.json", &j)
-            .map_err(|e| format!("Failed to write data.json: {}", e))?;
+        atomic_write(&directory.join("data.json"), j.as_bytes())?;
 
         if self.sensor_logs.len() > 0 {
-            if let Err(e) = std::fs::File::create("/opt/aog/data.bak.json") {
+            if let Err(e) = std::fs::File::create(directory.join("data.bak.json")) {
                 log::warn!("Failed to create backup file: {}", e);
             } else {
                 if let Ok(j) = serde_json::to_string(&self) {
-                    if let Err(e) = std::fs::write("/opt/aog/data.bak.json", j) {
+                    if let Err(e) = std::fs::write(directory.join("data.bak.json"), j) {
                         log::warn!("Failed to write backup file: {}", e);
                     }
                 }
@@ -147,54 +161,63 @@ impl Config {
         Ok(())
     }
 
-    pub fn load(retries: i64) -> Result<Config, Box<dyn Error>>{
+    pub fn load(retries: i64) -> Result<Config, Box<dyn Error>> {
+        Self::load_in(std::path::Path::new("/opt/aog"), retries)
+    }
 
-        if !std::path::Path::new("/opt/aog/data.json").exists(){
+    pub(crate) fn load_in(
+        directory: &std::path::Path,
+        retries: i64,
+    ) -> Result<Config, Box<dyn Error>> {
+        if !directory.join("data.json").exists() {
             let new_c = Config::new();
-            if let Err(e) = new_c.save() {
+            if let Err(e) = new_c.save_in(directory) {
                 log::warn!("Failed to save initial config: {}", e);
             }
             return Ok(new_c);
         }
 
-        let save_file = std::fs::read_to_string("/opt/aog/data.json");
+        let save_file = std::fs::read_to_string(directory.join("data.json"));
         match save_file {
             Ok(save_data) => {
                 let v: Result<Config, _> = serde_json::from_str(&save_data);
                 match v {
                     Ok(v2) => {
                         return Ok(v2);
-                    },
+                    }
                     Err(e) => {
                         log::error!("{}", format!("Unable to parse save file: {}", e));
-                        
+
                         if retries < 10 {
-                            std::fs::copy("/opt/aog/data.bak.json", "/opt/aog/data.json")?;
+                            std::fs::copy(
+                                directory.join("data.bak.json"),
+                                directory.join("data.json"),
+                            )?;
                             std::thread::sleep(std::time::Duration::from_secs(2));
-                            return Self::load(retries + 1);
+                            return Self::load_in(directory, retries + 1);
                         } else {
                             log::warn!("Unable to parse save file after 10 attempts....creating new save file.");
                             let new_c = Config::new();
-                            if let Err(e) = new_c.save() {
+                            if let Err(e) = new_c.save_in(directory) {
                                 log::warn!("Failed to save new config: {}", e);
                             }
                             return Ok(new_c);
                         }
-                 
                     }
                 }
-                
-            },
+            }
             Err(e) => {
                 log::error!("{}", format!("Unable to read save file: {}", e));
                 if retries < 10 {
-                    std::fs::copy("/opt/aog/data.bak.json", "/opt/aog/data.json")?;
+                    std::fs::copy(directory.join("data.bak.json"), directory.join("data.json"))?;
                     std::thread::sleep(std::time::Duration::from_secs(2));
-                    return Self::load(retries + 1);
+                    return Self::load_in(directory, retries + 1);
                 } else {
-                    log::warn!("Unable to read save file after 10 attempts....creating new save file.");
+                    log::warn!(
+                        "Unable to read save file after 10 attempts....creating new save file."
+                    );
                     let new_c = Config::new();
-                    if let Err(e) = new_c.save() {
+                    if let Err(e) = new_c.save_in(directory) {
                         log::warn!("Failed to save new config: {}", e);
                     }
                     return Ok(new_c);
@@ -204,26 +227,156 @@ impl Config {
     }
 }
 
+/// Replace a complete file so readers never observe partially written JSON.
+pub(crate) fn atomic_write(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let suffix: u64 = rand::random();
+    let temporary = path.with_extension(format!("tmp-{}-{}", std::process::id(), suffix));
+    let result = (|| {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)?;
+        file.write_all(data)?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardConfig {
+    pub setup_name: String,
+    pub relay_labels: [String; 4],
+    #[serde(default = "legacy_relay_roles")]
+    pub relay_roles: [RelayRole; 4],
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RelayRole {
+    Unassigned,
+    Lights,
+    Air,
+    Filling,
+    Draining,
+}
+
+impl RelayRole {
+    pub fn is_water_pump(self) -> bool {
+        matches!(self, Self::Filling | Self::Draining)
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Unassigned => "Unassigned",
+            Self::Lights => "Lights",
+            Self::Air => "Air",
+            Self::Filling => "Filling",
+            Self::Draining => "Draining",
+        }
+    }
+}
+
+// Keep existing lighting/fill/drain wiring. An old auxiliary relay must be
+// explicitly assigned before it can run under a different set of protections.
+fn legacy_relay_roles() -> [RelayRole; 4] {
+    [
+        RelayRole::Lights,
+        RelayRole::Draining,
+        RelayRole::Filling,
+        RelayRole::Unassigned,
+    ]
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ScheduleConfig {
+    pub lighting: LightingSchedule,
+    pub watering: WateringSchedule,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct LightingSchedule {
+    pub enabled: bool,
+    pub start_minute: u16,
+    pub end_minute: u16,
+}
+
+impl Default for LightingSchedule {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            start_minute: 360,
+            end_minute: 1320,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct WateringSchedule {
+    pub enabled: bool,
+    pub start_minute: u16,
+    pub end_minute: u16,
+    pub every_minutes: u64,
+    pub run_seconds: u64,
+}
+
+impl Default for WateringSchedule {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            start_minute: 360,
+            end_minute: 1320,
+            every_minutes: 60,
+            run_seconds: 30,
+        }
+    }
+}
+
+impl Default for DashboardConfig {
+    fn default() -> Self {
+        Self {
+            setup_name: "AOG Grow System".into(),
+            relay_labels: [
+                "Lights".into(),
+                "Drain pump".into(),
+                "Fill pump".into(),
+                "Relay 4".into(),
+            ],
+            relay_roles: legacy_relay_roles(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SensorKitConfig {
-    pub dht11_pin: u8, //default 7
-    pub tank_one_overflow: u8, //default 4
-    pub tank_two_overflow: u8, //default 2
+    pub dht11_pin: u8,          //default 7
+    pub tank_one_overflow: u8,  // ovf.ino: D2 on the separate overflow/pH Arduino
+    pub tank_two_overflow: u8,  // ovf.ino: D4 on the separate overflow/pH Arduino
     pub analog_co2_pin: String, //default A0
     pub enable_dht11: bool,
     pub enable_analog_co2: bool,
-    pub enable_ccs811: bool, 
+    pub enable_ccs811: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PumpConfig {
-    pub continuous_mode: bool,  // Enable continuous pump operation
-    pub photo_cycle_enabled: bool,  // Enable photo cycle scheduling for pumps
-    pub photo_cycle_start_hour: u8,  // Hour to start (0-23)
-    pub photo_cycle_end_hour: u8,  // Hour to end (0-23)
-    pub safety_gpio_pin: Option<u8>,  // Safety GPIO pin for external switches
-    pub pump_runtime_limit_seconds: u64,  // Maximum runtime in seconds (safety)
-    pub pump_cooldown_seconds: u64,  // Cooldown period between runs
+    pub continuous_mode: bool,           // Enable continuous pump operation
+    pub photo_cycle_enabled: bool,       // Enable photo cycle scheduling for pumps
+    pub photo_cycle_start_hour: u8,      // Hour to start (0-23)
+    pub photo_cycle_end_hour: u8,        // Hour to end (0-23)
+    pub safety_gpio_pin: Option<u8>,     // Safety GPIO pin for external switches
+    pub pump_runtime_limit_seconds: u64, // Maximum runtime in seconds (safety)
+    pub pump_cooldown_seconds: u64,      // Cooldown period between runs
 }
 
 impl Default for PumpConfig {
@@ -234,26 +387,26 @@ impl Default for PumpConfig {
             photo_cycle_start_hour: 6,
             photo_cycle_end_hour: 24,
             safety_gpio_pin: None,
-            pump_runtime_limit_seconds: 300,  // 5 minutes default
-            pump_cooldown_seconds: 60,  // 1 minute cooldown
+            pump_runtime_limit_seconds: 300, // 5 minutes default
+            pump_cooldown_seconds: 60,       // 1 minute cooldown
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PhConfig {
-    pub enabled: bool,  // Enable pH monitoring
-    pub sensor_type: String,  // "arduino", "serial", or "i2c"
-    pub serial_port: Option<String>,  // Serial port for direct pH sensor connection
-    pub i2c_address: Option<u8>,  // I2C address for I2C pH sensors
-    pub optimal_min: f32,  // Minimum optimal pH (default 6.5)
-    pub optimal_max: f32,  // Maximum optimal pH (default 7.5)
-    pub critical_min: f32,  // Minimum critical pH (default 5.5)
-    pub critical_max: f32,  // Maximum critical pH (default 8.5)
-    pub alert_enabled: bool,  // Enable pH alerts
-    pub auto_adjustment_enabled: bool,  // Enable automatic pH adjustment suggestions
-    pub monitoring_interval_seconds: u64,  // How often to check pH (default 60)
-    pub history_size: usize,  // Number of readings to keep in history (default 1440)
+    pub enabled: bool,                    // Enable pH monitoring
+    pub sensor_type: String,              // "arduino", "serial", or "i2c"
+    pub serial_port: Option<String>,      // Serial port for direct pH sensor connection
+    pub i2c_address: Option<u8>,          // I2C address for I2C pH sensors
+    pub optimal_min: f32,                 // Minimum optimal pH (default 6.5)
+    pub optimal_max: f32,                 // Maximum optimal pH (default 7.5)
+    pub critical_min: f32,                // Minimum critical pH (default 5.5)
+    pub critical_max: f32,                // Maximum critical pH (default 8.5)
+    pub alert_enabled: bool,              // Enable pH alerts
+    pub auto_adjustment_enabled: bool,    // Enable automatic pH adjustment suggestions
+    pub monitoring_interval_seconds: u64, // How often to check pH (default 60)
+    pub history_size: usize,              // Number of readings to keep in history (default 1440)
 }
 
 impl Default for PhConfig {
@@ -277,47 +430,47 @@ impl Default for PhConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WaterLevelConfig {
-    pub sensor_type: WaterLevelSensorType,  // Type of sensor (ultrasonic, pressure, float)
-    pub tank1_sensor_pin: Option<u8>,  // GPIO pin for tank 1 sensor
-    pub tank2_sensor_pin: Option<u8>,  // GPIO pin for tank 2 sensor
-    pub tank1_serial_port: Option<String>,  // Serial port for tank 1 sensor (if using serial)
-    pub tank2_serial_port: Option<String>,  // Serial port for tank 2 sensor (if using serial)
-    pub tank1_i2c_address: Option<u8>,  // I2C address for tank 1 sensor (if using I2C)
-    pub tank2_i2c_address: Option<u8>,  // I2C address for tank 2 sensor (if using I2C)
-    pub calibration_offset: f32,  // Calibration offset in cm
-    pub calibration_factor: f32,  // Calibration multiplier
-    pub tank_height_cm: f32,  // Total tank height in cm
-    pub max_fill_level_cm: f32,  // Maximum safe fill level in cm
-    pub min_level_cm: f32,  // Minimum level in cm
-    pub moving_average_samples: usize,  // Number of samples for moving average
-    pub sensor_timeout_ms: u64,  // Timeout for sensor readings in milliseconds
-    pub enable_fallback_mode: bool,  // Enable fallback to overflow sensors if primary fails
+    pub sensor_type: WaterLevelSensorType, // Type of sensor (ultrasonic, pressure, float)
+    pub tank1_sensor_pin: Option<u8>,      // GPIO pin for tank 1 sensor
+    pub tank2_sensor_pin: Option<u8>,      // GPIO pin for tank 2 sensor
+    pub tank1_serial_port: Option<String>, // Serial port for tank 1 sensor (if using serial)
+    pub tank2_serial_port: Option<String>, // Serial port for tank 2 sensor (if using serial)
+    pub tank1_i2c_address: Option<u8>,     // I2C address for tank 1 sensor (if using I2C)
+    pub tank2_i2c_address: Option<u8>,     // I2C address for tank 2 sensor (if using I2C)
+    pub calibration_offset: f32,           // Calibration offset in cm
+    pub calibration_factor: f32,           // Calibration multiplier
+    pub tank_height_cm: f32,               // Total tank height in cm
+    pub max_fill_level_cm: f32,            // Maximum safe fill level in cm
+    pub min_level_cm: f32,                 // Minimum level in cm
+    pub moving_average_samples: usize,     // Number of samples for moving average
+    pub sensor_timeout_ms: u64,            // Timeout for sensor readings in milliseconds
+    pub enable_fallback_mode: bool,        // Enable fallback to overflow sensors if primary fails
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum WaterLevelSensorType {
-    Ultrasonic,  // HC-SR04 or similar
-    Pressure,    // Pressure transducer
-    Float,       // Float switch array
-    Capacitive,  // Capacitive sensor
-    Mock,        // Mock sensor for testing
+    Ultrasonic, // HC-SR04 or similar
+    Pressure,   // Pressure transducer
+    Float,      // Float switch array
+    Capacitive, // Capacitive sensor
+    Mock,       // Mock sensor for testing
 }
 
 impl Default for WaterLevelConfig {
     fn default() -> Self {
         WaterLevelConfig {
             sensor_type: WaterLevelSensorType::Ultrasonic,
-            tank1_sensor_pin: Some(23),  // Default GPIO pin for tank 1
-            tank2_sensor_pin: Some(24),  // Default GPIO pin for tank 2
+            tank1_sensor_pin: Some(23), // Default GPIO pin for tank 1
+            tank2_sensor_pin: Some(24), // Default GPIO pin for tank 2
             tank1_serial_port: None,
             tank2_serial_port: None,
             tank1_i2c_address: None,
             tank2_i2c_address: None,
             calibration_offset: 0.0,
             calibration_factor: 1.0,
-            tank_height_cm: 100.0,  // 1 meter default
-            max_fill_level_cm: 90.0,  // 90cm max fill
-            min_level_cm: 10.0,  // 10cm minimum
+            tank_height_cm: 100.0,   // 1 meter default
+            max_fill_level_cm: 90.0, // 90cm max fill
+            min_level_cm: 10.0,      // 10cm minimum
             moving_average_samples: 5,
             sensor_timeout_ms: 1000,
             enable_fallback_mode: true,
@@ -325,30 +478,34 @@ impl Default for WaterLevelConfig {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Sessions {
     pub sessions: Vec<Session>,
 }
 impl Sessions {
     pub fn new() -> Sessions {
-        let sessions :Vec<Session> = Vec::new();
-        return Sessions{sessions};
+        let sessions: Vec<Session> = Vec::new();
+        return Sessions { sessions };
     }
-    pub fn save(&self) -> Result<(), Box<dyn Error>>{
-        std::fs::File::create("/opt/aog/sessions.json")
+    pub fn save(&self) -> Result<(), Box<dyn Error>> {
+        self.save_in(std::path::Path::new("/opt/aog"))
+    }
+
+    fn save_in(&self, directory: &std::path::Path) -> Result<(), Box<dyn Error>> {
+        std::fs::create_dir_all(directory)?;
+        std::fs::File::create(directory.join("sessions.json"))
             .map_err(|e| format!("Failed to create sessions.json: {}", e))?;
         let j = serde_json::to_string(&self)
             .map_err(|e| format!("Failed to serialize sessions: {}", e))?;
-        std::fs::write("/opt/aog/sessions.json", &j)
+        std::fs::write(directory.join("sessions.json"), &j)
             .map_err(|e| format!("Failed to write sessions.json: {}", e))?;
 
         if self.sessions.len() > 0 {
-            if let Err(e) = std::fs::File::create("/opt/aog/sessions.bak.json") {
+            if let Err(e) = std::fs::File::create(directory.join("sessions.bak.json")) {
                 log::warn!("Failed to create sessions backup file: {}", e);
             } else {
                 if let Ok(j) = serde_json::to_string(&self) {
-                    if let Err(e) = std::fs::write("/opt/aog/sessions.bak.json", j) {
+                    if let Err(e) = std::fs::write(directory.join("sessions.bak.json"), j) {
                         log::warn!("Failed to write sessions backup file: {}", e);
                     }
                 }
@@ -357,54 +514,63 @@ impl Sessions {
         Ok(())
     }
 
-    pub fn load(retries: i64) -> Result<Sessions, Box<dyn Error>>{
+    pub fn load(retries: i64) -> Result<Sessions, Box<dyn Error>> {
+        Self::load_in(std::path::Path::new("/opt/aog"), retries)
+    }
 
-        if !std::path::Path::new("/opt/aog/sessions.json").exists(){
+    fn load_in(directory: &std::path::Path, retries: i64) -> Result<Sessions, Box<dyn Error>> {
+        if !directory.join("sessions.json").exists() {
             let new_c = Sessions::new();
-            if let Err(e) = new_c.save() {
+            if let Err(e) = new_c.save_in(directory) {
                 log::warn!("Failed to save initial sessions: {}", e);
             }
             return Ok(new_c);
         }
 
-        let save_file = std::fs::read_to_string("/opt/aog/sessions.json");
+        let save_file = std::fs::read_to_string(directory.join("sessions.json"));
         match save_file {
             Ok(save_data) => {
                 let v: Result<Sessions, _> = serde_json::from_str(&save_data);
                 match v {
                     Ok(v2) => {
                         return Ok(v2);
-                    },
+                    }
                     Err(e) => {
                         log::error!("{}", format!("Unable to parse save file: {}", e));
-                        
+
                         if retries < 10 {
-                            std::fs::copy("/opt/aog/sessions.bak.json", "/opt/aog/sessions.json")?;
+                            std::fs::copy(
+                                directory.join("sessions.bak.json"),
+                                directory.join("sessions.json"),
+                            )?;
                             std::thread::sleep(std::time::Duration::from_secs(2));
-                            return Self::load(retries + 1);
+                            return Self::load_in(directory, retries + 1);
                         } else {
                             log::warn!("Unable to parse save file after 10 attempts....creating new save file.");
                             let new_c = Sessions::new();
-                            if let Err(e) = new_c.save() {
+                            if let Err(e) = new_c.save_in(directory) {
                                 log::warn!("Failed to save new sessions: {}", e);
                             }
                             return Ok(new_c);
                         }
-                 
                     }
                 }
-                
-            },
+            }
             Err(e) => {
                 log::error!("{}", format!("Unable to read save file: {}", e));
                 if retries < 10 {
-                    std::fs::copy("/opt/aog/sessions.bak.json", "/opt/aog/sessions.json")?;
+                    std::fs::copy(
+                        directory.join("sessions.bak.json"),
+                        directory.join("sessions.json"),
+                    )?;
                     std::thread::sleep(std::time::Duration::from_secs(2));
-                    return Self::load(retries + 1);
+                    return Self::load_in(directory, retries + 1);
                 } else {
-                    log::warn!("Unable to read save file after 10 attempts....creating new save file.");
+                    log::warn!(
+                        "Unable to read save file after 10 attempts....creating new save file."
+                    );
                     let new_c = Sessions::new();
-                    if let Err(e) = new_c.save() {
+                    if let Err(e) = new_c.save_in(directory) {
                         log::warn!("Failed to save new sessions: {}", e);
                     }
                     return Ok(new_c);
@@ -417,35 +583,12 @@ impl Sessions {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Session {
     pub id: String,
-    pub delta: u8
+    pub delta: u8,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use std::path::Path;
-
-    fn cleanup_test_files() {
-        let test_files = [
-            "/opt/aog/data.json",
-            "/opt/aog/data.bak.json",
-            "/opt/aog/sessions.json",
-            "/opt/aog/sessions.bak.json",
-        ];
-        
-        for file in test_files.iter() {
-            if Path::new(file).exists() {
-                let _ = fs::remove_file(file);
-            }
-        }
-    }
-
-    fn setup_test_dir() {
-        if !Path::new("/opt/aog").exists() {
-            let _ = fs::create_dir_all("/opt/aog");
-        }
-    }
 
     #[test]
     fn test_args_default_values() {
@@ -462,7 +605,10 @@ mod tests {
         assert!(!config.id.is_empty());
         assert_eq!(config.id.len(), 100);
         // Verify password is hashed, not plaintext
-        assert!(config.encrypted_password.starts_with("$argon2") || config.encrypted_password.starts_with("$argon2$invalid$"));
+        assert!(
+            config.encrypted_password.starts_with("$argon2")
+                || config.encrypted_password.starts_with("$argon2$invalid$")
+        );
         assert_ne!(config.encrypted_password, "aog");
         assert_eq!(config.photo_cycle_start, 6);
         assert_eq!(config.photo_cycle_end, 24);
@@ -477,28 +623,31 @@ mod tests {
 
     #[test]
     fn test_config_save_and_load() {
-        setup_test_dir();
-        cleanup_test_files();
-        
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let directory = temp_dir.path();
+
         let config = Config::new();
         let original_id = config.id.clone();
-        config.save().expect("Failed to save config");
-        
-        assert!(Path::new("/opt/aog/data.json").exists());
-        
-        let loaded_config = Config::load(0).expect("Failed to load config");
+        config.save_in(directory).expect("Failed to save config");
+
+        assert!(directory.join("data.json").exists());
+
+        let loaded_config = Config::load_in(directory, 0).expect("Failed to load config");
         assert_eq!(loaded_config.id, original_id);
         // Verify password remains hashed after loading
-        assert!(loaded_config.encrypted_password.starts_with("$argon2") || loaded_config.encrypted_password.starts_with("$argon2$invalid$"));
-        
-        cleanup_test_files();
+        assert!(
+            loaded_config.encrypted_password.starts_with("$argon2")
+                || loaded_config
+                    .encrypted_password
+                    .starts_with("$argon2$invalid$")
+        );
     }
 
     #[test]
     fn test_config_backup_creation() {
-        setup_test_dir();
-        cleanup_test_files();
-        
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let directory = temp_dir.path();
+
         let mut config = Config::new();
         config.sensor_logs.push(SensorLog {
             id: "test_log".to_string(),
@@ -511,13 +660,13 @@ mod tests {
             is_tank_one_overflowed: false,
             is_tank_two_overflowed: false,
         });
-        
-        config.save().expect("Failed to save config with logs");
-        
-        assert!(Path::new("/opt/aog/data.json").exists());
-        assert!(Path::new("/opt/aog/data.bak.json").exists());
-        
-        cleanup_test_files();
+
+        config
+            .save_in(directory)
+            .expect("Failed to save config with logs");
+
+        assert!(directory.join("data.json").exists());
+        assert!(directory.join("data.bak.json").exists());
     }
 
     #[test]
@@ -533,7 +682,7 @@ mod tests {
             is_tank_one_overflowed: true,
             is_tank_two_overflowed: false,
         };
-        
+
         assert_eq!(sensor_log.id, "test_sensor");
         assert_eq!(sensor_log.timestamp, 1234567890);
         assert_eq!(sensor_log.s1_co2, "500");
@@ -549,25 +698,25 @@ mod tests {
 
     #[test]
     fn test_sessions_save_and_load() {
-        setup_test_dir();
-        cleanup_test_files();
-        
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let directory = temp_dir.path();
+
         let mut sessions = Sessions::new();
         sessions.sessions.push(Session {
             id: "session1".to_string(),
             delta: 10,
         });
-        
-        sessions.save().expect("Failed to save sessions");
-        assert!(Path::new("/opt/aog/sessions.json").exists());
-        assert!(Path::new("/opt/aog/sessions.bak.json").exists());
-        
-        let loaded_sessions = Sessions::load(0).expect("Failed to load sessions");
+
+        sessions
+            .save_in(directory)
+            .expect("Failed to save sessions");
+        assert!(directory.join("sessions.json").exists());
+        assert!(directory.join("sessions.bak.json").exists());
+
+        let loaded_sessions = Sessions::load_in(directory, 0).expect("Failed to load sessions");
         assert_eq!(loaded_sessions.sessions.len(), 1);
         assert_eq!(loaded_sessions.sessions[0].id, "session1");
         assert_eq!(loaded_sessions.sessions[0].delta, 10);
-        
-        cleanup_test_files();
     }
 
     #[test]
@@ -581,7 +730,7 @@ mod tests {
             enable_analog_co2: true,
             enable_ccs811: false,
         };
-        
+
         assert_eq!(sensor_kit.dht11_pin, 7);
         assert_eq!(sensor_kit.tank_one_overflow, 4);
         assert_eq!(sensor_kit.tank_two_overflow, 2);
@@ -603,9 +752,11 @@ mod tests {
             enable_analog_co2: true,
             enable_ccs811: true,
         });
-        
+
         assert!(config.sensor_kit_config.is_some());
-        let sensor_kit = config.sensor_kit_config.expect("Sensor kit config should be present");
+        let sensor_kit = config
+            .sensor_kit_config
+            .expect("Sensor kit config should be present");
         assert_eq!(sensor_kit.dht11_pin, 8);
         assert_eq!(sensor_kit.analog_co2_pin, "A1");
     }
@@ -614,8 +765,9 @@ mod tests {
     fn test_config_serialization() {
         let config = Config::new();
         let json = serde_json::to_string(&config).expect("Failed to serialize config");
-        let deserialized: Config = serde_json::from_str(&json).expect("Failed to deserialize config");
-        
+        let deserialized: Config =
+            serde_json::from_str(&json).expect("Failed to deserialize config");
+
         assert_eq!(config.encrypted_password, deserialized.encrypted_password);
         assert_eq!(config.photo_cycle_start, deserialized.photo_cycle_start);
         assert_eq!(config.photo_cycle_end, deserialized.photo_cycle_end);
@@ -645,7 +797,7 @@ mod tests {
             pump_runtime_limit_seconds: 600,
             pump_cooldown_seconds: 120,
         });
-        
+
         assert!(config.pump_config.is_some());
         let pump_config = config.pump_config.expect("Pump config should be present");
         assert!(pump_config.continuous_mode);

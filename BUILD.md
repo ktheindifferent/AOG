@@ -1,3 +1,11 @@
+# Historical build notes
+
+These notes describe earlier AOG builds, including the eight-relay layout at
+the bottom. The current Rust v2 installation uses one four-channel I²C relay
+board with dashboard-configurable functions. Use the current
+[component diagrams and pin mappings](README.md#component-connections) for the
+sensor kit, overflow/pH board, LCD, and four-relay wiring.
+
 # Parts List:
 
 Required (Indoor Build):
