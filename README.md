@@ -18,6 +18,7 @@ Rust v2 installation, use the connections and pin mappings below.
 
 The [Rust v2 project](src/src-v2-rust-alpha/README.md) provides the web dashboard,
 pH history and calibration, CO₂/TVOC/particulate/temperature/humidity history,
+live ribbon-camera and USB-webcam views, air-quality exports and reports,
 lighting and watering schedules, four configurable
 relay outputs, and admin password changes. Open `https://<device-ip>:8443/` on
 the same network. Both web services bind to `0.0.0.0` by default; the dashboard
@@ -29,6 +30,16 @@ and keeps up to seven days across restarts, even when the browser is closed.
 Each chart shows the latest recorded value and the selected period's minimum,
 average, and maximum. Collection begins when this version is installed;
 missing or stale readings appear as gaps.
+
+Open **Cameras** to view the ribbon camera and USB webcam together. Views start
+on demand, support pause and full screen, and use the existing dashboard login.
+Install `ffmpeg` and `rpicam-apps-lite` for capture; see the
+[camera setup instructions](src/src-v2-rust-alpha/README.md#cameras).
+
+**Reports & exports** provides full recorded data as CSV/JSON and polished HTML
+reports with current readings, summaries, coverage, and six trend charts. Choose
+a time range, add notes, and use **Print / Save as PDF** in the report. Custom
+periods and current-only snapshots are supported; retained history is seven days.
 
 pH calibration updates live readings and charts immediately. One buffer provides
 **1-point normalization**; add a second distinct buffer for slope calibration.
@@ -47,9 +58,9 @@ See the Rust v2 README for [installation](src/src-v2-rust-alpha/README.md#buildi
 The Raspberry Pi runs AOG. Two **separate Arduino boards** report sensor data
 over USB serial: `SENSORKIT_MK1` for air measurements and `DUAL_OVF_SENSOR` for
 the two overflow switches and pH. The SDS011 uses its own USB serial adapter.
-The LCD and relay board share the Pi's I²C bus. The camera is optional; the
-current camera reader uses MJPEG-capable V4L2 devices at `/dev/video0` through
-`/dev/video2`.
+The LCD and relay board share the Pi's I²C bus. Optional cameras connect through
+the Pi's CSI ribbon connector and USB. Rust v2 streams both through the dashboard;
+USB capture supports raw YUYV as well as JPEG-capable webcams.
 
 The drawings show signal and control connections. Sensor supply requirements
 depend on the actual breakout board; relay load power is separate from the

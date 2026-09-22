@@ -82,9 +82,9 @@ const METRICS: [Metric; 6] = [
 ];
 
 #[derive(Clone, Deserialize, Serialize)]
-struct Sample {
-    timestamp: i64,
-    values: [Option<f64>; 6],
+pub struct Sample {
+    pub timestamp: i64,
+    pub values: [Option<f64>; 6],
 }
 
 struct State {
@@ -99,8 +99,8 @@ pub struct SensorHistory {
 
 #[derive(Clone, Serialize)]
 pub struct Point {
-    timestamp: i64,
-    value: Option<f64>,
+    pub timestamp: i64,
+    pub value: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -125,6 +125,35 @@ pub struct HistoryResponse {
     retention_hours: i64,
     error: Option<String>,
     series: Vec<Series>,
+}
+
+#[derive(Serialize)]
+pub struct ExportMetric {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub unit: &'static str,
+}
+
+#[derive(Serialize)]
+pub struct CurrentReadings {
+    pub timestamp: i64,
+    pub values: [Option<f64>; 6],
+    pub observed_at: [Option<i64>; 6],
+}
+
+#[derive(Serialize)]
+pub struct AirQualityExport {
+    pub schema_version: u8,
+    pub setup_name: String,
+    pub generated_at: i64,
+    pub start: i64,
+    pub end: i64,
+    pub sample_interval_seconds: u64,
+    pub retention_hours: i64,
+    pub metrics: Vec<ExportMetric>,
+    pub current: Option<CurrentReadings>,
+    pub samples: Vec<Sample>,
+    pub error: Option<String>,
 }
 
 fn log_date(path: &Path) -> Option<NaiveDate> {
@@ -210,6 +239,10 @@ impl SensorHistory {
     }
 
     fn read_value(&self, metric: &Metric) -> Option<f64> {
+        self.read_latest(metric).map(|reading| reading.0)
+    }
+
+    fn read_latest(&self, metric: &Metric) -> Option<(f64, i64)> {
         // Open first so the metadata and value refer to the same atomically
         // replaced sensor file, even when a new reading arrives during sampling.
         let file = File::open(self.directory.join("sensors").join(metric.key)).ok()?;
@@ -227,7 +260,12 @@ impl SensorHistory {
             .trim()
             .parse::<f64>()
             .ok()?;
-        (value.is_finite() && (metric.minimum..=metric.maximum).contains(&value)).then_some(value)
+        let timestamp = modified
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .ok()?
+            .as_secs() as i64;
+        (value.is_finite() && (metric.minimum..=metric.maximum).contains(&value))
+            .then_some((value, timestamp))
     }
 
     fn record(&self, now: DateTime<Utc>, clean_logs: bool) -> io::Result<bool> {
@@ -274,6 +312,54 @@ impl SensorHistory {
             }
         }
         Ok(true)
+    }
+
+    /// Full-resolution saved samples, never the chart's reduced point set.
+    pub fn export(
+        &self,
+        start: i64,
+        end: i64,
+        include_current: bool,
+        setup_name: &str,
+    ) -> AirQualityExport {
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let samples = state
+            .samples
+            .iter()
+            .filter(|sample| (start..=end).contains(&sample.timestamp))
+            .cloned()
+            .collect();
+        let error = state.error.clone();
+        drop(state);
+        let current = include_current.then(|| {
+            let readings: [Option<(f64, i64)>; 6] =
+                std::array::from_fn(|index| self.read_latest(&METRICS[index]));
+            CurrentReadings {
+                timestamp: Utc::now().timestamp(),
+                values: std::array::from_fn(|index| readings[index].map(|reading| reading.0)),
+                observed_at: std::array::from_fn(|index| readings[index].map(|reading| reading.1)),
+            }
+        });
+        AirQualityExport {
+            schema_version: 1,
+            setup_name: setup_name.into(),
+            generated_at: Utc::now().timestamp(),
+            start,
+            end,
+            sample_interval_seconds: SAMPLE_SECONDS,
+            retention_hours: RETENTION_HOURS,
+            metrics: METRICS
+                .iter()
+                .map(|metric| ExportMetric {
+                    key: metric.key,
+                    label: metric.label,
+                    unit: metric.unit,
+                })
+                .collect(),
+            current,
+            samples,
+            error,
+        }
     }
 
     pub fn snapshot(&self, hours: u64) -> HistoryResponse {
@@ -343,7 +429,7 @@ impl SensorHistory {
 
 // Keep the first/last point and both extrema of each time bucket. Split on
 // missing readings BEFORE reducing, so neither spikes nor gaps are hidden.
-fn chart_points(points: &[Point], start: i64, end: i64) -> Vec<Point> {
+pub(super) fn chart_points(points: &[Point], start: i64, end: i64) -> Vec<Point> {
     let bucket_seconds = ((end - start) / CHART_BUCKETS as i64).max(SAMPLE_SECONDS as i64);
     let mut result = Vec::new();
     let mut index = 0;

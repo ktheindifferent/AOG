@@ -1573,3 +1573,28 @@ dialog p {
     grid-template-columns: 1fr;
   }
 }
+
+/* Live camera views and downloadable environmental reports. */
+.camera-card { min-width: 0; padding: 22px; }
+.camera-card .panel-heading h2 { font-size: 20px; }
+.camera-viewport { position: relative; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 12px; background: #14271f; display: grid; place-items: center; }
+.camera-viewport img.camera-stream { width: 100%; height: 100%; object-fit: contain; border-radius: 0; background: #14271f; }
+.camera-placeholder { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: #bbccbc; background: #14271fe8; font-size: 14px; }
+.camera-detail { min-height: 3.2em; margin-top: 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9em; overflow-y: auto; }
+.camera-actions, .report-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+.camera-viewport:fullscreen { background: #101812; border-radius: 0; width: 100%; height: 100%; }
+.history-export-bar { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 0 0 22px; font-size: 12px; color: var(--muted); }
+.report-layout { align-items: start; }
+.report-options textarea { width: 100%; min-height: 100px; resize: vertical; border: 1px solid var(--line); border-radius: 9px; padding: 12px; font: inherit; color: var(--ink); background: #fffef9; }
+.report-options textarea:focus { outline: 2px solid #8da87c; outline-offset: 2px; }
+.report-options label { margin-top: 17px; }
+.report-options .field-grid label { margin-top: 0; }
+.report-side { display: grid; gap: 20px; }
+.report-preview-card { background: linear-gradient(145deg, #edf3e7, #faf9f0); }
+.report-preview-card h2 { font-size: 32px; line-height: 1.15; letter-spacing: -1px; margin: 17px 0 25px; }
+.report-illustration { border: 1px solid #dce5d3; border-radius: 12px; padding: 18px; background: #ffffff85; }
+.report-illustration span { font-size: 9px; letter-spacing: 1.6px; color: #778c6c; }
+.report-illustration svg { display: block; width: 100%; margin: 16px 0 12px; }
+.report-illustration small { color: var(--muted); font-size: 10px; }
+.report-preview-card .helper { margin-top: 20px; }
+@media (max-width: 780px) { .camera-grid { grid-template-columns: 1fr; } .history-export-bar { align-items: start; flex-direction: column; gap: 12px; } }

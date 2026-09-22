@@ -3,6 +3,10 @@
   const $ = id => document.getElementById(id);
   const state = {
     csrf: null,
+    cameras: [],
+    camerasRequest: 0,
+    cameraViews: {},
+    cameraError: null,
     settings: null,
     ph: null,
     phError: null,
@@ -30,6 +34,8 @@
   const pageCopy = {
     overview: ['Grow overview', 'Your environment, water, and equipment in one place.'],
     history: ['Sensor history', 'Follow air quality, temperature, and humidity over time.'],
+    cameras: ['Live cameras', 'A window into your grow, from both cameras.'],
+    reports: ['Reports & exports', 'Capture your air quality story and keep the underlying data.'],
     schedules: ['Lighting & watering', 'Build a daily rhythm for your grow.'],
     outputs: ['Equipment controls', 'Start and stop draining, or use timed runs for other equipment.'],
     settings: ['Setup settings', 'Tune your environment and make this setup your own.'],
@@ -145,6 +151,7 @@
     document.title = `AOG · ${pageCopy[page][0]}`;
     if (page === 'overview') renderChart();
     if (page === 'history') renderHistory();
+    syncCameras();
     if (state.csrf) refreshVisiblePage();
   }
 
@@ -697,6 +704,7 @@
     }
   }
   function refreshVisiblePage() {
+    syncCameras();
     if (!state.csrf || document.hidden) return;
     const page = location.hash.slice(1) || 'overview';
     loadSettings().catch(() => {});
@@ -704,6 +712,7 @@
     pollOutputs(false);
     if (page === 'overview' || page === 'settings') pollPh(false);
     if (page === 'history') pollHistory(false);
+    if (page === 'cameras') pollCameras(false);
   }
   async function pollStats(schedule = true) {
     const request = ++state.statsRequest;
@@ -765,31 +774,185 @@
       if (schedule) setTimeout(() => pollOutputs(), document.hidden ? 15000 : location.hash === '#outputs' ? 1000 : 3000);
     }
   }
-  async function pollCameras() {
+  function makeCameraCards() {
+    for (const [id, label, source] of [['ribbon', 'Raspberry Pi camera', 'Ribbon cable'], ['usb', 'USB webcam', 'USB connection']]) {
+      const card = document.createElement('article');
+      card.className = 'panel camera-card';
+      card.innerHTML = `<div class="panel-heading"><div><span class="eyebrow">${source}</span><h2>${label}</h2></div><span class="badge neutral" id="camera-status-${id}">Connecting</span></div><div class="camera-viewport" id="camera-viewport-${id}"><p class="camera-placeholder" id="camera-placeholder-${id}">Waiting for the device…</p></div><p class="helper camera-detail" id="camera-detail-${id}" role="status">Checking camera availability</p><div class="camera-actions"><button type="button" class="button secondary" id="camera-toggle-${id}">Pause view</button><button type="button" class="button quiet" id="camera-fullscreen-${id}">Full screen</button></div>`;
+      $('camera-feeds').append(card);
+      state.cameraViews[id] = {image: null, paused: false, retryAfter: 0, connectedAt: 0};
+      $(`camera-toggle-${id}`).addEventListener('click', () => {
+        const view = state.cameraViews[id];
+        view.paused = !view.paused;
+        view.retryAfter = 0;
+        syncCameras();
+        if (!view.paused) pollCameras(false);
+      });
+      $(`camera-fullscreen-${id}`).addEventListener('click', () => {
+        const viewport = $(`camera-viewport-${id}`);
+        if (viewport.requestFullscreen) viewport.requestFullscreen().catch(error => flash(error.message));
+        else flash('Full screen is unavailable in this browser.');
+      });
+    }
+  }
+  function disconnectCamera(view) {
+    if (!view.image) return;
+    const image = view.image;
+    view.image = null;
+    image.onload = null;
+    image.onerror = null;
+    image.removeAttribute('src');
+    image.remove();
+  }
+  function syncCameras() {
+    const watching = state.csrf && !document.hidden && location.hash === '#cameras';
+    for (const [id, view] of Object.entries(state.cameraViews)) {
+      const camera = state.cameras.find(item => item.id === id);
+      const available = camera && camera.detected;
+      const show = watching && !view.paused && available;
+      if (!show || Date.now() - view.connectedAt > 240000) disconnectCamera(view);
+      $(`camera-toggle-${id}`).textContent = view.paused ? 'Resume view' : 'Pause view';
+      $(`camera-fullscreen-${id}`).disabled = !show;
+      const placeholder = $(`camera-placeholder-${id}`);
+      placeholder.hidden = Boolean(show && view.image && camera.live);
+      let detail = view.paused ? 'This view is paused.' : !camera ? 'Checking camera availability…' : !available ? (camera.error || 'Ribbon camera not detected. Check the camera model, cable, and boot configuration.') : camera.error || (camera.live ? `Live · ${camera.width} × ${camera.height} · up to ${camera.fps} fps · last frame ${new Date(camera.timestamp_ms).toLocaleTimeString()}` : 'Starting the camera. The view reconnects automatically.');
+      if (state.cameraError) detail = state.cameraError;
+      text(`camera-detail-${id}`, detail);
+      const label = view.paused ? 'Paused' : !camera ? 'Connecting' : !available ? 'Not detected' : state.cameraError ? 'Offline' : camera.live && view.image ? 'Live' : camera.error ? 'Reconnecting' : 'Starting';
+      badge($(`camera-status-${id}`), label, label === 'Live' ? 'good' : camera && (camera.error || !available) ? 'warning' : 'neutral');
+      placeholder.textContent = view.paused ? 'View paused' : !available ? 'Camera unavailable' : camera && camera.error ? 'Reconnecting…' : 'Starting live view…';
+      if (show && !view.image && Date.now() >= view.retryAfter) {
+        const image = new Image();
+        image.alt = camera.label;
+        image.className = 'camera-stream';
+        view.image = image;
+        view.connectedAt = Date.now();
+        // MJPEG load events differ between browsers. Device frame timestamps
+        // drive the Live indicator; connection-end events trigger reconnection.
+        const reconnect = () => {
+          if (view.image !== image) return;
+          disconnectCamera(view);
+          view.retryAfter = Date.now() + 3000;
+        };
+        image.onerror = reconnect;
+        image.onload = () => { /* Status polling renews bounded streams. */ };
+        image.src = `${camera.stream_url}?connection=${Date.now()}`;
+        $(`camera-viewport-${id}`).prepend(image);
+      }
+      if (view.image && camera && !camera.live && Date.now() - view.connectedAt > 20000) {
+        disconnectCamera(view);
+        view.retryAfter = Date.now() + 3000;
+      }
+    }
+  }
+  async function pollCameras(schedule = true) {
+    const request = ++state.camerasRequest;
     try {
+      if (!state.csrf || document.hidden || location.hash !== '#cameras') return;
       const cameras = await api('/api/cameras');
-      $('cameras-panel').hidden = cameras.length === 0;
-      for (const existing of Array.from($('camera-feeds').children)) {
-        if (!cameras.some(camera => existing.dataset.camera === String(camera.id))) existing.remove();
-      }
-      for (const camera of cameras) {
-        let figure = document.querySelector(`[data-camera="${camera.id}"]`);
-        if (!figure) {
-          figure = document.createElement('figure');
-          figure.dataset.camera = String(camera.id);
-          const image = document.createElement('img');
-          image.alt = `Camera ${camera.id + 1}`;
-          const caption = document.createElement('figcaption');
-          figure.append(image, caption);
-          $('camera-feeds').append(figure);
-        }
-        figure.querySelector('img').src = `${camera.url}?frame=${camera.timestamp}`;
-        figure.querySelector('figcaption').textContent = `Camera ${camera.id + 1} · ${dateText(camera.timestamp)}`;
-      }
-    } catch (_) {
-      /* Camera availability does not interrupt equipment controls. */
+      if (request !== state.camerasRequest) return;
+      state.cameras = cameras;
+      state.cameraError = null;
+      $('cameras-error').hidden = true;
+      syncCameras();
+    } catch (error) {
+      if (request !== state.camerasRequest) return;
+      state.cameraError = error.message;
+      text('cameras-error', error.message);
+      $('cameras-error').hidden = false;
+      for (const view of Object.values(state.cameraViews)) disconnectCamera(view);
     } finally {
-      setTimeout(pollCameras, document.hidden ? 30000 : 5000);
+      if (schedule) setTimeout(() => pollCameras(), document.hidden ? 15000 : 3000);
+    }
+  }
+
+  function reportRangeChanged() {
+    const range = $('report-range').value;
+    $('report-custom-range').hidden = range !== 'custom';
+    $('report-current').disabled = range === 'current';
+    if (range === 'current') $('report-current').checked = true;
+    message('report-result', '');
+    message('export-result', '');
+  }
+  function reportParameters() {
+    const range = $('report-range').value;
+    const params = new URLSearchParams();
+    if (range === 'current') params.set('scope', 'current');
+    else if (range === 'custom') {
+      const start = new Date($('report-start').value).getTime() / 1000;
+      const end = new Date($('report-end').value).getTime() / 1000;
+      if (!finite(start) || !finite(end) || start >= end) throw new Error('Choose a start and end time, with the end after the start.');
+      if (end - start > 7 * 86400) throw new Error('Choose a period of up to 7 days.');
+      if (end > Date.now() / 1000 + 60) throw new Error('The end time must be in the past.');
+      params.set('start', String(Math.floor(start)));
+      params.set('end', String(Math.floor(end)));
+    } else params.set('hours', range);
+    params.set('current', $('report-current').checked ? '1' : '0');
+    params.set('title', $('report-title').value.trim() || 'Air quality report');
+    params.set('notes', $('report-notes').value.trim());
+    return params;
+  }
+  async function downloadExport(kind, button) {
+    const result = kind === 'html' ? 'report-result' : 'export-result';
+    const originalLabel = button.textContent;
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 30000);
+    button.disabled = true;
+    button.textContent = 'Preparing…';
+    message(result, 'Preparing your download…');
+    try {
+      const params = reportParameters();
+      const endpoint = kind === 'html' ? 'report' : 'export';
+      params.set('format', kind);
+      params.set('download', '1');
+      const response = await fetch(`/api/air-quality/${endpoint}?${params}`, {credentials: 'same-origin', cache: 'no-store', signal: abort.signal});
+      if (response.status === 401) { window.location.replace('/login.html?expired=1'); return; }
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || `Download failed (${response.status})`);
+      }
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = (response.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || `aog-air-quality.${kind}`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      message(result, `Your ${kind.toUpperCase()} download is ready.`);
+    } catch (error) {
+      message(result, error.name === 'AbortError' ? 'The download took too long. Try again.' : error.message, true);
+    } finally {
+      clearTimeout(timeout);
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+  function prepareReportControls() {
+    const localInputTime = date => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    $('report-start').value = localInputTime(new Date(Date.now() - 86400000));
+    $('report-end').value = localInputTime(new Date());
+    $('report-range').addEventListener('change', reportRangeChanged);
+    $('history-to-reports').addEventListener('click', () => {
+      $('report-range').value = String(state.historyRange);
+      reportRangeChanged();
+    });
+    $('report-preview').addEventListener('click', () => {
+      try {
+        const params = reportParameters();
+        const link = document.createElement('a');
+        link.href = `/api/air-quality/report?${params}`;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        message('report-result', 'Report opened in a new tab. Use Print / Save as PDF there to save a PDF copy.');
+      } catch (error) { message('report-result', error.message, true); }
+    });
+    for (const [id, kind] of [['export-csv', 'csv'], ['export-json', 'json'], ['report-html', 'html']]) {
+      $(id).addEventListener('click', event => downloadExport(kind, event.currentTarget));
     }
   }
 
@@ -893,6 +1056,8 @@
       renderOutputs();
     }
   }
+  makeCameraCards();
+  prepareReportControls();
   makeOutputCards();
   makeHistoryCards();
   makeCalibrationCards();
@@ -910,6 +1075,9 @@
   window.addEventListener('resize', renderHistory);
   document.addEventListener('visibilitychange', refreshVisiblePage);
   window.addEventListener('focus', refreshVisiblePage);
+  window.addEventListener('pagehide', () => {
+    for (const view of Object.values(state.cameraViews)) disconnectCamera(view);
+  });
   setInterval(() => {
     if (!document.hidden && state.outputs && (location.hash === '#outputs' || location.hash === '#schedules')) renderOutputs();
   }, 1000);
@@ -1103,7 +1271,7 @@
     document.querySelectorAll('form [type=submit]').forEach(button => {
       button.disabled = false;
     });
-    await Promise.all([pollStats(false), pollPh(false), pollHistory(false), pollOutputs(false)]);
+    await Promise.all([pollStats(false), pollPh(false), pollHistory(false), pollOutputs(false), pollCameras(false)]);
   }));
   async function boot() {
     document.querySelectorAll('form [type=submit]').forEach(button => {

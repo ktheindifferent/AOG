@@ -24,6 +24,7 @@ pub mod command;
 pub mod command_exec;
 pub mod sensors;
 pub mod sensor_history;
+pub mod air_quality;
 pub mod gpio;
 pub mod lcd;
 pub mod video;

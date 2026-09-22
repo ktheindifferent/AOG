@@ -96,7 +96,7 @@ struct WebSession {
     created: Instant,
     csrf: String,
 }
-type WebSessions = Mutex<HashMap<String, WebSession>>;
+type WebSessions = Arc<Mutex<HashMap<String, WebSession>>>;
 
 struct WebState {
     config: Mutex<Config>,
@@ -125,7 +125,7 @@ impl WebState {
         outputs.configure_schedules(config.schedules.clone());
         Self {
             config: Mutex::new(config),
-            sessions: Mutex::new(HashMap::new()),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
             directory: directory.into(),
             ph,
             history: Arc::new(aog::sensor_history::SensorHistory::new(directory)),
@@ -227,6 +227,62 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
             None => api_error(401, "Sign in to continue"),
         };
     }
+    if request.url().starts_with("/api/cameras/") {
+        if !session_authenticated {
+            return api_error(401, "Your session expired. Sign in again.");
+        }
+        if request.method() != "GET" {
+            return api_error(405, "Use GET for camera streams");
+        }
+        let path = request.url();
+        let Some(id) = path
+            .strip_prefix("/api/cameras/")
+            .and_then(|rest| rest.strip_suffix("/stream"))
+        else {
+            return api_error(404, "Unknown camera endpoint");
+        };
+        let sessions = Arc::clone(&state.sessions);
+        let session_id = session_id.unwrap().to_owned();
+        // Streaming must never hold the configuration lock used by relay controls.
+        drop(config);
+        let authorized = Box::new(move || {
+            sessions
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .get(&session_id)
+                .is_some_and(|session| session.created.elapsed() < SESSION_LIFETIME)
+        });
+        return match aog::video::stream(id, authorized) {
+            Ok(stream) => {
+                let mut response = Response::empty_204()
+                    .with_status_code(200)
+                    .with_additional_header(
+                        "Content-Type",
+                        "multipart/x-mixed-replace; boundary=aog-frame",
+                    )
+                    .with_additional_header("X-Content-Type-Options", "nosniff")
+                    .with_additional_header("X-Accel-Buffering", "no")
+                    .with_no_cache();
+                response.data = rouille::ResponseBody::from_reader(stream);
+                response
+            }
+            Err(error) => api_error(503, error),
+        };
+    }
+    if matches!(
+        request.url().as_str(),
+        "/api/air-quality/export" | "/api/air-quality/report"
+    ) {
+        if !session_authenticated {
+            return api_error(401, "Your session expired. Sign in again.");
+        }
+        if request.method() != "GET" {
+            return api_error(405, "Use GET for exports and reports");
+        }
+        let setup_name = config.dashboard_config.setup_name.clone();
+        drop(config);
+        return aog::air_quality::handle(request, &state.history, &setup_name);
+    }
     if matches!(
         request.url().as_str(),
         "/api/settings"
@@ -253,6 +309,9 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
     }
 
     if request.url().contains("/api/dat/") {
+        if !session_authenticated {
+            return api_error(401, "Sign in to view camera images");
+        }
         if let Some(request) = request.remove_prefix("/api/dat/") {
             return rouille::match_assets(&request, "/opt/aog/dat")
                 .with_additional_header("Access-Control-Allow-Origin", "*")
@@ -445,16 +504,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
     let path = request.url();
     if request.method() == "GET" {
         return match path.as_str() {
-            "/api/cameras" => {
-                let cameras: Vec<_> = (0..3).filter_map(|index| {
-                    let file = state.directory.join(format!("dat/video{}.jpg", index));
-                    let metadata = std::fs::metadata(file).ok()?;
-                    if metadata.len() == 0 { return None; }
-                    let timestamp = metadata.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
-                    Some(serde_json::json!({"id":index, "url":format!("/api/dat/video{}.jpg", index), "timestamp":timestamp}))
-                }).collect();
-                Response::json(&cameras).with_no_cache()
-            }
+            "/api/cameras" => Response::json(&aog::video::status()).with_no_cache(),
             "/api/settings" => settings_response(config),
             "/api/history" => {
                 let hours = request.get_param("hours").unwrap_or_else(|| "24".into());

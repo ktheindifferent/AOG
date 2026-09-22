@@ -188,6 +188,7 @@ fn main() -> Result<()> {
     // receiving SIGTERM
     println!("Exiting...");
     aog::web_control::shutdown();
+    aog::video::shutdown();
 
     // Cleanup
     // aog::pump::stop(Arc::clone(&pump_thread));

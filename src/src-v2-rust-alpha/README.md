@@ -92,7 +92,7 @@ restart.
 
 The dashboard works on desktop and mobile and provides:
 
-- **Overview:** live sensor and overflow readings, available camera images,
+- **Overview:** live sensor and overflow readings, a link to both cameras,
   relay states, and a pH history chart with 1-hour, 6-hour, and 24-hour views.
   History is available before calibration; missing, stale, and failed readings
   have explicit status messages.
@@ -100,6 +100,11 @@ The dashboard works on desktop and mobile and provides:
   (°C), and humidity (%), with shared 1-hour, 6-hour, 24-hour, and 7-day ranges.
   Each chart shows its latest recorded value, minimum, average, and maximum.
   Hover, tap, or use arrow keys on a focused chart to inspect recorded samples.
+- **Cameras:** simultaneous live views from the Raspberry Pi ribbon camera and
+  a USB webcam, with per-view pause, full screen, and connection status.
+- **Reports & exports:** full-resolution CSV/JSON downloads and standalone HTML
+  reports with current conditions, period summaries, charts, coverage, and notes.
+  Use the report's **Print / Save as PDF** button to save a PDF through your browser.
 - **Schedules:** daily lighting and repeating watering, including overnight
   windows. Schedules use the Pi's local time, displayed on the page. Both are
   disabled by default. Lighting controls the shared **Lights + Air** relay;
@@ -177,6 +182,81 @@ recorded value, window statistics, and chart points. Storage failures are
 reported on the page while in-memory history remains available. Environmental
 retention is separate from the configurable pH sample interval and history size;
 the pH chart remains on Overview.
+
+### Cameras
+
+Install the capture tools on Raspberry Pi OS / Debian with the Raspberry Pi
+package repository enabled:
+
+```sh
+sudo apt-get install --no-install-recommends ffmpeg rpicam-apps-lite
+```
+
+The ribbon camera uses `rpicam-vid` (`libcamera-vid` is also supported). The USB
+webcam uses FFmpeg's V4L2 input and JPEG encoder, including webcams that only
+offer uncompressed YUYV frames. AOG selects the first USB capture device by its
+stable `/dev/v4l/by-id/*-video-index0` name, avoiding metadata and Pi codec nodes.
+Both views request **640 × 480 at 10 fps**, suitable for the installed USB camera.
+These capture settings are fixed in `src/aog/video.rs` for now.
+
+Open **Cameras** in the dashboard to start viewing. Each camera shares one
+encoder and the latest in-memory frame among up to four viewers; no images or
+video are written to disk. Capture stops when viewing ends (within ten seconds
+if a client disappears). Streams reconnect after failures. The authenticated
+`GET /api/cameras` lists both camera slots, detection, activity, and errors;
+`GET /api/cameras/ribbon/stream` and `GET /api/cameras/usb/stream` return MJPEG
+through the existing HTTPS dashboard. No separate network ports are opened.
+Logout, password changes, and session expiry revoke active streams. Old
+`/api/dat/` camera-image access now also requires dashboard authentication.
+
+For ribbon-camera detection, keep `camera_auto_detect=1` in
+`/boot/firmware/config.txt`. Connect the ribbon while the Pi is powered off and
+boot with it attached, then inspect detection with `rpicam-hello --list-cameras`.
+A cable connected after boot needs a reboot before firmware detection can run.
+If it remains absent, check cable seating, orientation, and the camera model;
+the web page retains an explicit unavailable slot instead of hiding that camera.
+See [Raspberry Pi camera documentation](https://www.raspberrypi.com/documentation/computers/camera_software.html)
+and [FFmpeg V4L2 documentation](https://ffmpeg.org/ffmpeg-devices.html#video4linux2_002c-v4l2).
+
+### Air-quality exports and reports
+
+**Reports & exports** supports the last 1/6/24 hours, 7 days, custom periods of
+up to 7 days, and a current-only snapshot. Custom date inputs use the browser's
+time zone. Reports show UTC; exports use UTC timestamps. Existing history
+retention stays at seven days; downloading cannot recover older or missing data.
+
+- **CSV:** one row per saved sample, a `record_type` column distinguishing
+  `historical` and `current`, UTC/Unix timestamps, and numeric columns with units
+  in their names. Current rows include each sensor file's observation timestamp;
+  those columns stay empty for historical samples because the older storage
+  format retained only the sampling timestamp. Missing values are empty cells.
+- **JSON:** versioned metadata, setup name, requested range, units, sampling and
+  retention information, optional fresh readings with observation timestamps,
+  storage notices, and every saved sample. Each `values` array follows the
+  `metrics` order: CO₂, TVOC, PM2.5, PM10, temperature, humidity. Missing values
+  are `null`. Downloads are not reduced to the points used in dashboard charts.
+- **HTML report:** a standalone document with inline styles and SVG charts,
+  title/notes, fresh conditions, minimum/mean/maximum/P95, valid-sample coverage,
+  peak times, and first-to-last changes. Statistics use all available valid
+  samples; chart reduction preserves peaks and gaps. Current values are shown
+  separately from the historical period. The document works offline; print it
+  or save it as PDF using the browser. Reports do not calculate an AQI or apply
+  exposure thresholds. The sensor-kit's CO₂ value may include CCS811 eCO₂.
+
+All export/report endpoints require a dashboard session:
+
+```text
+GET /api/air-quality/export?format=csv&hours=24&current=1
+GET /api/air-quality/export?format=json&scope=current
+GET /api/air-quality/export?format=json&start=<unix-seconds>&end=<unix-seconds>
+GET /api/air-quality/report?hours=168&title=Air%20quality%20report
+GET /api/air-quality/report?hours=24&download=1
+```
+
+Use `current=0` to omit the live snapshot. Optional `title` (100 characters) and
+`notes` (2,000 characters) customize reports. HTML escapes user-provided text.
+The `download=1` response attaches the report as a file. A blank historical
+period still produces a report with explicit missing-data messages.
 
 ### Assign the four relays
 
