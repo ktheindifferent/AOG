@@ -30,6 +30,12 @@ Each chart shows the latest recorded value and the selected period's minimum,
 average, and maximum. Collection begins when this version is installed;
 missing or stale readings appear as gaps.
 
+pH calibration updates live readings and charts immediately. One buffer provides
+**1-point normalization**; add a second distinct buffer for slope calibration.
+Saved points can be removed or replaced in **Setup → pH calibration**. Output
+cards each have one button that switches between **Start** and **Stop** as the
+relay state changes. Pages refresh after interactions and when you return to them.
+
 See the Rust v2 README for [installation](src/src-v2-rust-alpha/README.md#building-on-debian-ubuntu-or-raspberry-pi-os),
 [relay assignments](src/src-v2-rust-alpha/README.md#assign-the-four-relays), and
 [password recovery](src/src-v2-rust-alpha/README.md#reset-a-forgotten-admin-password).

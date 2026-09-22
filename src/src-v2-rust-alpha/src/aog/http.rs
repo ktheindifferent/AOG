@@ -234,6 +234,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
             | "/api/ph"
             | "/api/history"
             | "/api/ph/calibrate"
+            | "/api/ph/calibration/remove"
             | "/api/outputs"
             | "/api/outputs/start"
             | "/api/outputs/stop"
@@ -458,12 +459,16 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
             "/api/history" => {
                 let hours = request.get_param("hours").unwrap_or_else(|| "24".into());
                 match hours.parse::<u64>() {
-                    Ok(hours @ (1 | 6 | 24 | 168)) => Response::json(&state.history.snapshot(hours)).with_no_cache(),
+                    Ok(hours @ (1 | 6 | 24 | 168)) => {
+                        Response::json(&state.history.snapshot(hours)).with_no_cache()
+                    }
                     _ => api_error(400, "History range must be 1, 6, 24, or 168 hours"),
                 }
             }
-            "/api/ph" => Response::json(&serde_json::json!({"status": state.ph.get_status(), "history": state.ph.history().readings, "calibration": state.ph.calibration(), "error": state.ph.last_error(), "config": config.ph_config.clone().unwrap_or_default(), "raw_value": state.ph.read_raw_value().ok(), "server_time": chrono::Utc::now().timestamp()})).with_no_cache(),
-            "/api/outputs" => Response::json(&state.outputs.lock().unwrap().status()).with_no_cache(),
+            "/api/ph" => Response::json(&state.ph.snapshot()).with_no_cache(),
+            "/api/outputs" => {
+                Response::json(&state.outputs.lock().unwrap().status()).with_no_cache()
+            }
             _ => api_error(405, "Use POST for this action"),
         };
     }
@@ -559,14 +564,46 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
         #[serde(deny_unknown_fields)]
         struct CalibrationInput {
             buffer_ph: f32,
-            raw_value: f32,
+            raw_value: Option<f32>,
         }
         let input: CalibrationInput = match json_body(request) {
             Ok(value) => value,
             Err(response) => return response,
         };
-        return match state.ph.calibrate(input.buffer_ph, input.raw_value) {
-            Ok(()) => Response::json(&serde_json::json!({"message":"Calibration point saved", "calibration":state.ph.calibration()})).with_no_cache(),
+        let raw_value = match input.raw_value {
+            Some(raw) => raw,
+            None => match state.ph.read_raw_value() {
+                Ok(raw) => raw,
+                Err(error) => return api_error(409, error),
+            },
+        };
+        return match state.ph.calibrate(input.buffer_ph, raw_value) {
+            Ok(()) => {
+                let mut snapshot = state.ph.snapshot();
+                snapshot["message"] = serde_json::json!("Calibration saved and applied. Readings and charts now use the updated calibration.");
+                Response::json(&snapshot).with_no_cache()
+            }
+            Err(error) => api_error(400, error),
+        };
+    }
+    if path == "/api/ph/calibration/remove" {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct RemovePoint {
+            buffer_ph: u8,
+        }
+        let input: RemovePoint = match json_body(request) {
+            Ok(value) => value,
+            Err(response) => return response,
+        };
+        return match state.ph.remove_calibration_point(input.buffer_ph) {
+            Ok(()) => {
+                let mut snapshot = state.ph.snapshot();
+                snapshot["message"] = serde_json::json!(
+                    "Calibration point removed. Readings and charts have been updated."
+                );
+                Response::json(&snapshot).with_no_cache()
+            }
             Err(error) => api_error(400, error),
         };
     }

@@ -964,6 +964,20 @@ input::placeholder {
   gap: 9px
 }
 
+.output-card .output-actions .button {
+  width: 100%;
+  min-height: 44px
+}
+
+form[aria-busy=true] {
+  border-color: #91b576
+}
+
+input[readonly] {
+  background: #f2f6ed;
+  color: var(--muted)
+}
+
 .output-card.is-on {
   border-color: #91b576;
   background: #fcfef8
@@ -1012,6 +1026,36 @@ input::placeholder {
 .calibration-point span {
   font-size: 10px;
   color: var(--muted)
+}
+
+.calibration-point small {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  margin: 6px 0
+}
+
+.calibration-point .text-button {
+  display: block;
+  margin: 8px auto 0;
+  color: var(--red);
+  font-size: 11px
+}
+
+.calibration-live {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 12px;
+  background: #f2f6ed;
+  border-radius: 8px;
+  font-size: 12px
+}
+
+.calibration-live strong {
+  margin-left: 5px;
+  font-size: 17px;
+  color: var(--dark)
 }
 
 dialog {

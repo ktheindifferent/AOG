@@ -6,6 +6,16 @@
     settings: null,
     ph: null,
     phError: null,
+    phRequest: 0,
+    phBusy: false,
+    settingsRequest: 0,
+    settingsBusy: false,
+    statsRequest: 0,
+    dirtyForms: new Set(),
+    outputsRequest: 0,
+    outputActionRequest: 0,
+    outputPending: new Map(),
+    outputsReceivedAt: 0,
     history: null,
     historyError: null,
     historyRange: 24,
@@ -135,6 +145,7 @@
     document.title = `AOG · ${pageCopy[page][0]}`;
     if (page === 'overview') renderChart();
     if (page === 'history') renderHistory();
+    if (state.csrf) refreshVisiblePage();
   }
 
   function showSettings(settings, hydrate = true) {
@@ -151,19 +162,23 @@
       pump,
       ph
     } = settings;
-    if (hydrate) {
+    if (hydrate && !state.dirtyForms.has('setup-form')) {
       $('setup-name-input').value = setup.setup_name;
       setup.relay_labels.forEach((label, i) => {
         $(`relay-label-${i + 1}`).value = label;
         $(`relay-role-${i + 1}`).value = setup.relay_roles[i];
         $(`relay-role-${i + 1}`).dataset.previousRole = setup.relay_roles[i];
       });
+    }
+    if (hydrate && !state.dirtyForms.has('overflow-form')) {
       setup.overflow.sensor_labels.forEach((label, i) => {
         $(`overflow-label-${i + 1}`).value = label;
       });
       waterRoles.forEach(role => {
         $(`overflow-${role}`).value = selectionValue(setup.overflow[role]);
       });
+    }
+    if (hydrate && !state.dirtyForms.has('schedule-form')) {
       $('lighting-enabled').checked = schedules.lighting.enabled;
       $('lighting-start').value = timeText(schedules.lighting.start_minute);
       $('lighting-end').value = timeText(schedules.lighting.end_minute);
@@ -173,11 +188,15 @@
       $('watering-interval').value = schedules.watering.every_minutes;
       $('watering-duration').value = schedules.watering.run_seconds;
       $('watering-pump').value = schedules.watering.pump;
+    }
+    if (hydrate && !state.dirtyForms.has('pump-form')) {
       $('pump-runtime').value = pump.pump_runtime_limit_seconds;
       $('pump-cooldown').value = pump.pump_cooldown_seconds;
       $('safety-enabled').checked = pump.safety_gpio_pin !== null;
       $('safety-pin').value = pump.safety_gpio_pin === null ? 17 : pump.safety_gpio_pin;
       $('safety-pin-field').hidden = !$('safety-enabled').checked;
+    }
+    if (hydrate && !state.dirtyForms.has('ph-settings-form')) {
       $('ph-enabled').checked = ph.enabled;
       $('ph-alerts').checked = ph.alert_enabled;
       [
@@ -290,7 +309,6 @@
       badge($(`tank${index}-status`), error ? 'Unavailable' : normal ? 'Normal' : 'Overflow', error || !normal ? 'warning' : 'good');
       text(`tank${index}-detail`, error ? 'Sensor data needs attention' : normal ? 'Overflow sensor clear' : 'Overflow sensor triggered');
     }
-    if (data.ph_status) showPhStatus(data.ph_status);
     showClock(data.device_time);
     badge($('connection'), '● Connected', 'good');
     text('updated-at', `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}`);
@@ -301,11 +319,14 @@
     const hasReading = finite(status.current_ph);
     badge($('ph-badge'), !status.enabled ? 'Paused' : !hasReading ? 'No reading' : status.alert_level, status.enabled && hasReading ? status.alert_level === 'Normal' ? 'good' : status.alert_level === 'Warning' ? 'warning' : 'bad' : 'neutral');
     text('ph-trend', !status.enabled ? 'Monitoring paused' : !hasReading ? 'Waiting for readings' : status.reading_count < 2 ? 'Collecting trend data' : `${status.trend === 'Rising' ? '↗' : status.trend === 'Falling' ? '↘' : '→'} ${status.trend} · last hour`);
-    badge($('ph-calibration-badge'), status.calibration_valid ? 'Calibrated' : 'Not calibrated', status.calibration_valid ? 'good' : 'warning');
+    const points = status.calibration_points || 0;
+    const calibrationLabel = points >= 2 ? `${points}-point calibrated` : points === 1 ? '1-point normalized' : 'Not calibrated';
+    badge($('ph-calibration-badge'), calibrationLabel, points ? 'good' : 'warning');
+    badge($('calibration-mode'), calibrationLabel, points ? 'good' : 'warning');
     text('ph-sample-time', status.last_reading ? `Last sample ${dateText(status.last_reading)}` : 'No sample yet');
     const freshSeconds = state.settings ? Math.max(15, state.settings.ph.monitoring_interval_seconds * 2) : 120;
     const stale = status.last_reading && Date.now() / 1000 - status.last_reading > freshSeconds;
-    text('ph-detail', !status.enabled ? 'Monitoring is paused. Enable it in Setup settings to collect new samples.' : stale ? 'This reading is stale. Check the sensor connection; the chart shows saved history.' : !status.calibration_valid ? 'The probe has not completed a two-point calibration. Calibrate it in Setup settings before relying on its pH values.' : 'The shaded band shows your configured target range.');
+    text('ph-detail', !status.enabled ? 'History sampling is paused. Live readings and calibration remain available.' : stale ? 'This reading is stale. Check the sensor connection; the chart shows saved history.' : points === 0 ? 'Save a known buffer in Setup to normalize the reading. A second distinct buffer calibrates the slope.' : points === 1 ? 'Single-point normalization is active. Add a second distinct buffer to calibrate the slope. The chart uses your current calibration.' : 'Live readings and the chart use your current calibration. The shaded band shows your target range.');
   }
 
   function showPh(data) {
@@ -314,17 +335,30 @@
     showPhStatus(data.status);
     renderChart();
     if (data.error) text('ph-detail', data.error);
-    $('calibration-points').replaceChildren();
+    text('ph-sample-time', data.history.length ? `Last chart sample ${dateText(data.history[data.history.length - 1].timestamp)}` : 'No chart sample yet');
+    text('calibration-live-raw', finite(data.raw_value) ? data.raw_value.toFixed(3) : 'Unavailable');
+    text('calibration-live-ph', formatNumber(data.status.current_ph));
+    const warning = data.calibration_warning || '';
+    text('calibration-warning', warning);
+    $('calibration-warning').hidden = !warning;
+    if ($('calibration-use-live').checked) $('calibration-raw').value = finite(data.raw_value) ? data.raw_value : '';
     for (const point of [4, 7, 10]) {
       const saved = data.calibration[`point_${point}`];
-      const element = document.createElement('div');
-      element.className = `calibration-point${saved ? ' done' : ''}`;
-      const title = document.createElement('strong');
-      title.textContent = `pH ${point}`;
-      const detail = document.createElement('span');
-      detail.textContent = saved ? `Raw ${saved.raw_value}` : 'Not set';
-      element.append(title, detail);
-      $('calibration-points').append(element);
+      $(`calibration-point-${point}`).classList.toggle('done', Boolean(saved));
+      text(`calibration-point-value-${point}`, saved ? `Raw ${saved.raw_value.toFixed(3)}` : 'Not set');
+      text(`calibration-point-time-${point}`, saved ? dateText(saved.timestamp) : '');
+      $(`remove-calibration-${point}`).hidden = !saved;
+      $(`remove-calibration-${point}`).disabled = state.phBusy;
+    }
+  }
+
+  function makeCalibrationCards() {
+    for (const point of [4, 7, 10]) {
+      const card = document.createElement('div');
+      card.id = `calibration-point-${point}`;
+      card.className = 'calibration-point';
+      card.innerHTML = `<strong>pH ${point}</strong><span id="calibration-point-value-${point}">Not set</span><small id="calibration-point-time-${point}"></small><button type="button" id="remove-calibration-${point}" class="text-button" data-remove-calibration="${point}" aria-label="Remove pH ${point} calibration point" hidden>Remove</button>`;
+      $('calibration-points').append(card);
     }
   }
 
@@ -346,15 +380,16 @@
       return;
     }
     if (!state.ph) return;
-    const all = (state.ph.history || []).filter(point => finite(point.ph_value) && finite(point.timestamp));
+    const all = (state.ph.history || []).filter(point => finite(point.timestamp));
     const end = state.ph.server_time || Date.now() / 1000,
       start = end - state.range * 3600;
-    const points = all.filter(point => point.timestamp >= start && point.timestamp <= end);
+    const windowPoints = all.filter(point => point.timestamp >= start && point.timestamp <= end);
+    const points = windowPoints.filter(point => finite(point.ph_value) && point.ph_value >= 0 && point.ph_value <= 14);
     state.chartPoints = points;
     $('ph-chart-message').hidden = points.length > 0;
     svg.toggleAttribute('hidden', points.length === 0);
     if (!points.length) {
-      text('ph-chart-message', all.length ? 'No pH readings in this time range. Try a longer range.' : 'No pH history yet. Readings appear after the sensor reports a valid sample.');
+      text('ph-chart-message', windowPoints.length ? 'Saved readings are outside pH 0–14 with this calibration. Recheck the saved buffer points in Setup.' : all.length ? 'No pH readings in this time range. Try a longer range.' : 'No pH history yet. Readings appear after the sensor reports a valid sample.');
       return;
     }
     const width = Math.max(svg.getBoundingClientRect().width, 280),
@@ -411,8 +446,22 @@
         minute: '2-digit'
       })));
     }
-    svg.append(svgNode('polyline', {
-      points: points.map(point => `${x(point.timestamp)},${y(point.ph_value)}`).join(' '),
+    let previous = null;
+    const path = [];
+    const gapSeconds = Math.max(120, config.monitoring_interval_seconds * 2);
+    for (let index = 0; index < windowPoints.length; index++) {
+      const point = windowPoints[index];
+      if (!finite(point.ph_value) || point.ph_value < 0 || point.ph_value > 14) { previous = null; continue; }
+      const connected = previous && point.timestamp - previous.timestamp <= gapSeconds;
+      path.push(`${connected ? 'L' : 'M'}${x(point.timestamp)},${y(point.ph_value)}`);
+      const next = windowPoints[index + 1];
+      if (!connected && (!next || !finite(next.ph_value) || next.timestamp - point.timestamp > gapSeconds)) {
+        svg.append(svgNode('circle', {cx: x(point.timestamp), cy: y(point.ph_value), r: 2.5, fill: '#507943'}));
+      }
+      previous = point;
+    }
+    svg.append(svgNode('path', {
+      d: path.join(' '),
       fill: 'none',
       stroke: '#507943',
       'stroke-width': 2,
@@ -571,7 +620,7 @@
       const card = document.createElement('article');
       card.id = `output-card-${channel}`;
       card.className = 'output-card';
-      card.innerHTML = `<div class="output-top"><span class="eyebrow">RELAY ${channel}</span><span class="badge neutral" id="output-state-${channel}">Unknown</span></div><h2 id="output-name-${channel}"></h2><p class="output-role" id="output-role-${channel}"></p><p class="helper" id="output-overflow-${channel}"></p><p class="output-timing" id="output-timing-${channel}">Waiting for the relay board</p><div class="output-actions"><button type="button" class="button primary" data-start="${channel}" disabled>Start timed run</button><button type="button" class="button secondary" data-stop="${channel}">Stop</button></div>`;
+      card.innerHTML = `<div class="output-top"><span class="eyebrow">RELAY ${channel}</span><span class="badge neutral" id="output-state-${channel}">Unknown</span></div><h2 id="output-name-${channel}"></h2><p class="output-role" id="output-role-${channel}"></p><p class="helper" id="output-overflow-${channel}"></p><p class="output-timing" id="output-timing-${channel}">Waiting for the relay board</p><div class="output-actions"><button type="button" class="button primary" data-output="${channel}" disabled>Connecting…</button></div>`;
       $('output-controls').append(card);
     }
   }
@@ -587,8 +636,9 @@
     });
     if (!state.outputs) return;
     const data = state.outputs;
+    const elapsed = Math.max(0, Math.floor((performance.now() - state.outputsReceivedAt) / 1000));
     $('paused-banner').hidden = !data.automation_paused;
-    $('pause-schedules').disabled = data.automation_paused;
+    $('pause-schedules').disabled = data.automation_paused || Boolean($('pause-schedules').dataset.busy);
     $('outputs-error').hidden = !(data.error || data.pump_block_reason || data.stop_pending);
     text('outputs-error', data.error || (data.stop_pending ? 'Shutdown is retrying. Check the relay board connection.' : data.pump_block_reason || ''));
     text('water-safety-note', data.pump_block_reason || 'Assigned overflow checks allow pumping. Only one water pump can run at a time. Draining uses manual Start/Stop.');
@@ -598,7 +648,8 @@
     for (const output of data.outputs) {
       const channel = output.channel,
         known = typeof output.on === 'boolean';
-      const label = !known ? 'Unknown' : output.on ? 'On' : 'Off';
+      const pending = state.outputPending.get('all') || state.outputPending.get(channel);
+      const label = pending || (!known ? 'Unknown' : output.on ? 'On' : 'Off');
       const kind = output.on ? 'good' : 'neutral';
       badge($(`output-state-${channel}`), label, kind);
       $(`output-card-${channel}`).classList.toggle('is-on', output.on === true);
@@ -606,15 +657,19 @@
       let detail;
       if (!known) detail = 'Relay state is unavailable';
       else if (output.role === 'draining') detail = output.on ? 'Draining until you press Stop · no timer' : 'Manual Start/Stop · no timer or cooldown';
-      else if (output.on) detail = finite(output.remaining_seconds) ? `Stops in ${duration(output.remaining_seconds)}` : 'On outside a dashboard timed run';
-      else detail = output.cooldown_seconds > 0 ? `Cooldown: ${duration(output.cooldown_seconds)} remaining` : `Maximum timed run: ${duration(output.maximum_seconds)}`;
+      else if (output.on) detail = finite(output.remaining_seconds) ? `Stops in ${duration(Math.max(0, output.remaining_seconds - elapsed))}` : 'On outside a dashboard timed run';
+      else detail = output.cooldown_seconds > elapsed ? `Cooldown: ${duration(output.cooldown_seconds - elapsed)} remaining` : `Maximum timed run: ${duration(output.maximum_seconds)}`;
       const controlled = output.schedule_controlled;
       if (controlled) detail = output.on ? 'On for the scheduled lighting period' : 'Waiting for the lighting period';
       if (output.blocked_reason) detail = output.blocked_reason;
       text(`output-timing-${channel}`, detail);
-      const startButton = document.querySelector(`[data-start="${channel}"]`);
-      startButton.textContent = role === 'draining' ? 'Start draining' : 'Start timed run';
-      startButton.disabled = !known || output.on || data.stop_pending || controlled || Boolean(output.blocked_reason) || output.cooldown_seconds > 0 || role === 'unassigned' || output.role !== role;
+      const button = document.querySelector(`[data-output="${channel}"]`);
+      const stop = output.on || !known;
+      button.dataset.action = stop ? 'stop' : 'start';
+      button.textContent = pending || (stop ? 'Stop' : 'Start');
+      button.className = `button ${stop ? 'danger-outline' : 'primary'}`;
+      button.setAttribute('aria-label', `${stop ? 'Stop' : 'Start'} ${state.settings.setup.relay_labels[channel - 1]}`);
+      button.disabled = Boolean(pending) || Boolean(button.dataset.busy) || (!stop && (state.outputPending.size > 0 || data.stop_pending || controlled || Boolean(output.blocked_reason) || output.cooldown_seconds > elapsed || role === 'unassigned' || output.role !== role));
       const chip = document.createElement('div');
       chip.className = 'output-chip';
       const name = document.createElement('strong');
@@ -627,34 +682,71 @@
     renderSchedules();
   }
   async function loadSettings(hydrate = true) {
-    showSettings(await api('/api/settings'), hydrate);
+    if (state.settingsBusy) return;
+    const request = ++state.settingsRequest;
+    const settings = await api('/api/settings');
+    if (request === state.settingsRequest) showSettings(settings, hydrate);
+  }
+  async function pollSettings() {
+    try {
+      if (!document.hidden) await loadSettings();
+    } catch (error) {
+      /* Other live requests report connection failures without discarding edits. */
+    } finally {
+      setTimeout(pollSettings, 15000);
+    }
+  }
+  function refreshVisiblePage() {
+    if (!state.csrf || document.hidden) return;
+    const page = location.hash.slice(1) || 'overview';
+    loadSettings().catch(() => {});
+    pollStats(false);
+    pollOutputs(false);
+    if (page === 'overview' || page === 'settings') pollPh(false);
+    if (page === 'history') pollHistory(false);
   }
   async function pollStats(schedule = true) {
+    const request = ++state.statsRequest;
     try {
-      showStats(await api('/api/stats'));
+      const stats = await api('/api/stats');
+      if (request === state.statsRequest) showStats(stats);
     } catch (error) {
-      badge($('connection'), '● Offline', 'warning');
-      text('updated-at', 'Readings unavailable — retrying');
+      if (request === state.statsRequest) {
+        badge($('connection'), '● Offline', 'warning');
+        text('updated-at', 'Readings unavailable — retrying');
+      }
     } finally {
       if (schedule) setTimeout(() => pollStats(), document.hidden ? 15000 : 5000);
     }
   }
   async function pollPh(schedule = true) {
+    const request = ++state.phRequest;
     try {
-      showPh(await api('/api/ph'));
+      if (state.phBusy) return;
+      const ph = await api('/api/ph');
+      if (request === state.phRequest && !state.phBusy) showPh(ph);
     } catch (error) {
-      state.phError = error.message;
-      text('ph-trend', 'Trend unavailable');
-      renderChart();
+      if (request === state.phRequest && !state.phBusy) {
+        state.phError = error.message;
+        text('ph-trend', 'Trend unavailable');
+        renderChart();
+      }
     } finally {
-      if (schedule) setTimeout(() => pollPh(), document.hidden ? 60000 : 15000);
+      if (schedule) setTimeout(() => pollPh(), document.hidden ? 60000 : 5000);
     }
   }
   async function pollOutputs(schedule = true) {
+    const request = ++state.outputsRequest;
     try {
-      state.outputs = await api('/api/outputs');
+      if (state.outputPending.size) return;
+      const outputs = await api('/api/outputs');
+      if (request !== state.outputsRequest || state.outputPending.size) return;
+      state.outputs = outputs;
+      state.outputsReceivedAt = performance.now();
+      text('outputs-updated', `Live relay state · updated ${new Date().toLocaleTimeString()}`);
       renderOutputs();
     } catch (error) {
+      if (request !== state.outputsRequest || state.outputPending.size) return;
       if (state.outputs) {
         state.outputs = {
           ...state.outputs,
@@ -666,13 +758,11 @@
         };
         renderOutputs();
       }
-      document.querySelectorAll('[data-start]').forEach(button => {
-        button.disabled = true;
-      });
+      text('outputs-updated', 'Connection lost · relay state is unknown · retrying automatically');
       text('outputs-error', error.message);
       $('outputs-error').hidden = false;
     } finally {
-      if (schedule) setTimeout(() => pollOutputs(), document.hidden ? 15000 : 5000);
+      if (schedule) setTimeout(() => pollOutputs(), document.hidden ? 15000 : location.hash === '#outputs' ? 1000 : 3000);
     }
   }
   async function pollCameras() {
@@ -706,55 +796,123 @@
   function form(id, result, handler) {
     $(id).addEventListener('submit', async event => {
       event.preventDefault();
+      if ($(id).dataset.saving) return;
+      $(id).dataset.saving = 'true';
+      const version = $(id).dataset.editVersion;
       const button = $(id).querySelector('[type=submit]');
       const label = button.textContent;
       button.disabled = true;
-      button.textContent = 'Saving…';
+      button.textContent = id === 'run-form' ? 'Starting…' : id === 'calibration-form' ? 'Applying…' : 'Saving…';
+      $(id).setAttribute('aria-busy', 'true');
       message(result, '');
       try {
         if (!state.settings || !state.csrf) throw new Error('Wait for the device to connect, then try again.');
         const reply = await handler();
+        if ($(id).dataset.editVersion === version) state.dirtyForms.delete(id);
+        showSettings(state.settings, true);
         if (reply) message(result, reply);
       } catch (error) {
         message(result, error.message, true);
       } finally {
+        delete $(id).dataset.saving;
+        $(id).removeAttribute('aria-busy');
         button.disabled = false;
         button.textContent = label;
       }
     });
   }
   async function saveSettings(patch) {
-    const settings = await api('/api/settings', {
-      body: patch
-    });
-    showSettings(settings, false);
+    if (state.settingsBusy) throw new Error('Another settings change is being saved. Try again when it finishes.');
+    state.settingsBusy = true;
+    ++state.settingsRequest;
+    try {
+      const settings = await api('/api/settings', {body: patch});
+      showSettings(settings, false);
+    } finally {
+      ++state.settingsRequest;
+      state.settingsBusy = false;
+    }
+    await pollOutputs(false);
+    await pollPh(false);
     return 'Saved. Changes are active on the device.';
   }
   async function outputAction(path, body = {}) {
-    state.outputs = await api(path, {
-      body
-    });
+    const key = body.channel || 'all';
+    if (state.outputPending.has(key)) return;
+    const request = ++state.outputActionRequest;
+    ++state.outputsRequest;
+    state.outputPending.set(key, path.endsWith('/start') ? 'Starting…' : path.endsWith('/resume') ? 'Applying…' : 'Stopping…');
     renderOutputs();
-    flash(state.outputs.last_event);
-    return state.outputs;
+    try {
+      const outputs = await api(path, {body});
+      ++state.outputsRequest;
+      if (request === state.outputActionRequest) {
+        state.outputs = outputs;
+        state.outputsReceivedAt = performance.now();
+        text('outputs-updated', `Device confirmed · ${new Date().toLocaleTimeString()}`);
+        renderOutputs();
+        flash(outputs.last_event);
+      }
+      return outputs;
+    } finally {
+      state.outputPending.delete(key);
+      renderOutputs();
+      // A fresh read also resolves timeouts where the command reached the Pi
+      // but its response did not reach the browser.
+      await pollOutputs(false);
+    }
+  }
+  async function calibrationAction(path, body) {
+    if (state.phBusy) throw new Error('A calibration change is already being applied.');
+    state.phBusy = true;
+    ++state.phRequest;
+    document.querySelectorAll('[data-remove-calibration]').forEach(button => { button.disabled = true; });
+    try {
+      const snapshot = await api(path, {body});
+      ++state.phRequest;
+      showPh(snapshot);
+      flash(snapshot.message);
+      return snapshot.message;
+    } finally {
+      state.phBusy = false;
+      document.querySelectorAll('[data-remove-calibration]').forEach(button => { button.disabled = false; });
+      await pollPh(false);
+    }
   }
   async function actionButton(button, action) {
+    if (button.dataset.busy) return;
+    button.dataset.busy = 'true';
     button.disabled = true;
     try {
       await action();
     } catch (error) {
       globalError(error.message);
     } finally {
+      delete button.dataset.busy;
       button.disabled = false;
       renderOutputs();
     }
   }
   makeOutputCards();
   makeHistoryCards();
+  makeCalibrationCards();
   navigate();
+  document.querySelectorAll('form').forEach(element => {
+    const edited = () => {
+      state.dirtyForms.add(element.id);
+      element.dataset.editVersion = String(Number(element.dataset.editVersion || 0) + 1);
+    };
+    element.addEventListener('input', edited);
+    element.addEventListener('change', edited);
+  });
   window.addEventListener('hashchange', navigate);
   window.addEventListener('resize', renderChart);
   window.addEventListener('resize', renderHistory);
+  document.addEventListener('visibilitychange', refreshVisiblePage);
+  window.addEventListener('focus', refreshVisiblePage);
+  setInterval(() => {
+    if (!document.hidden && state.outputs && (location.hash === '#outputs' || location.hash === '#schedules')) renderOutputs();
+  }, 1000);
   document.querySelectorAll('[data-history-range]').forEach(button => button.addEventListener('click', () => {
     state.historyRange = Number(button.dataset.historyRange);
     state.history = null;
@@ -796,16 +954,18 @@
   $('stop-all').addEventListener('click', event => actionButton(event.currentTarget, () => outputAction('/api/outputs/stop-all')));
   $('pause-schedules').addEventListener('click', event => actionButton(event.currentTarget, () => outputAction('/api/schedules/pause')));
   document.querySelectorAll('.resume-schedules').forEach(button => button.addEventListener('click', event => actionButton(event.currentTarget, () => outputAction('/api/schedules/resume'))));
-  document.querySelectorAll('[data-stop]').forEach(button => button.addEventListener('click', event => actionButton(event.currentTarget, () => outputAction('/api/outputs/stop', {
-    channel: Number(button.dataset.stop)
-  }))));
-  document.querySelectorAll('[data-start]').forEach(button => button.addEventListener('click', () => {
-    const channel = Number(button.dataset.start),
+  document.querySelectorAll('[data-output]').forEach(button => button.addEventListener('click', () => {
+    const channel = Number(button.dataset.output),
       output = state.outputs.outputs.find(item => item.channel === channel);
+    globalError('');
+    if (output.on || output.on === null) {
+      return actionButton(button, () => outputAction('/api/outputs/stop', {channel}));
+    }
     if (output.role === 'draining') {
       return actionButton(button, () => outputAction('/api/outputs/start', {channel}));
     }
     state.selectedOutput = channel;
+    state.selectedRole = output.role;
     text('run-dialog-title', `Start ${state.settings.setup.relay_labels[channel-1]}?`);
     text('run-dialog-description', `This switches physical relay ${channel} on for ${roleNames[output.role]}. Maximum duration: ${duration(output.maximum_seconds)}.`);
     $('run-seconds').max = output.maximum_seconds;
@@ -817,6 +977,7 @@
     $('run-dialog').close();
   });
   form('run-form', 'run-result', async () => {
+    if (state.settings.setup.relay_roles[state.selectedOutput - 1] !== state.selectedRole) throw new Error('This relay assignment changed. Close this dialog and choose the output again.');
     await outputAction('/api/outputs/start', {
       channel: state.selectedOutput,
       seconds: Number($('run-seconds').value)
@@ -892,21 +1053,31 @@
     return reply;
   });
   $('use-raw-reading').addEventListener('click', event => actionButton(event.currentTarget, async () => {
+    if (state.phBusy) return;
+    const request = ++state.phRequest;
     const data = await api('/api/ph');
+    if (state.phBusy || request !== state.phRequest) return;
     showPh(data);
     if (!finite(data.raw_value)) throw new Error('A fresh raw reading is unavailable. Check the probe connection.');
     $('calibration-raw').value = data.raw_value;
   }));
-  form('calibration-form', 'calibration-result', async () => {
-    const reply = await api('/api/ph/calibrate', {
-      body: {
-        buffer_ph: Number($('buffer-ph').value),
-        raw_value: Number($('calibration-raw').value)
-      }
-    });
+  $('calibration-use-live').addEventListener('change', () => {
+    $('calibration-raw').readOnly = $('calibration-use-live').checked;
     $('calibration-ready').checked = false;
-    await pollPh(false);
-    return reply.message;
+    if ($('calibration-use-live').checked) pollPh(false);
+  });
+  $('buffer-ph').addEventListener('change', () => { $('calibration-ready').checked = false; });
+  document.querySelectorAll('[data-remove-calibration]').forEach(button => button.addEventListener('click', event => actionButton(event.currentTarget, async () => {
+    const reply = await calibrationAction('/api/ph/calibration/remove', {buffer_ph: Number(button.dataset.removeCalibration)});
+    $('calibration-ready').checked = false;
+    message('calibration-result', reply);
+  })));
+  form('calibration-form', 'calibration-result', async () => {
+    const body = {buffer_ph: Number($('buffer-ph').value)};
+    if (!$('calibration-use-live').checked) body.raw_value = Number($('calibration-raw').value);
+    const reply = await calibrationAction('/api/ph/calibrate', body);
+    $('calibration-ready').checked = false;
+    return reply;
   });
   form('password-form', 'password-result', async () => {
     if ($('new-password').value !== $('confirm-password').value) throw new Error('New passwords do not match.');
@@ -953,6 +1124,7 @@
     pollHistory();
     pollOutputs();
     pollCameras();
+    setTimeout(pollSettings, 15000);
   }
   boot();
 })();

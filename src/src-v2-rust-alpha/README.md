@@ -56,9 +56,12 @@ command requests are accepted only from loopback. The dashboard login uses
 the admin password independently of this token.
 
 Login sessions last one hour and are cleared by logout or a server restart.
-Dashboard readings and output states refresh every five seconds; pH history
-refreshes every fifteen seconds. Environmental history is recorded and refreshed
-every minute. AOG
+Dashboard readings and live pH refresh every five seconds. Output states refresh
+every second on Outputs and every three seconds on other visible pages, with
+countdowns updating between requests. Settings refresh every fifteen seconds
+without replacing unsaved form edits. Returning to a page or browser tab refreshes
+its content, and actions immediately apply the device's response. Environmental
+history is recorded and refreshed every minute. AOG
 continues serving when stdin is closed and exits on SIGTERM or Ctrl-C.
 
 The binary embeds `src/www.zip`; changes to `www/` must also be packaged into
@@ -111,14 +114,45 @@ The dashboard works on desktop and mobile and provides:
   switch together for up to 24 hours per manual run. Configured overflow stops,
   the external safety input, emergency stop, and one-pump-at-a-time protection
   apply to every water pump, regardless of relay number. Unassigned relays cannot be started.
+  Each relay has one button that switches between **Start** and **Stop**, with
+  pending feedback until the device responds. **Stop all** remains available.
 - **Setup:** setup name, output labels and assignments, sensor names and per-pump
   overflow stops, pump runtime/cooldown/safety limits,
   pH monitoring thresholds and interval, history retention, and buffer
-  calibration. Calibration needs pH 7 plus pH 4 or pH 10 with different stable
-  raw readings. Monitoring changes take effect without restarting.
+  calibration. One buffer immediately normalizes pH; a second distinct buffer
+  calibrates the slope. Individual points can be removed or replaced. Calibration
+  and monitoring changes take effect without restarting.
 - **Account:** change the admin password using the current password. A
   successful change signs out all sessions immediately; sign in with the new
   password. Forgotten passwords can still be reset locally as described below.
+
+### Live pH calibration
+
+Under **Setup → pH calibration**, leave **Use the live sensor reading when saving**
+checked to capture a fresh reading on the Pi when you save. The raw value and
+current pH update on screen. Uncheck it to enter a measured average manually.
+Confirm the probe is stable in the selected buffer before saving.
+
+A single point, such as pH 7, applies an offset immediately and is labeled
+**1-point normalized**. It does not determine the probe's slope. A second distinct
+buffer adds slope calibration; three points use separate pH 4–7 and 7–10 segments
+so the third buffer is honored. Buffers with identical raw readings or an
+inconsistent three-point order are rejected. Very close raw readings produce a
+visible warning because they amplify noise. **Remove** on a point returns to the
+remaining calibration, including single-point normalization.
+
+Saving or removing a point immediately refreshes the live pH, takes a new history
+sample when the sensor is available, and returns the updated chart and status.
+The chart recalculates saved raw samples using the current calibration; original
+raw samples remain intact on disk. Out-of-range results appear as gaps instead
+of being clipped to 0 or 14. The existing temperature correction is referenced to
+the saved neutral buffer's temperature (or another saved point when pH 7 is absent).
+Changing thresholds and sampling settings also updates the page immediately.
+
+`POST /api/ph/calibrate` accepts `buffer_ph` and an optional `raw_value`; omitting
+the latter captures the live sensor reading. `POST /api/ph/calibration/remove`
+accepts `buffer_ph` of `4`, `7`, or `10`. Both return the complete updated pH
+snapshot and require the dashboard session and CSRF token.
 
 ### Sensor history
 

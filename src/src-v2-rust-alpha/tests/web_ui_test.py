@@ -117,7 +117,7 @@ def run():
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=os.environ.get('CHROMIUM', '/usr/bin/chromium'), headless=True, args=['--no-sandbox','--disable-dev-shm-usage'])
         device=Device(); context,page,errors=open_page(browser,device)
-        expect(page.locator('#ph-chart-svg polyline')).to_have_count(1)
+        expect(page.locator('#ph-chart-svg path')).to_have_count(1)
         expect(page.locator('#ph-calibration-badge')).to_have_text('Not calibrated')
         assert not errors, errors
         page.screenshot(path='/tmp/aog-ui-desktop.png',full_page=True)
@@ -134,13 +134,13 @@ def run():
         expect(page.locator('#schedule-result')).to_contain_text('cooldown')
         expect(page.locator('#schedule-form [type=submit]')).to_be_enabled()
         page.click('#stop-all'); expect(page.locator('#paused-banner')).to_be_visible()
-        page.click('[data-page=outputs]'); page.click('[data-start="1"]')
+        page.click('[data-page=outputs]'); page.click('[data-output="1"]')
         expect(page.locator('#run-dialog')).to_be_visible()
         page.fill('#run-seconds','10'); page.click('#run-form [type=submit]')
         expect(page.locator('#run-dialog')).not_to_be_visible()
         expect(page.locator('#output-state-1')).to_have_text('On')
         assert ('/api/outputs/start', {'channel':1, 'seconds':10}) in device.requests
-        page.click('[data-stop="1"]'); expect(page.locator('#output-state-1')).to_have_text('Off')
+        page.click('[data-output="1"]'); expect(page.locator('#output-state-1')).to_have_text('Off')
         page.click('[data-page=settings]'); page.fill('#setup-name-input','Kitchen grow')
         page.click('#setup-form [type=submit]'); expect(page.locator('#setup-result')).to_contain_text('Saved')
         expect(page.locator('#setup-name')).to_have_text('Kitchen grow')
