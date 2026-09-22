@@ -78,6 +78,7 @@ pub fn init() {
         Box::new(aog::web_control::QuadBoard),
     );
     aog::web_control::start_watchdog(Arc::clone(&state.outputs));
+    aog::sensor_history::start_recording(Arc::clone(&state.history));
 
     rouille::Server::new_ssl(
         (bind_address.as_str(), bind_port),
@@ -102,6 +103,7 @@ struct WebState {
     sessions: WebSessions,
     directory: std::path::PathBuf,
     ph: Arc<aog::ph_sensor::PhSensor>,
+    history: Arc<aog::sensor_history::SensorHistory>,
     outputs: Arc<Mutex<aog::web_control::OutputController>>,
 }
 
@@ -126,6 +128,7 @@ impl WebState {
             sessions: Mutex::new(HashMap::new()),
             directory: directory.into(),
             ph,
+            history: Arc::new(aog::sensor_history::SensorHistory::new(directory)),
             outputs: Arc::new(Mutex::new(outputs)),
         }
     }
@@ -229,6 +232,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
         "/api/settings"
             | "/api/cameras"
             | "/api/ph"
+            | "/api/history"
             | "/api/ph/calibrate"
             | "/api/outputs"
             | "/api/outputs/start"
@@ -451,6 +455,13 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
                 Response::json(&cameras).with_no_cache()
             }
             "/api/settings" => settings_response(config),
+            "/api/history" => {
+                let hours = request.get_param("hours").unwrap_or_else(|| "24".into());
+                match hours.parse::<u64>() {
+                    Ok(hours @ (1 | 6 | 24 | 168)) => Response::json(&state.history.snapshot(hours)).with_no_cache(),
+                    _ => api_error(400, "History range must be 1, 6, 24, or 168 hours"),
+                }
+            }
             "/api/ph" => Response::json(&serde_json::json!({"status": state.ph.get_status(), "history": state.ph.history().readings, "calibration": state.ph.calibration(), "error": state.ph.last_error(), "config": config.ph_config.clone().unwrap_or_default(), "raw_value": state.ph.read_raw_value().ok(), "server_time": chrono::Utc::now().timestamp()})).with_no_cache(),
             "/api/outputs" => Response::json(&state.outputs.lock().unwrap().status()).with_no_cache(),
             _ => api_error(405, "Use POST for this action"),

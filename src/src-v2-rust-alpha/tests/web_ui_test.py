@@ -8,7 +8,7 @@ import mimetypes
 import os
 import time
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from playwright.sync_api import sync_playwright, expect
 
 # Allow the same request timeout as the UI plus rendering time on a Pi.
@@ -46,6 +46,14 @@ class Device:
     def ph(self):
         status = {'current_ph': self.history[-1]['ph_value'] if self.history else None, 'average_ph': 6.85 if self.history else None, 'trend': 'Stable', 'alert_level': 'Normal', 'last_calibration': 0, 'calibration_valid': False, 'adjustment_suggestion': '', 'last_reading': NOW if self.history else None, 'reading_count': len(self.history), 'enabled': True}
         return {'status': status, 'history': self.history, 'calibration': {'point_4': None, 'point_7': None, 'point_10': None, 'slope': 1.0, 'offset': 0.0, 'last_calibration': 0}, 'error': None, 'config': self.settings['ph'], 'raw_value': 6.85, 'server_time': NOW}
+
+    def sensor_history(self, hours):
+        series = []
+        for key, label, unit, base in [('co2', 'CO₂', 'ppm', 820), ('tvoc', 'TVOC', 'ppb', 18), ('pm25', 'PM2.5', 'µg/m³', 4.2), ('pm10', 'PM10', 'µg/m³', 6.1), ('temp', 'Temperature', '°C', 24.5), ('hum', 'Humidity', '%', 62)]:
+            points = [{'timestamp': NOW-(119-i)*60, 'value': base + math.sin(i/15)} for i in range(120) if NOW-(119-i)*60 >= NOW-hours*3600]
+            values = [point['value'] for point in points]
+            series.append({'key': key, 'label': label, 'unit': unit, 'available': True, 'latest': points[-1], 'count': len(points), 'minimum': min(values), 'maximum': max(values), 'average': sum(values)/len(values), 'points': points})
+        return {'server_time': NOW, 'range_hours': hours, 'sample_interval_seconds': 60, 'retention_hours': 168, 'error': None, 'series': series}
 
     def route(self, route):
         request = route.request
@@ -87,6 +95,7 @@ class Device:
             elif path == '/api/outputs': reply(self.output_status())
             elif path == '/api/cameras': reply([])
             elif path == '/api/ph': reply({'error': 'Sensor history temporarily unavailable'}, 503) if self.ph_error else reply(self.ph())
+            elif path == '/api/history': reply(self.sensor_history(int(parse_qs(urlparse(request.url).query).get('hours', ['24'])[0])))
             elif path == '/api/stats': reply({'temp':'24.50C', 'hum':'62.00%', 'co2':'820.00ppm', 'pm25':'4.2', 'pm10':'6.1', 'tvoc':'18ppb', 't1_ovf':'NONE', 't2_ovf':'NONE', 'overflow_error':False, 'ph':'6.85', 'ph_status':None, 'device_time':self.settings['device_time']})
             else: reply({'error': 'Unexpected API'}, 404)
             return

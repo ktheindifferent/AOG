@@ -16,6 +16,7 @@
     <a class="brand" href="#overview" aria-label="AOG overview"><span class="brand-mark" aria-hidden="true">↗</span><span>AOG<small>GROW CONTROL</small></span></a>
     <nav aria-label="Main navigation">
       <a href="#overview" data-page="overview" aria-current="page"><span aria-hidden="true">▦</span> Overview</a>
+      <a href="#history" data-page="history"><span aria-hidden="true">↗</span> Sensor history</a>
       <a href="#schedules" data-page="schedules"><span aria-hidden="true">◷</span> Schedules</a>
       <a href="#outputs" data-page="outputs"><span aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 5a8 8 0 1 0 10 0M12 2v10"/></svg></span> Outputs</a>
       <a href="#settings" data-page="settings"><span aria-hidden="true">⚙</span> Setup settings</a>
@@ -52,8 +53,14 @@
         <article class="panel"><div class="panel-heading"><div><span class="eyebrow">AUTOMATION</span><h2>Today’s schedules</h2></div><a class="text-link" href="#schedules">Manage →</a></div><div class="schedule-summary"><span class="schedule-icon" aria-hidden="true">☀</span><div><strong>Lighting</strong><p id="lighting-summary">Loading schedule</p></div><span id="lighting-state" class="badge neutral">—</span></div><div class="schedule-summary"><span class="schedule-icon" aria-hidden="true">≈</span><div><strong>Watering</strong><p id="watering-summary">Loading schedule</p></div><span id="watering-state" class="badge neutral">—</span></div><p class="helper" id="next-watering">Set schedules to automate your grow.</p></article>
         <article class="panel"><div class="panel-heading"><div><span class="eyebrow">EQUIPMENT</span><h2>Output status</h2></div><a class="text-link" href="#outputs">Control →</a></div><div id="output-summary" class="output-summary"></div><p class="helper" id="last-event">Waiting for relay board</p></article>
       </div>
-      <div class="air-strip"><span class="eyebrow">AIR QUALITY</span><span>PM2.5 <strong id="pm25-value">—</strong></span><span>PM10 <strong id="pm10-value">—</strong></span><span>TVOC <strong id="tvoc-value">—</strong></span></div>
+      <div class="air-strip"><span class="eyebrow">AIR QUALITY</span><span>PM2.5 <strong id="pm25-value">—</strong></span><span>PM10 <strong id="pm10-value">—</strong></span><span>TVOC <strong id="tvoc-value">—</strong></span><a class="text-link" href="#history">View sensor history →</a></div>
       <article id="cameras-panel" class="panel camera-panel" hidden><div class="panel-heading"><div><span class="eyebrow">LIVE VIEW</span><h2>Camera feeds</h2></div></div><div id="camera-feeds" class="camera-grid"></div></article>
+    </section>
+    <section id="page-history" class="page" aria-label="Sensor history" hidden>
+      <div class="history-toolbar"><div><p class="helper">Recorded every minute on the Pi, including when this page is closed. Up to 7 days are saved across restarts. Gaps mean no fresh reading was available.</p><a class="text-link" href="#overview">View pH history on Overview →</a></div><div class="segmented" role="group" aria-label="Sensor history range"><button type="button" data-history-range="1" aria-pressed="false">1h</button><button type="button" data-history-range="6" aria-pressed="false">6h</button><button type="button" data-history-range="24" aria-pressed="true">24h</button><button type="button" data-history-range="168" aria-pressed="false">7d</button></div></div>
+      <div id="history-error" class="notice warning" role="status" hidden></div>
+      <div id="history-cards" class="history-grid"></div>
+      <p class="helper">Point to or tap a chart for a recorded value and time. Use the arrow keys when a chart is focused. Times follow your browser’s time zone. History begins when recording is installed; older readings cannot be reconstructed.</p>
     </section>
     <section id="page-schedules" class="page" aria-label="Schedules" hidden>
       <div class="schedule-toolbar"><p id="device-time" class="muted">Schedule times follow the Pi’s local clock.</p><button type="button" class="button secondary" id="pause-schedules">Pause schedules & stop outputs</button></div>

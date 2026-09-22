@@ -6,6 +6,11 @@
     settings: null,
     ph: null,
     phError: null,
+    history: null,
+    historyError: null,
+    historyRange: 24,
+    historyRequest: 0,
+    historyCharts: {},
     outputs: null,
     range: 24,
     chartPoints: [],
@@ -14,8 +19,9 @@
   };
   const pageCopy = {
     overview: ['Grow overview', 'Your environment, water, and equipment in one place.'],
+    history: ['Sensor history', 'Follow air quality, temperature, and humidity over time.'],
     schedules: ['Lighting & watering', 'Build a daily rhythm for your grow.'],
-    outputs: ['Equipment controls', 'See actual relay states and run equipment for a set time.'],
+    outputs: ['Equipment controls', 'Start and stop draining, or use timed runs for other equipment.'],
     settings: ['Setup settings', 'Tune your environment and make this setup your own.'],
     account: ['Your account', 'Manage your password and device access.']
   };
@@ -31,6 +37,14 @@
     tank_cycle: 'Tank-to-tank'
   };
   const waterRoles = ['filling', 'tank_cycle', 'draining'];
+  const historyMetrics = [
+    {key: 'co2', label: 'CO₂', unit: 'ppm', decimals: 0, color: '#507943'},
+    {key: 'tvoc', label: 'TVOC', unit: 'ppb', decimals: 0, color: '#8163a0'},
+    {key: 'pm25', label: 'PM2.5', unit: 'µg/m³', decimals: 1, color: '#ae7434'},
+    {key: 'pm10', label: 'PM10', unit: 'µg/m³', decimals: 1, color: '#8a6546'},
+    {key: 'temp', label: 'Temperature', unit: '°C', decimals: 1, color: '#a95545'},
+    {key: 'hum', label: 'Humidity', unit: '%', decimals: 1, color: '#407e94'}
+  ];
   const sensorSelection = value => [value === 'both' || value === '1', value === 'both' || value === '2'];
   const selectionValue = sensors => sensors[0] ? sensors[1] ? 'both' : '1' : sensors[1] ? '2' : 'none';
   const sensorNames = (sensors, labels) => sensors.map((selected, index) => selected ? `${labels[index]} (sensor ${index + 1})` : null).filter(Boolean).join(' + ') || 'No overflow stop';
@@ -120,6 +134,7 @@
     text('page-description', pageCopy[page][1]);
     document.title = `AOG · ${pageCopy[page][0]}`;
     if (page === 'overview') renderChart();
+    if (page === 'history') renderHistory();
   }
 
   function showSettings(settings, hydrate = true) {
@@ -426,6 +441,131 @@
     $('chart-tooltip').hidden = false;
   }
 
+  function historyNumber(value, metric) {
+    return finite(value) ? value.toLocaleString([], {maximumFractionDigits: metric.decimals}) : '—';
+  }
+
+  function makeHistoryCards() {
+    for (const metric of historyMetrics) {
+      const card = document.createElement('article');
+      card.className = 'panel history-card';
+      card.innerHTML = `<div class="panel-heading"><div><span class="eyebrow">${metric.unit}</span><h2>${metric.label} over time</h2></div><span id="history-status-${metric.key}" class="badge neutral">Waiting</span></div><div class="history-latest"><strong id="history-value-${metric.key}">—</strong><span>Last recorded · ${metric.unit}</span></div><div class="chart-wrap"><svg id="history-chart-${metric.key}" class="sensor-chart-svg" viewBox="0 0 500 230" role="img" tabindex="0" aria-label="${metric.label} readings over time"></svg><div id="history-empty-${metric.key}" class="chart-empty">Loading history…</div><output id="history-tooltip-${metric.key}" class="chart-tooltip" hidden></output></div><dl class="history-stats"><div><dt>Minimum</dt><dd id="history-min-${metric.key}">—</dd></div><div><dt>Average</dt><dd id="history-average-${metric.key}">—</dd></div><div><dt>Maximum</dt><dd id="history-max-${metric.key}">—</dd></div></dl><p id="history-detail-${metric.key}" class="helper">Waiting for readings</p>`;
+      $('history-cards').append(card);
+      const chart = $(`history-chart-${metric.key}`);
+      chart.addEventListener('pointermove', event => historyTooltip(metric, event));
+      chart.addEventListener('pointerdown', event => historyTooltip(metric, event));
+      chart.addEventListener('pointerleave', () => { $(`history-tooltip-${metric.key}`).hidden = true; });
+      chart.addEventListener('blur', () => { $(`history-tooltip-${metric.key}`).hidden = true; });
+      chart.addEventListener('keydown', event => {
+        if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+          event.preventDefault();
+          historyTooltip(metric, event);
+        }
+      });
+    }
+  }
+
+  function renderHistory() {
+    const error = state.historyError || (state.history && state.history.error);
+    text('history-error', error || '');
+    $('history-error').hidden = !error;
+    for (const metric of historyMetrics) {
+      const key = metric.key;
+      const series = state.history && state.history.series.find(series => series.key === key);
+      const svg = $(`history-chart-${key}`);
+      svg.replaceChildren();
+      state.historyCharts[key] = null;
+      $(`history-tooltip-${key}`).hidden = true;
+      const points = series ? series.points.filter(point => finite(point.timestamp) && finite(point.value)) : [];
+      const latest = series && series.latest;
+      text(`history-value-${key}`, historyNumber(latest && latest.value, metric));
+      badge($(`history-status-${key}`), state.historyError ? 'Unavailable' : !series ? 'Waiting' : series.available ? 'Recording' : 'No fresh reading', series && series.available && !state.historyError ? 'good' : 'neutral');
+      text(`history-min-${key}`, historyNumber(series && series.minimum, metric));
+      text(`history-average-${key}`, historyNumber(series && series.average, metric));
+      text(`history-max-${key}`, historyNumber(series && series.maximum, metric));
+      text(`history-detail-${key}`, series ? `${series.count.toLocaleString()} readings in this range. ${latest ? `Last sample ${dateText(latest.timestamp)}.` : 'No valid sample recorded yet.'}` : 'Waiting for saved readings');
+      $(`history-empty-${key}`).hidden = points.length > 0;
+      svg.toggleAttribute('hidden', points.length === 0);
+      if (!points.length) {
+        text(`history-empty-${key}`, state.historyError || (!series ? 'Loading history…' : latest ? 'No readings in this time range. Try a longer range.' : 'No history yet. A fresh sensor reading will appear here after the next sample.'));
+        continue;
+      }
+      const width = Math.max(svg.getBoundingClientRect().width, 220);
+      const height = Math.max(svg.getBoundingClientRect().height, 220);
+      const left = 48, right = width - 12, top = 15, bottom = height - 28;
+      const end = state.history.server_time, start = end - state.history.range_hours * 3600;
+      const padding = Math.max((series.maximum - series.minimum) * 0.12, Math.abs(series.maximum) * 0.02, 1);
+      const low = metric.key === 'temp' ? series.minimum - padding : Math.max(0, series.minimum - padding);
+      const high = metric.key === 'hum' ? Math.min(100, series.maximum + padding) : series.maximum + padding;
+      const x = stamp => left + (stamp - start) / (end - start) * (right - left);
+      const y = value => bottom - (value - low) / (high - low) * (bottom - top);
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      state.historyCharts[key] = {points, start, end, left, right, cursor: points.length - 1};
+      for (let step = 0; step <= 4; step++) {
+        const value = low + (high - low) * step / 4;
+        svg.append(svgNode('line', {x1: left, x2: right, y1: y(value), y2: y(value), stroke: '#e5eadf', 'stroke-dasharray': '3 4'}));
+        svg.append(svgNode('text', {x: left - 8, y: y(value) + 4, fill: '#84907e', 'font-size': 10, 'text-anchor': 'end'}, value.toLocaleString([], {notation: Math.abs(value) >= 10000 ? 'compact' : 'standard', maximumFractionDigits: 1})));
+      }
+      const divisions = width < 400 ? 2 : 4;
+      for (let step = 0; step <= divisions; step++) {
+        const stamp = start + (end - start) * step / divisions;
+        const label = state.history.range_hours > 24 ? new Date(stamp * 1000).toLocaleDateString([], {month: 'short', day: 'numeric'}) : new Date(stamp * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+        svg.append(svgNode('text', {x: x(stamp), y: height - 7, fill: '#84907e', 'font-size': 10, 'text-anchor': step === 0 ? 'start' : step === divisions ? 'end' : 'middle'}, label));
+      }
+      let connected = false;
+      const path = [];
+      for (let index = 0; index < series.points.length; index++) {
+        const point = series.points[index];
+        if (!finite(point.value) || !finite(point.timestamp)) { connected = false; continue; }
+        path.push(`${connected ? 'L' : 'M'}${x(point.timestamp)},${y(point.value)}`);
+        if (!connected && (index === series.points.length - 1 || !finite(series.points[index + 1].value))) {
+          svg.append(svgNode('circle', {cx: x(point.timestamp), cy: y(point.value), r: 2.5, fill: metric.color}));
+        }
+        connected = true;
+      }
+      svg.append(svgNode('path', {d: path.join(' '), fill: 'none', stroke: metric.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'}));
+      const last = points[points.length - 1];
+      svg.append(svgNode('circle', {cx: x(last.timestamp), cy: y(last.value), r: 3.5, fill: metric.color, stroke: '#fff', 'stroke-width': 2}));
+      svg.setAttribute('aria-label', `${metric.label}: ${series.count} readings in the last ${state.history.range_hours} hours. Minimum ${historyNumber(series.minimum, metric)}, average ${historyNumber(series.average, metric)}, maximum ${historyNumber(series.maximum, metric)} ${metric.unit}. Use arrow keys to inspect samples.`);
+    }
+  }
+
+  function historyTooltip(metric, event) {
+    const chart = state.historyCharts[metric.key];
+    if (!chart || !chart.points.length) return;
+    if (event.type === 'keydown') {
+      if (event.key === 'Home') chart.cursor = 0;
+      else if (event.key === 'End') chart.cursor = chart.points.length - 1;
+      else chart.cursor = Math.max(0, Math.min(chart.points.length - 1, chart.cursor + (event.key === 'ArrowLeft' ? -1 : 1)));
+    } else {
+      const position = event.clientX - $(`history-chart-${metric.key}`).getBoundingClientRect().left;
+      const stamp = chart.start + (position - chart.left) / (chart.right - chart.left) * (chart.end - chart.start);
+      chart.cursor = chart.points.reduce((nearest, point, index) => Math.abs(point.timestamp - stamp) < Math.abs(chart.points[nearest].timestamp - stamp) ? index : nearest, 0);
+    }
+    const point = chart.points[chart.cursor];
+    text(`history-tooltip-${metric.key}`, `${dateText(point.timestamp)} · ${historyNumber(point.value, metric)} ${metric.unit}`);
+    $(`history-tooltip-${metric.key}`).hidden = false;
+  }
+
+  async function pollHistory(schedule = true) {
+    const request = ++state.historyRequest;
+    try {
+      const history = await api(`/api/history?hours=${state.historyRange}`);
+      if (request !== state.historyRequest) return;
+      if (!Array.isArray(history.series)) throw new Error('Sensor history response is unavailable. Try Refresh.');
+      state.history = history;
+      state.historyError = null;
+      renderHistory();
+    } catch (error) {
+      if (request === state.historyRequest) {
+        state.historyError = `${error.message} ${state.history ? 'Showing the last loaded history.' : 'Use Refresh to try again.'}`;
+        renderHistory();
+      }
+    } finally {
+      if (schedule) setTimeout(() => pollHistory(), 60000);
+    }
+  }
+
   function makeOutputCards() {
     for (let channel = 1; channel <= 4; channel++) {
       const card = document.createElement('article');
@@ -610,9 +750,19 @@
     }
   }
   makeOutputCards();
+  makeHistoryCards();
   navigate();
   window.addEventListener('hashchange', navigate);
   window.addEventListener('resize', renderChart);
+  window.addEventListener('resize', renderHistory);
+  document.querySelectorAll('[data-history-range]').forEach(button => button.addEventListener('click', () => {
+    state.historyRange = Number(button.dataset.historyRange);
+    state.history = null;
+    state.historyError = null;
+    document.querySelectorAll('[data-history-range]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    renderHistory();
+    pollHistory(false);
+  }));
   $('ph-chart-svg').addEventListener('pointermove', chartTooltip);
   $('ph-chart-svg').addEventListener('pointerleave', () => {
     $('chart-tooltip').hidden = true;
@@ -782,7 +932,7 @@
     document.querySelectorAll('form [type=submit]').forEach(button => {
       button.disabled = false;
     });
-    await Promise.all([pollStats(false), pollPh(false), pollOutputs(false)]);
+    await Promise.all([pollStats(false), pollPh(false), pollHistory(false), pollOutputs(false)]);
   }));
   async function boot() {
     document.querySelectorAll('form [type=submit]').forEach(button => {
@@ -800,6 +950,7 @@
     }
     pollStats();
     pollPh();
+    pollHistory();
     pollOutputs();
     pollCameras();
   }

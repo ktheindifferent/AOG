@@ -17,10 +17,18 @@ Rust v2 installation, use the connections and pin mappings below.
 ## Rust v2 on Raspberry Pi
 
 The [Rust v2 project](src/src-v2-rust-alpha/README.md) provides the web dashboard,
-pH history and calibration, lighting and watering schedules, four configurable
+pH history and calibration, CO₂/TVOC/particulate/temperature/humidity history,
+lighting and watering schedules, four configurable
 relay outputs, and admin password changes. Open `https://<device-ip>:8443/` on
 the same network. Both web services bind to `0.0.0.0` by default; the dashboard
 uses a self-signed HTTPS certificate.
+
+Open **Sensor history** for CO₂, TVOC, PM2.5, PM10, temperature, and humidity
+charts with 1-hour, 6-hour, 24-hour, and 7-day views. The Pi records every minute
+and keeps up to seven days across restarts, even when the browser is closed.
+Each chart shows the latest recorded value and the selected period's minimum,
+average, and maximum. Collection begins when this version is installed;
+missing or stale readings appear as gaps.
 
 See the Rust v2 README for [installation](src/src-v2-rust-alpha/README.md#building-on-debian-ubuntu-or-raspberry-pi-os),
 [relay assignments](src/src-v2-rust-alpha/README.md#assign-the-four-relays), and

@@ -57,7 +57,8 @@ the admin password independently of this token.
 
 Login sessions last one hour and are cleared by logout or a server restart.
 Dashboard readings and output states refresh every five seconds; pH history
-refreshes every fifteen seconds. AOG
+refreshes every fifteen seconds. Environmental history is recorded and refreshed
+every minute. AOG
 continues serving when stdin is closed and exits on SIGTERM or Ctrl-C.
 
 The binary embeds `src/www.zip`; changes to `www/` must also be packaged into
@@ -92,6 +93,10 @@ The dashboard works on desktop and mobile and provides:
   relay states, and a pH history chart with 1-hour, 6-hour, and 24-hour views.
   History is available before calibration; missing, stale, and failed readings
   have explicit status messages.
+- **Sensor history:** CO₂ (ppm), TVOC (ppb), PM2.5 and PM10 (µg/m³), temperature
+  (°C), and humidity (%), with shared 1-hour, 6-hour, 24-hour, and 7-day ranges.
+  Each chart shows its latest recorded value, minimum, average, and maximum.
+  Hover, tap, or use arrow keys on a focused chart to inspect recorded samples.
 - **Schedules:** daily lighting and repeating watering, including overnight
   windows. Schedules use the Pi's local time, displayed on the page. Both are
   disabled by default. Lighting controls the shared **Lights + Air** relay;
@@ -114,6 +119,30 @@ The dashboard works on desktop and mobile and provides:
 - **Account:** change the admin password using the current password. A
   successful change signs out all sessions immediately; sign in with the new
   password. Forgotten passwords can still be reset locally as described below.
+
+### Sensor history
+
+The Pi samples the six environmental readings once per minute independently of
+browser connections. Up to seven days are retained in memory and in daily UTC
+JSONL files under `/opt/aog/sensor_history/v1/`. Appending records avoids rewriting
+the entire history on every sample. AOG reloads saved records on startup and
+removes expired daily files automatically. Include this directory in backups
+to retain environmental history when moving to another Pi.
+
+Collection begins with installation of this version. Past readings cannot be
+backfilled from the live sensor files. Missing, invalid, and stale values are
+recorded as gaps, never as zero. Zero is a valid reading, including for TVOC.
+The history sampler accepts environment files updated within 15 seconds and
+particulate files updated within 120 seconds. Charts retain gaps during service
+downtime and use the browser's local time zone. Wide time ranges reduce plotted
+points while retaining peaks and troughs; statistics use all valid samples.
+
+The authenticated endpoint `GET /api/history?hours=24` accepts `1`, `6`, `24`,
+or `168` hours. Its response includes each metric's units, freshness, latest
+recorded value, window statistics, and chart points. Storage failures are
+reported on the page while in-memory history remains available. Environmental
+retention is separate from the configurable pH sample interval and history size;
+the pH chart remains on Overview.
 
 ### Assign the four relays
 
