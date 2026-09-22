@@ -25,11 +25,15 @@
   const finite = value => typeof value === 'number' && Number.isFinite(value);
   const roleNames = {
     unassigned: 'Unassigned',
-    lights: 'Lights',
-    air: 'Air',
+    lights_air: 'Lights + Air',
     filling: 'Filling',
-    draining: 'Draining'
+    draining: 'Draining',
+    tank_cycle: 'Tank-to-tank'
   };
+  const waterRoles = ['filling', 'tank_cycle', 'draining'];
+  const sensorSelection = value => [value === 'both' || value === '1', value === 'both' || value === '2'];
+  const selectionValue = sensors => sensors[0] ? sensors[1] ? 'both' : '1' : sensors[1] ? '2' : 'none';
+  const sensorNames = (sensors, labels) => sensors.map((selected, index) => selected ? `${labels[index]} (sensor ${index + 1})` : null).filter(Boolean).join(' + ') || 'No overflow stop';
   const relayFor = role => state.settings.setup.relay_roles.indexOf(role) + 1;
   const formatNumber = value => finite(value) ? value.toFixed(2) : '—';
   const timeText = minute => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
@@ -139,6 +143,12 @@
         $(`relay-role-${i + 1}`).value = setup.relay_roles[i];
         $(`relay-role-${i + 1}`).dataset.previousRole = setup.relay_roles[i];
       });
+      setup.overflow.sensor_labels.forEach((label, i) => {
+        $(`overflow-label-${i + 1}`).value = label;
+      });
+      waterRoles.forEach(role => {
+        $(`overflow-${role}`).value = selectionValue(setup.overflow[role]);
+      });
       $('lighting-enabled').checked = schedules.lighting.enabled;
       $('lighting-start').value = timeText(schedules.lighting.start_minute);
       $('lighting-end').value = timeText(schedules.lighting.end_minute);
@@ -147,6 +157,7 @@
       $('watering-end').value = timeText(schedules.watering.end_minute);
       $('watering-interval').value = schedules.watering.every_minutes;
       $('watering-duration').value = schedules.watering.run_seconds;
+      $('watering-pump').value = schedules.watering.pump;
       $('pump-runtime').value = pump.pump_runtime_limit_seconds;
       $('pump-cooldown').value = pump.pump_cooldown_seconds;
       $('safety-enabled').checked = pump.safety_gpio_pin !== null;
@@ -165,11 +176,13 @@
         $(id).value = ph[key];
       });
     }
+    setup.overflow.sensor_labels.forEach((label, i) => text(`tank${i + 1}-name`, label));
     text('pump-limit-summary', `Configured maximum: ${pump.pump_runtime_limit_seconds} seconds. Cooldown: ${pump.pump_cooldown_seconds} seconds.${pump.photo_cycle_enabled ? ` Additional pump operating window: ${timeText(pump.photo_cycle_start_hour * 60)}–${timeText(pump.photo_cycle_end_hour * 60)}.` : ''}`);
     text('ph-target', `Target ${ph.optimal_min.toFixed(1)}–${ph.optimal_max.toFixed(1)}`);
     renderSchedules();
     previewSchedules();
     previewAssignments();
+    previewOverflow();
     renderOutputs();
     renderChart();
   }
@@ -189,14 +202,14 @@
     } = state.settings.schedules;
     const paused = Boolean(state.outputs && state.outputs.automation_paused);
     for (const [id, role] of [
-        ['lighting-relay', 'lights'],
-        ['watering-relay', 'filling']
+        ['lighting-relay', 'lights_air'],
+        ['watering-relay', watering.pump]
       ]) {
       const channel = relayFor(role);
       text(id, `${roleNames[role]} · ${channel ? `Relay ${channel}` : 'No relay assigned'}`);
     }
     text('lighting-summary', lighting.enabled ? `${timeText(lighting.start_minute)}–${timeText(lighting.end_minute)}${lighting.start_minute > lighting.end_minute ? ' · overnight' : ''}` : 'No automatic lighting period');
-    text('watering-summary', watering.enabled ? `${watering.run_seconds}s every ${watering.every_minutes} min · ${timeText(watering.start_minute)}–${timeText(watering.end_minute)}` : 'No automatic watering cycle');
+    text('watering-summary', watering.enabled ? `${roleNames[watering.pump]} · ${watering.run_seconds}s every ${watering.every_minutes} min · ${timeText(watering.start_minute)}–${timeText(watering.end_minute)}` : 'No automatic water pump cycle');
     badge($('lighting-state'), lighting.enabled ? paused ? 'Paused' : 'Scheduled' : 'Disabled', lighting.enabled && !paused ? 'good' : 'neutral');
     badge($('watering-state'), watering.enabled ? paused ? 'Paused' : 'Scheduled' : 'Disabled', watering.enabled && !paused ? 'good' : 'neutral');
     const wait = state.outputs && state.outputs.next_watering_in_seconds;
@@ -204,7 +217,9 @@
   }
 
   function previewSchedules() {
-    $('watering-duration').max = $('watering-enabled').checked && state.settings ? Math.min(300, state.settings.pump.pump_runtime_limit_seconds) : 300;
+    const waterRole = $('watering-pump').value;
+    const maximum = waterRole === 'filling' ? 300 : 600;
+    $('watering-duration').max = $('watering-enabled').checked && state.settings ? Math.min(maximum, state.settings.pump.pump_runtime_limit_seconds) : maximum;
     const start = minutes($('lighting-start').value),
       end = minutes($('lighting-end').value);
     const enabled = $('lighting-enabled').checked;
@@ -212,16 +227,22 @@
       to = end / 1440 * 100;
     $('lighting-preview').style.background = !enabled ? '#edf1e7' : start < end ? `linear-gradient(to right,#edf1e7 ${from}%,#a9c77c ${from}%,#a9c77c ${to}%,#edf1e7 ${to}%)` : `linear-gradient(to right,#a9c77c ${to}%,#edf1e7 ${to}%,#edf1e7 ${from}%,#a9c77c ${from}%)`;
     const hours = ((end - start + 1440) % 1440) / 60;
-    text('lighting-preview-text', enabled ? `${hours.toFixed(1)} hours of light per day${start > end ? ', crossing midnight' : ''}.` : 'Lighting schedule is disabled. Manual timed runs remain available.');
-    text('watering-preview-text', $('watering-enabled').checked ? `Run for ${$('watering-duration').value || '—'} seconds every ${$('watering-interval').value || '—'} minutes. The first run waits one interval; blocked runs retry once conditions allow.` : 'Watering schedule is disabled. Configure the interval and enable it when ready.');
+    text('lighting-preview-text', enabled ? `${hours.toFixed(1)} hours of lights and air per day${start > end ? ', crossing midnight' : ''}. Both switch together.` : 'Lights + Air schedule is disabled. Manual timed runs remain available.');
+    text('watering-preview-text', $('watering-enabled').checked ? `${roleNames[waterRole]}: run for ${$('watering-duration').value || '—'} seconds every ${$('watering-interval').value || '—'} minutes. The first run waits one interval; blocked runs retry once conditions allow.` : 'Water pump schedule is disabled. Choose the pump and interval, then enable it when ready.');
   }
 
   function previewAssignments() {
     const roles = [1, 2, 3, 4].map(channel => $(`relay-role-${channel}`).value);
-    text('relay-assignment-summary', ['lights', 'air', 'filling', 'draining'].map(role => {
+    text('relay-assignment-summary', ['lights_air', 'draining', 'filling', 'tank_cycle'].map(role => {
       const channels = roles.map((assigned, index) => assigned === role ? index + 1 : null).filter(Boolean);
       return `${roleNames[role]} → ${channels.length ? `Relay ${channels.join(', ')}` : 'Unassigned'}`;
     }).join(' · '));
+  }
+
+  function previewOverflow() {
+    const labels = [1, 2].map(index => $(`overflow-label-${index}`).value.trim() || `Sensor ${index}`);
+    text('overflow-assignment-summary', waterRoles.map(role => `${roleNames[role]} → ${sensorNames(sensorSelection($(`overflow-${role}`).value), labels)}`).join(' · '));
+    $('overflow-assignment-summary').classList.toggle('warning', waterRoles.some(role => $(`overflow-${role}`).value === 'none'));
   }
 
   function metric(id, raw, suffix = '') {
@@ -410,7 +431,7 @@
       const card = document.createElement('article');
       card.id = `output-card-${channel}`;
       card.className = 'output-card';
-      card.innerHTML = `<div class="output-top"><span class="eyebrow">RELAY ${channel}</span><span class="badge neutral" id="output-state-${channel}">Unknown</span></div><h2 id="output-name-${channel}"></h2><p class="output-role" id="output-role-${channel}"></p><p class="output-timing" id="output-timing-${channel}">Waiting for the relay board</p><div class="output-actions"><button type="button" class="button primary" data-start="${channel}" disabled>Start timed run</button><button type="button" class="button secondary" data-stop="${channel}">Stop</button></div>`;
+      card.innerHTML = `<div class="output-top"><span class="eyebrow">RELAY ${channel}</span><span class="badge neutral" id="output-state-${channel}">Unknown</span></div><h2 id="output-name-${channel}"></h2><p class="output-role" id="output-role-${channel}"></p><p class="helper" id="output-overflow-${channel}"></p><p class="output-timing" id="output-timing-${channel}">Waiting for the relay board</p><div class="output-actions"><button type="button" class="button primary" data-start="${channel}" disabled>Start timed run</button><button type="button" class="button secondary" data-stop="${channel}">Stop</button></div>`;
       $('output-controls').append(card);
     }
   }
@@ -420,6 +441,9 @@
     state.settings.setup.relay_labels.forEach((label, i) => {
       text(`output-name-${i+1}`, label);
       text(`output-role-${i+1}`, roleNames[state.settings.setup.relay_roles[i]]);
+      const role = state.settings.setup.relay_roles[i];
+      const overflow = state.settings.setup.overflow;
+      text(`output-overflow-${i+1}`, waterRoles.includes(role) ? `Overflow stops: ${sensorNames(overflow[role], overflow.sensor_labels)}` : role === 'lights_air' ? 'Lights and air switch together on this relay.' : 'Choose a function in Setup.');
     });
     if (!state.outputs) return;
     const data = state.outputs;
@@ -427,7 +451,7 @@
     $('pause-schedules').disabled = data.automation_paused;
     $('outputs-error').hidden = !(data.error || data.pump_block_reason || data.stop_pending);
     text('outputs-error', data.error || (data.stop_pending ? 'Shutdown is retrying. Check the relay board connection.' : data.pump_block_reason || ''));
-    text('water-safety-note', data.pump_block_reason || 'Tank readings are clear. Pump starts still respect runtime and cooldown limits.');
+    text('water-safety-note', data.pump_block_reason || 'Assigned overflow checks allow pumping. Runtime, cooldown, and one-pump-at-a-time limits still apply.');
     $('water-safety-note').classList.toggle('warning', Boolean(data.pump_block_reason));
     text('last-event', data.last_event);
     $('output-summary').replaceChildren();
@@ -592,11 +616,12 @@
     renderChart();
   }));
   $('schedule-form').addEventListener('input', previewSchedules);
+  $('overflow-form').addEventListener('input', previewOverflow);
   for (const channel of [1, 2, 3, 4]) {
     $(`relay-role-${channel}`).addEventListener('change', event => {
       const label = $(`relay-label-${channel}`);
       const previous = event.target.dataset.previousRole;
-      if ([roleNames[previous], 'Lights & air', 'Fill pump', 'Drain pump', 'Auxiliary pump', `Relay ${channel}`].includes(label.value)) {
+      if ([roleNames[previous], 'Lights', 'Air', 'Lights & air', 'Fill pump', 'Drain pump', 'Tank-to-tank pump', 'Auxiliary pump', `Relay ${channel}`].includes(label.value)) {
         label.value = event.target.value === 'unassigned' ? `Relay ${channel}` : roleNames[event.target.value];
       }
       event.target.dataset.previousRole = event.target.value;
@@ -624,7 +649,7 @@
     text('run-dialog-title', `Start ${state.settings.setup.relay_labels[channel-1]}?`);
     text('run-dialog-description', `This switches physical relay ${channel} on for ${roleNames[output.role]}. Maximum duration: ${duration(output.maximum_seconds)}.`);
     $('run-seconds').max = output.maximum_seconds;
-    $('run-seconds').value = Math.min(['lights', 'air'].includes(output.role) ? 600 : 30, output.maximum_seconds);
+    $('run-seconds').value = Math.min(output.role === 'lights_air' ? 600 : 30, output.maximum_seconds);
     message('run-result', '');
     $('run-dialog').showModal();
   }));
@@ -647,6 +672,7 @@
         end_minute: minutes($('lighting-end').value)
       },
       watering: {
+        pump: $('watering-pump').value,
         enabled: $('watering-enabled').checked,
         start_minute: minutes($('watering-start').value),
         end_minute: minutes($('watering-end').value),
@@ -679,6 +705,15 @@
       safety_gpio_pin: $('safety-enabled').checked ? Number($('safety-pin').value) : null
     }
   }));
+  form('overflow-form', 'overflow-result', async () => {
+    const overflow = {
+      sensor_labels: [1, 2].map(index => $(`overflow-label-${index}`).value.trim()),
+      ...Object.fromEntries(waterRoles.map(role => [role, sensorSelection($(`overflow-${role}`).value)]))
+    };
+    await saveSettings({setup: {...state.settings.setup, overflow}});
+    await pollOutputs(false);
+    return 'Overflow assignments saved. Schedules are paused; resume when ready.';
+  });
   form('ph-settings-form', 'ph-settings-result', async () => {
     const reply = await saveSettings({
       ph: {

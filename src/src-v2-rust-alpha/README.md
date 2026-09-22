@@ -94,15 +94,17 @@ The dashboard works on desktop and mobile and provides:
   have explicit status messages.
 - **Schedules:** daily lighting and repeating watering, including overnight
   windows. Schedules use the Pi's local time, displayed on the page. Both are
-  disabled by default. Lighting controls the relay assigned to **Lights**;
-  watering runs the relay assigned to **Filling**. Saving an enabled lighting schedule applies
+  disabled by default. Lighting controls the shared **Lights + Air** relay;
+  the repeating water schedule can run **Filling** or **Tank-to-tank**. Saving an enabled lighting schedule applies
   its current window immediately. Watering waits one interval after enabling,
-  saving schedules, resuming, or restarting AOG.
+  saving schedules, resuming, or restarting AOG. Changing the scheduled pump
+  stops any scheduled run on the previous pump before applying the new target.
 - **Outputs:** timed manual runs, actual relay readback, remaining runtime,
-  cooldown, and stop controls. Lights and Air can run independently for up to
-  24 hours per manual run. Filling and Draining follow water-pump safety limits,
+  cooldown, and stop controls. Lights + Air switch together for up to
+  24 hours per manual run. Filling, Draining, and Tank-to-tank follow water-pump safety limits,
   regardless of their relay numbers. Unassigned relays cannot be started.
-- **Setup:** setup name, output labels and assignments, pump runtime/cooldown/safety limits,
+- **Setup:** setup name, output labels and assignments, sensor names and per-pump
+  overflow stops, pump runtime/cooldown/safety limits,
   pH monitoring thresholds and interval, history retention, and buffer
   calibration. Calibration needs pH 7 plus pH 4 or pH 10 with different stable
   raw readings. Monitoring changes take effect without restarting.
@@ -112,23 +114,46 @@ The dashboard works on desktop and mobile and provides:
 
 ### Assign the four relays
 
-Under **Setup settings → Setup & relay assignments**, choose **Lights**, **Air**,
-**Filling**, **Draining**, or **Unassigned** for each physical relay. Each function
+Under **Setup settings → Setup & relay assignments**, choose **Lights + Air**,
+**Draining**, **Filling**, **Tank-to-tank**, or **Unassigned** for each physical relay. Each function
 can be assigned once; multiple unused relays may remain unassigned. Labels are
 separate from functions and do not determine the safety rules.
 
 Use **Stop all** before changing assignments. The server verifies that every
 relay is off, saves the assignments, and leaves schedules paused. Resume
-schedules when the assignments match the connected equipment. Filling and
-Draining cannot run together; Air and Lights can run alongside a water pump.
+schedules when the assignments match the connected equipment. Only one of
+Filling, Draining, and Tank-to-tank can run at a time; Lights + Air can run alongside it.
 Overflow, cooldown, and runtime checks follow the water-pump functions even
 when they are assigned to relay 1.
 
-Existing installations retain Lighting on relay 1, Draining on relay 2, and
-Filling on relay 3. Relay 4 starts unassigned, so an old auxiliary pump is not
-automatically treated as an air pump. Assign Air to the relay actually wired
-to the air pump. Air and Draining currently use independent manual timed runs;
-the automatic schedules control Lights and Filling.
+New installations default to Lights + Air on relay 1, Draining on relay 2,
+Filling on relay 3, and Tank-to-tank on relay 4. Tank-to-tank moves water from the
+55-gallon drum to the display tank above. Filling adds water to the drum.
+Existing saved maps are preserved: legacy `lights` reads as `lights_air`, legacy
+standalone `air` becomes unassigned, and an unassigned fourth relay requires an
+explicit assignment. Existing water schedules keep targeting Filling until
+changed in **Schedules → Scheduled pump**. Filling runs are capped at 300 seconds;
+Draining and Tank-to-tank runs are capped at 600 seconds, subject to your lower
+configured pump runtime limit.
+
+### Configure overflow stops
+
+Under **Setup → Overflow sensor stops**, name sensor 1 (Arduino D2) and sensor 2
+(D4) for their actual locations. Select either sensor, both, or **No overflow
+stop** separately for Filling, Tank-to-tank, and Draining. Both sensors protect
+each water pump by default. These settings follow functions, not relay numbers.
+
+For example, if sensor 1 is in the display tank and sensor 2 is in the drum,
+select sensor 1 for Tank-to-tank and sensor 2 for Filling. Either sensor can
+protect multiple pumps. A selected sensor blocks starting and stops an active
+run on overflow or missing/stale data. An unselected sensor's overflow does not
+block that pump. Losing the shared sensor board stops all pumps using either
+sensor. **No overflow stop** explicitly disables this protection for that pump.
+
+Save these settings with all outputs off; schedules remain paused afterward.
+Runtime, cooldown, emergency stop, the external safety input, and one-pump-at-a-time
+checks continue to apply independently. Output cards list each pump's selected
+sensors and the particular sensor preventing a run.
 
 Console and command API relay actions use the same controller and protections:
 `relay on <1–4> <seconds>`, `relay off <1–4|all>`, and `relay status`.
@@ -140,8 +165,8 @@ and **Pause schedules** stop all four outputs immediately. The pause survives
 restarts until explicitly resumed. Schedule settings persist in
 `/opt/aog/data.json`; pause state is in `/opt/aog/automation_paused`.
 
-The server supervises run deadlines even after the browser closes. Watering
-requires fresh, safe tank readings and observes pump cooldown, any configured
+The server supervises run deadlines even after the browser closes. Scheduled
+water runs require fresh, safe readings from their selected sensors and observe pump cooldown, any configured
 operating window, the optional GPIO safety input, and emergency stop. Only one
 pump can run at a time. A watering run also stops when its daily window closes.
 Shutdown failures block new starts and are retried. Lighting and watering
@@ -193,11 +218,13 @@ Arduino and SDS011 readers share port ownership, so they cannot consume each
 other's serial data. Temporary `WouldBlock`, timeout, and interrupted reads
 are retried without flooding the log.
 
-Overflow monitoring starts with pumping blocked. Both tank readings must come
+Overflow monitoring starts with sensor-protected pumping blocked. Both readings must come
 from a valid `DUAL_OVF_SENSOR` report before the communication fault clears.
-Actual `OVERFLOW` readings still block pumping. A disconnect, invalid overflow
+Actual `OVERFLOW` readings block the functions assigned to that sensor. A disconnect, invalid overflow
 report, or five seconds without a valid report restores the communication
-fault. Pump checks also reject missing, invalid, or stale reading files.
+fault, blocking pumps that use either sensor. Pump checks also reject missing,
+invalid, or stale selected reading files. The legacy GPIO pump path continues
+requiring both sensors; configurable routing applies to the four relay outputs.
 
 With AOG stopped, build and run the sensor diagnostics tool:
 

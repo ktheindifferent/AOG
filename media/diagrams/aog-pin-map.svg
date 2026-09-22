@@ -101,8 +101,8 @@
   <circle cx="1270" cy="795" r="6" class="contact"/>
   <circle cx="1330" cy="795" r="6" class="contact"/>
   <path d="M1276 795 H1324" class="signal"/>
-  <text x="1100" y="680" class="body" font-weight="700">Tank 1 switch</text>
-  <text x="1100" y="775" class="body" font-weight="700">Tank 2 switch</text>
+  <text x="1100" y="680" class="body" font-weight="700">Sensor 1 switch</text>
+  <text x="1100" y="775" class="body" font-weight="700">Sensor 2 switch</text>
   <path d="M1480 700 V720 M1463 720 H1497 M1469 729 H1491 M1475 738 H1485" class="ground"/>
   <path d="M1480 795 V815 M1463 815 H1497 M1469 824 H1491 M1475 833 H1485" class="ground"/>
   <text x="1390" y="687" class="small">GND</text>
@@ -125,5 +125,5 @@
 
   <text x="50" y="1310" class="body" font-weight="700">Arduino A0 appears twice because these are two different boards.</text>
   <text x="50" y="1347" class="body muted">Signal map, not connector positions. Read the README for power, firmware, and relay assignments.</text>
-  <text x="50" y="1380" class="small muted">Legacy firmware at 1200 baud is also discovered. USB device numbering can change.</text>
+  <text x="50" y="1380" class="small muted">Assign sensor 1 / 2 to Filling, Draining, and Tank-to-tank in Setup → Overflow sensor stops.</text>
 </svg>

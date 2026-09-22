@@ -256,43 +256,88 @@ pub struct DashboardConfig {
     pub relay_labels: [String; 4],
     #[serde(default = "legacy_relay_roles")]
     pub relay_roles: [RelayRole; 4],
+    #[serde(default)]
+    pub overflow: OverflowConfig,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RelayRole {
+    // A former standalone air relay must be reassigned explicitly.
+    #[serde(alias = "air")]
     Unassigned,
-    Lights,
-    Air,
+    #[serde(alias = "lights")]
+    LightsAir,
     Filling,
     Draining,
+    TankCycle,
 }
 
 impl RelayRole {
     pub fn is_water_pump(self) -> bool {
-        matches!(self, Self::Filling | Self::Draining)
+        matches!(self, Self::Filling | Self::Draining | Self::TankCycle)
+    }
+
+    pub fn maximum_seconds(self, pump_limit: u64) -> u64 {
+        match self {
+            Self::LightsAir => 86400,
+            Self::Filling => 300.min(pump_limit),
+            Self::Draining | Self::TankCycle => 600.min(pump_limit),
+            Self::Unassigned => 0,
+        }
     }
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Unassigned => "Unassigned",
-            Self::Lights => "Lights",
-            Self::Air => "Air",
+            Self::LightsAir => "Lights + Air",
             Self::Filling => "Filling",
             Self::Draining => "Draining",
+            Self::TankCycle => "Tank-to-tank",
         }
     }
 }
 
-// Keep existing lighting/fill/drain wiring. An old auxiliary relay must be
-// explicitly assigned before it can run under a different set of protections.
+// Missing maps keep the old auxiliary relay off until explicitly assigned.
 fn legacy_relay_roles() -> [RelayRole; 4] {
     [
-        RelayRole::Lights,
+        RelayRole::LightsAir,
         RelayRole::Draining,
         RelayRole::Filling,
         RelayRole::Unassigned,
     ]
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct OverflowConfig {
+    pub sensor_labels: [String; 2],
+    // Array positions correspond to Arduino D2 (sensor 1) and D4 (sensor 2).
+    pub filling: [bool; 2],
+    pub draining: [bool; 2],
+    pub tank_cycle: [bool; 2],
+}
+
+impl Default for OverflowConfig {
+    fn default() -> Self {
+        Self {
+            sensor_labels: ["Overflow sensor 1".into(), "Overflow sensor 2".into()],
+            filling: [true; 2],
+            draining: [true; 2],
+            tank_cycle: [true; 2],
+        }
+    }
+}
+
+impl OverflowConfig {
+    pub fn sensors_for(&self, role: RelayRole) -> [bool; 2] {
+        match role {
+            RelayRole::Filling => self.filling,
+            RelayRole::Draining => self.draining,
+            RelayRole::TankCycle => self.tank_cycle,
+            _ => [false; 2],
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -328,6 +373,25 @@ pub struct WateringSchedule {
     pub end_minute: u16,
     pub every_minutes: u64,
     pub run_seconds: u64,
+    #[serde(default)]
+    pub pump: WateringPump,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WateringPump {
+    #[default]
+    Filling,
+    TankCycle,
+}
+
+impl WateringPump {
+    pub fn role(self) -> RelayRole {
+        match self {
+            Self::Filling => RelayRole::Filling,
+            Self::TankCycle => RelayRole::TankCycle,
+        }
+    }
 }
 
 impl Default for WateringSchedule {
@@ -338,6 +402,7 @@ impl Default for WateringSchedule {
             end_minute: 1320,
             every_minutes: 60,
             run_seconds: 30,
+            pump: WateringPump::default(),
         }
     }
 }
@@ -347,12 +412,18 @@ impl Default for DashboardConfig {
         Self {
             setup_name: "AOG Grow System".into(),
             relay_labels: [
-                "Lights".into(),
+                "Lights + Air".into(),
                 "Drain pump".into(),
                 "Fill pump".into(),
-                "Relay 4".into(),
+                "Tank-to-tank pump".into(),
             ],
-            relay_roles: legacy_relay_roles(),
+            relay_roles: [
+                RelayRole::LightsAir,
+                RelayRole::Draining,
+                RelayRole::Filling,
+                RelayRole::TankCycle,
+            ],
+            overflow: OverflowConfig::default(),
         }
     }
 }

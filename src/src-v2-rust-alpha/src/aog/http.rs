@@ -119,6 +119,7 @@ impl WebState {
             config.dashboard_config.relay_roles,
             board,
         );
+        outputs.configure_overflow(config.dashboard_config.overflow.clone());
         outputs.configure_schedules(config.schedules.clone());
         Self {
             config: Mutex::new(config),
@@ -469,8 +470,9 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
         if let Err(error) = patch.apply(&mut updated) {
             return api_error(400, error);
         }
-        let assignments_changed =
-            updated.dashboard_config.relay_roles != config.dashboard_config.relay_roles;
+        let assignments_changed = updated.dashboard_config.relay_roles
+            != config.dashboard_config.relay_roles
+            || updated.dashboard_config.overflow != config.dashboard_config.overflow;
         let mut outputs = state.outputs.lock().unwrap();
         if pump_changed && outputs.is_running() {
             return api_error(409, "Stop active outputs before changing pump limits");
@@ -488,6 +490,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
         }
         if assignments_changed {
             outputs.assign_roles(updated.dashboard_config.relay_roles);
+            outputs.configure_overflow(updated.dashboard_config.overflow.clone());
         }
         if schedules_changed {
             outputs.configure_schedules(updated.schedules.clone());

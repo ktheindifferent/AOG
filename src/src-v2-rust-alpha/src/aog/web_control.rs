@@ -1,6 +1,6 @@
 //! Timed dashboard output controls. The watchdog owns shutdown deadlines;
 //! closing a browser never leaves a timed run without supervision.
-use crate::{Config, PhConfig, PumpConfig, RelayRole, ScheduleConfig};
+use crate::{Config, OverflowConfig, PhConfig, PumpConfig, RelayRole, ScheduleConfig};
 use chrono::{Local, Timelike};
 use i2cdev::core::I2CDevice;
 use i2cdev::linux::LinuxI2CDevice;
@@ -26,6 +26,7 @@ pub struct SetupPatch {
     pub relay_labels: [String; 4],
     // Older clients can still change labels without resetting the wiring map.
     pub relay_roles: Option<[RelayRole; 4]>,
+    pub overflow: Option<OverflowConfig>,
 }
 
 pub fn validate_roles(roles: &[RelayRole; 4]) -> Result<(), String> {
@@ -67,6 +68,16 @@ impl SettingsPatch {
             config.dashboard_config.relay_labels = setup.relay_labels;
             if let Some(roles) = setup.relay_roles {
                 config.dashboard_config.relay_roles = roles;
+            }
+            if let Some(overflow) = setup.overflow {
+                if overflow.sensor_labels.iter().any(|label| {
+                    label.trim().is_empty()
+                        || label.chars().count() > 60
+                        || label.chars().any(char::is_control)
+                }) {
+                    return Err("Sensor labels must contain 1–60 printable characters".into());
+                }
+                config.dashboard_config.overflow = overflow;
             }
         }
         if let Some(pump) = self.pump {
@@ -130,11 +141,17 @@ impl SettingsPatch {
         let schedules = &config.schedules;
         let roles = &config.dashboard_config.relay_roles;
         validate_roles(roles)?;
-        if schedules.lighting.enabled && !roles.contains(&RelayRole::Lights) {
-            return Err("Assign a relay to Lights before enabling the lighting schedule".into());
+        if schedules.lighting.enabled && !roles.contains(&RelayRole::LightsAir) {
+            return Err(
+                "Assign a relay to Lights + Air before enabling the lighting schedule".into(),
+            );
         }
-        if schedules.watering.enabled && !roles.contains(&RelayRole::Filling) {
-            return Err("Assign a relay to Filling before enabling the watering schedule".into());
+        let watering_role = schedules.watering.pump.role();
+        if schedules.watering.enabled && !roles.contains(&watering_role) {
+            return Err(format!(
+                "Assign a relay to {} before enabling its water schedule",
+                watering_role.label()
+            ));
         }
         for (start, end) in [
             (
@@ -155,13 +172,14 @@ impl SettingsPatch {
         let pump = config.pump_config.clone().unwrap_or_default();
         if !(1..=1440).contains(&schedules.watering.every_minutes)
             || schedules.watering.run_seconds == 0
-            || schedules.watering.run_seconds > 300
+            || schedules.watering.run_seconds > watering_role.maximum_seconds(1800)
             || (schedules.watering.enabled
-                && (schedules.watering.run_seconds > pump.pump_runtime_limit_seconds.min(300)
+                && (schedules.watering.run_seconds
+                    > watering_role.maximum_seconds(pump.pump_runtime_limit_seconds)
                     || schedules.watering.every_minutes * 60
                         < schedules.watering.run_seconds + pump.pump_cooldown_seconds))
         {
-            return Err("Watering must fit the fill-pump runtime limit, with enough time between runs for cooldown".into());
+            return Err("The water schedule must fit the selected pump's runtime limit, with enough time between runs for cooldown".into());
         }
         Ok(())
     }
@@ -242,6 +260,7 @@ pub struct OutputController {
     directory: PathBuf,
     pump: PumpConfig,
     roles: [RelayRole; 4],
+    overflow: OverflowConfig,
     active: [Option<Run>; 4],
     stopped: [Option<Instant>; 4],
     stop_pending: bool,
@@ -262,6 +281,7 @@ pub struct OutputStatus {
     pub maximum_seconds: u64,
     pub blocked_reason: Option<String>,
     pub schedule_controlled: bool,
+    pub overflow_sensors: [bool; 2],
 }
 
 #[derive(Serialize)]
@@ -303,6 +323,7 @@ impl OutputController {
             directory: directory.into(),
             pump,
             roles,
+            overflow: OverflowConfig::default(),
             active: std::array::from_fn(|_| None),
             stopped: [None; 4],
             stop_pending: false,
@@ -328,16 +349,21 @@ impl OutputController {
 
     pub fn prepare_reassignment(&mut self) -> Result<(), String> {
         if self.is_running() || self.board.states()?.iter().any(|on| *on) {
-            return Err("Stop all outputs before changing relay assignments".into());
+            return Err("Stop all outputs before changing relay or overflow assignments".into());
         }
         self.pause_schedules()?;
-        self.last_event = "Relay assignments changed; schedules are paused until resumed".into();
+        self.last_event =
+            "Relay or overflow assignments changed; schedules are paused until resumed".into();
         Ok(())
     }
 
     // Called under the same controller lock after validation and durable save.
     pub(crate) fn assign_roles(&mut self, roles: [RelayRole; 4]) {
         self.roles = roles;
+    }
+
+    pub(crate) fn configure_overflow(&mut self, overflow: OverflowConfig) {
+        self.overflow = overflow;
     }
 
     fn channel_for(&self, role: RelayRole) -> Option<u8> {
@@ -348,6 +374,15 @@ impl OutputController {
     }
 
     pub fn configure_schedules(&mut self, schedules: ScheduleConfig) {
+        // Finish any run started by the old water schedule before changing its
+        // pump or timing, so the former target cannot outlive that schedule.
+        for index in 0..4 {
+            if self.roles[index].is_water_pump()
+                && self.active[index].as_ref().is_some_and(|run| run.scheduled)
+            {
+                let _ = self.stop(index as u8 + 1);
+            }
+        }
         self.schedules = schedules;
         self.next_water = Instant::now()
             + Duration::from_secs(self.schedules.watering.every_minutes.clamp(1, 1440) * 60);
@@ -393,20 +428,19 @@ impl OutputController {
     }
 
     fn maximum(&self, index: usize) -> u64 {
-        match self.roles[index] {
-            RelayRole::Lights | RelayRole::Air => 86400,
-            RelayRole::Filling => 300.min(self.pump.pump_runtime_limit_seconds),
-            RelayRole::Draining => 600.min(self.pump.pump_runtime_limit_seconds),
-            RelayRole::Unassigned => 0,
-        }
+        self.roles[index].maximum_seconds(self.pump.pump_runtime_limit_seconds)
     }
 
-    fn pump_block_reason(&self, hour: u8) -> Option<String> {
+    fn pump_block_reason(&self, role: RelayRole, hour: u8) -> Option<String> {
         if self.directory.join("emergency_stop").exists() {
             return Some("Emergency stop is active".into());
         }
-        if !super::sensors::overflow_allows_pumping_in(&self.directory.join("sensors")) {
-            return Some("Overflow detected or tank readings missing/stale".into());
+        if let Some(reason) = super::sensors::overflow_block_reason_in(
+            &self.directory.join("sensors"),
+            self.overflow.sensors_for(role),
+            &self.overflow.sensor_labels,
+        ) {
+            return Some(reason);
         }
         if self.pump.photo_cycle_enabled
             && !within_window(
@@ -443,11 +477,11 @@ impl OutputController {
     }
 
     pub fn start(&mut self, channel: u8, seconds: u64) -> Result<(), String> {
-        if self.channel_for(RelayRole::Lights) == Some(channel)
+        if self.channel_for(RelayRole::LightsAir) == Some(channel)
             && self.schedules.lighting.enabled
             && !self.automation_paused
         {
-            return Err("Pause schedules before starting a manual lighting run".into());
+            return Err("Pause schedules before starting a manual Lights + Air run".into());
         }
         self.start_at(channel, seconds, Instant::now(), Local::now().hour() as u8)
     }
@@ -482,7 +516,7 @@ impl OutputController {
             return Err("Emergency stop is active".into());
         }
         if self.roles[index].is_water_pump() {
-            if let Some(reason) = self.pump_block_reason(hour) {
+            if let Some(reason) = self.pump_block_reason(self.roles[index], hour) {
                 return Err(reason);
             }
             if self.cooldown(index, now) > 0 {
@@ -576,7 +610,7 @@ impl OutputController {
         let lighting = &self.schedules.lighting;
         let wanted =
             lighting.enabled && in_schedule(minute, lighting.start_minute, lighting.end_minute);
-        if let Some(channel) = self.channel_for(RelayRole::Lights) {
+        if let Some(channel) = self.channel_for(RelayRole::LightsAir) {
             let index = (channel - 1) as usize;
             if wanted && self.active[index].is_none() {
                 match self.board.set(channel, true) {
@@ -601,18 +635,19 @@ impl OutputController {
         if self.stop_pending {
             return;
         }
-        let Some(fill_channel) = self.channel_for(RelayRole::Filling) else {
+        let water_role = self.schedules.watering.pump.role();
+        let Some(water_channel) = self.channel_for(water_role) else {
             return;
         };
-        let fill_index = (fill_channel - 1) as usize;
+        let water_index = (water_channel - 1) as usize;
         let watering = &self.schedules.watering;
-        if self.active[fill_index]
+        if self.active[water_index]
             .as_ref()
             .is_some_and(|run| run.scheduled)
             && (!watering.enabled
                 || !in_schedule(minute, watering.start_minute, watering.end_minute))
         {
-            let _ = self.stop(fill_channel);
+            let _ = self.stop(water_channel);
         }
         if self.stop_pending {
             return;
@@ -624,15 +659,17 @@ impl OutputController {
         {
             let seconds = watering.run_seconds;
             let interval = watering.every_minutes;
-            match self.start_at(fill_channel, seconds, now, (minute / 60) as u8) {
+            match self.start_at(water_channel, seconds, now, (minute / 60) as u8) {
                 Ok(()) => {
-                    if let Some(run) = self.active[fill_index].as_mut() {
+                    if let Some(run) = self.active[water_index].as_mut() {
                         run.scheduled = true;
                     }
                     self.next_water = now + Duration::from_secs(interval * 60);
                     self.last_event = format!(
-                        "Watering schedule started Filling on relay {} for {} seconds",
-                        fill_channel, seconds
+                        "Water schedule started {} on relay {} for {} seconds",
+                        water_role.label(),
+                        water_channel,
+                        seconds
                     );
                 }
                 Err(error) => {
@@ -651,9 +688,12 @@ impl OutputController {
         if !self.active.iter().any(Option::is_some) {
             return;
         }
-        let blocked = self.pump_block_reason(hour);
         let emergency = self.directory.join("emergency_stop").exists();
         for index in 0..4 {
+            let blocked = self.roles[index]
+                .is_water_pump()
+                .then(|| self.pump_block_reason(self.roles[index], hour))
+                .flatten();
             if self.active[index].as_ref().is_some_and(|run| {
                 run.deadline <= now
                     || emergency
@@ -683,7 +723,23 @@ impl OutputController {
     pub fn status(&mut self) -> ControllerStatus {
         let now = Instant::now();
         let states = self.board.states();
-        let pump_block_reason = self.pump_block_reason(Local::now().hour() as u8);
+        let hour = Local::now().hour() as u8;
+        let pump_blocks: [Option<String>; 4] = std::array::from_fn(|index| {
+            self.roles[index]
+                .is_water_pump()
+                .then(|| self.pump_block_reason(self.roles[index], hour))
+                .flatten()
+        });
+        let blocked_pumps: Vec<_> = pump_blocks
+            .iter()
+            .enumerate()
+            .filter_map(|(index, reason)| {
+                reason
+                    .as_ref()
+                    .map(|reason| format!("{}: {}", self.roles[index].label(), reason))
+            })
+            .collect();
+        let pump_block_reason = (!blocked_pumps.is_empty()).then(|| blocked_pumps.join("; "));
         let configuration_error = validate_roles(&self.roles).err();
         let global_block = configuration_error.clone().or_else(|| {
             if self.stop_pending {
@@ -704,14 +760,14 @@ impl OutputController {
                     .map(|run| run.deadline.saturating_duration_since(now).as_secs()),
                 cooldown_seconds: self.cooldown(index, now),
                 maximum_seconds: self.maximum(index),
-                schedule_controlled: self.roles[index] == RelayRole::Lights
+                schedule_controlled: self.roles[index] == RelayRole::LightsAir
                     && self.schedules.lighting.enabled
                     && !self.automation_paused,
                 blocked_reason: global_block.clone().or_else(|| {
                     if self.roles[index] == RelayRole::Unassigned {
                         Some("Assign a function to this relay in Setup settings".into())
                     } else if self.roles[index].is_water_pump() {
-                        pump_block_reason.clone().or_else(|| {
+                        pump_blocks[index].clone().or_else(|| {
                             states.as_ref().ok().and_then(|states| {
                                 states
                                     .iter()
@@ -726,6 +782,7 @@ impl OutputController {
                         None
                     }
                 }),
+                overflow_sensors: self.overflow.sensors_for(self.roles[index]),
             })
             .collect();
         ControllerStatus {
@@ -737,7 +794,9 @@ impl OutputController {
             automation_paused: self.automation_paused,
             next_watering_in_seconds: (self.schedules.watering.enabled
                 && !self.automation_paused
-                && self.channel_for(RelayRole::Filling).is_some())
+                && self
+                    .channel_for(self.schedules.watering.pump.role())
+                    .is_some())
             .then(|| self.next_water.saturating_duration_since(now).as_secs()),
         }
     }

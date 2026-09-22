@@ -17,10 +17,10 @@ expect.set_options(timeout=15000)
 ROOT = Path(__file__).resolve().parents[1] / 'www'
 NOW = int(time.time())
 SETTINGS = {
-    'setup': {'setup_name': 'AOG Grow System', 'relay_labels': ['Lights & air', 'Drain pump', 'Fill pump', 'Relay 4'], 'relay_roles': ['lights','draining','filling','unassigned']},
+    'setup': {'setup_name': 'AOG Grow System', 'relay_labels': ['Lights + Air', 'Drain pump', 'Fill pump', 'Tank-to-tank pump'], 'relay_roles': ['lights_air','draining','filling','tank_cycle'], 'overflow': {'sensor_labels': ['Overflow sensor 1', 'Overflow sensor 2'], 'filling': [True, True], 'draining': [True, True], 'tank_cycle': [True, True]}},
     'pump': {'continuous_mode': False, 'photo_cycle_enabled': False, 'photo_cycle_start_hour': 6, 'photo_cycle_end_hour': 24, 'safety_gpio_pin': None, 'pump_runtime_limit_seconds': 300, 'pump_cooldown_seconds': 60},
     'ph': {'enabled': True, 'sensor_type': 'arduino', 'serial_port': None, 'i2c_address': None, 'optimal_min': 6.5, 'optimal_max': 7.5, 'critical_min': 5.5, 'critical_max': 8.5, 'alert_enabled': True, 'auto_adjustment_enabled': True, 'monitoring_interval_seconds': 60, 'history_size': 1440},
-    'schedules': {'lighting': {'enabled': False, 'start_minute': 360, 'end_minute': 1320}, 'watering': {'enabled': False, 'start_minute': 360, 'end_minute': 1320, 'every_minutes': 60, 'run_seconds': 30}},
+    'schedules': {'lighting': {'enabled': False, 'start_minute': 360, 'end_minute': 1320}, 'watering': {'pump': 'filling', 'enabled': False, 'start_minute': 360, 'end_minute': 1320, 'every_minutes': 60, 'run_seconds': 30}},
     'network': {'dashboard_port': 8443, 'command_port': 9443, 'command_token_configured': False},
     'version': '0.2.0', 'device_time': '2026-09-22T10:30:00-04:00',
 }
@@ -38,9 +38,9 @@ class Device:
         for output in self.outputs['outputs']:
             role = self.settings['setup']['relay_roles'][output['channel']-1]
             output['role'] = role
-            output['maximum_seconds'] = 86400 if role in ['lights','air'] else 0 if role == 'unassigned' else min(300 if role == 'filling' else 600, self.settings['pump']['pump_runtime_limit_seconds'])
-            output['blocked_reason'] = 'Assign a function in Setup settings' if role == 'unassigned' else self.outputs['pump_block_reason'] if role in ['filling','draining'] else None
-            output['schedule_controlled'] = role == 'lights' and self.settings['schedules']['lighting']['enabled'] and not self.outputs['automation_paused']
+            output['maximum_seconds'] = 86400 if role == 'lights_air' else 0 if role == 'unassigned' else min(300 if role == 'filling' else 600, self.settings['pump']['pump_runtime_limit_seconds'])
+            output['blocked_reason'] = 'Assign a function in Setup settings' if role == 'unassigned' else self.outputs['pump_block_reason'] if role in ['filling','draining','tank_cycle'] else None
+            output['schedule_controlled'] = role == 'lights_air' and self.settings['schedules']['lighting']['enabled'] and not self.outputs['automation_paused']
         return self.outputs
 
     def ph(self):
@@ -62,7 +62,9 @@ class Device:
                 if path == '/api/settings':
                     if 'schedules' in data and data['schedules']['watering']['every_minutes'] == 1:
                         reply({'error': 'Watering interval must include cooldown'}, 400); return
-                    self.settings.update(data); reply(self.settings); return
+
+                    for key, value in data.items(): self.settings[key].update(value)
+                    reply(self.settings); return
                 if path == '/api/account/password':
                     if data['current_password'] != 'OldPassword123!':
                         reply({'error': 'Current password is incorrect'}, 403); return

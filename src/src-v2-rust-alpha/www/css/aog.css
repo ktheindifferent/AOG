@@ -1392,8 +1392,31 @@ dialog p {
   }
 }
 
-.relay-setup-panel {
+.relay-setup-panel, .overflow-setup-panel {
   grid-column: 1 / -1;
+}
+
+.overflow-assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin: 22px 0;
+}
+
+.overflow-assignment-grid .helper {
+  display: block;
+  min-height: 2.8em;
+  margin: 6px 0;
+}
+
+.watering-pump-field {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  .overflow-assignment-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .setup-name-field {

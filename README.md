@@ -28,7 +28,7 @@ See the Rust v2 README for [installation](src/src-v2-rust-alpha/README.md#buildi
 
 ## Component connections
 
-![AOG system overview: Raspberry Pi, two Arduino sensor boards, SDS011, optional camera, LCD, and four assignable relay outputs](media/diagrams/aog-system-overview.png)
+![AOG system overview: Raspberry Pi, two Arduino sensor boards, SDS011, optional camera, LCD, and relays for lights and air together, draining, filling, and tank-to-tank transfer](media/diagrams/aog-system-overview.png)
 
 The Raspberry Pi runs AOG. Two **separate Arduino boards** report sensor data
 over USB serial: `SENSORKIT_MK1` for air measurements and `DUAL_OVF_SENSOR` for
@@ -99,10 +99,12 @@ float so that a safe water level closes the contact and overflow opens it:
 
 | Contact state | Input level | Report | Water-pump permission |
 | --- | --- | --- | --- |
-| Closed to GND | LOW | `NONE` | Eligible only when both tanks are safe and all other checks pass |
-| Open, including a disconnected wire | HIGH from pull-up | `OVERFLOW` | Blocked |
+| Closed to GND | LOW | `NONE` | Permits pumps assigned to this sensor, subject to other checks |
+| Open, including a disconnected wire | HIGH from pull-up | `OVERFLOW` | Blocks and stops pumps assigned to this sensor |
 
-Missing, invalid, or stale reports also block pumping. The pH A0 above belongs
+Missing, invalid, or stale selected readings also block their assigned pumps.
+Select the sensor-to-pump rules under **Setup → Overflow sensor stops**; both
+sensors protect all three water-pump functions by default. The pH A0 above belongs
 to the **overflow/pH Arduino**; the CO₂ A0 belongs to the **sensor-kit Arduino**.
 They are separate analog inputs on separate boards.
 
@@ -153,22 +155,44 @@ leave the equipment off; the diagrams do not specify mains terminal wiring.
 ### Four relay functions
 
 The board's channel numbers are physical **1–4**. In the dashboard's
-**Setup → Setup & relay assignments**, assign **Lights**, **Air**, **Filling**,
-**Draining**, or **Unassigned** to each channel to match the equipment wiring.
+**Setup → Setup & relay assignments**, assign **Lights + Air**, **Draining**,
+**Filling**, **Tank-to-tank**, or **Unassigned** to each channel to match the equipment wiring.
 Each function can be used once. There are no permanently fixed function pins.
 
-| Physical relay | Compatibility default when no assignments are saved |
-| --- | --- |
-| 1 | Lights |
-| 2 | Draining |
-| 3 | Filling |
-| 4 | Unassigned; assign Air here only if that is the connected equipment |
+| Physical relay | New-installation default | Function |
+| --- | --- | --- |
+| 1 | Lights + Air | Lights and the air pump switch together on one relay |
+| 2 | Draining | Drain pump |
+| 3 | Filling | Add water to the 55-gallon drum |
+| 4 | Tank-to-tank | Pump water from the 55-gallon drum to the display tank above |
 
 Use **Stop all** before changing assignments. A successful assignment change
-leaves schedules paused until resumed. Lighting schedules follow **Lights**;
-watering schedules follow **Filling**. **Air** and **Draining** currently use
-timed manual control. These roles replace the historical eight-relay layouts
-in the old build notes.
+leaves schedules paused until resumed. Lighting schedules follow **Lights + Air**.
+The repeating water schedule can target **Filling** or **Tank-to-tank**; existing
+schedules retain Filling until changed. All three water pumps support timed
+manual runs, and only one can run at a time. Saved relay maps are preserved:
+old `lights` becomes `lights_air`, a former standalone `air` becomes unassigned,
+and an already-unassigned relay stays off until assigned. These roles replace
+the historical eight-relay layouts in the old build notes.
+
+### Assign overflow sensors to pumps
+
+In **Setup → Overflow sensor stops**, name sensor 1 (D2) and sensor 2 (D4) for
+their actual locations. For each of **Filling**, **Tank-to-tank**, and **Draining**,
+choose sensor 1, sensor 2, both, or **No overflow stop**. The rules follow the
+pump function when you move it to a different relay.
+
+For example, with sensor 1 in the display tank and sensor 2 in the 55-gallon
+drum, select **Sensor 1 only** for Tank-to-tank and **Sensor 2 only** for Filling.
+If the locations are reversed, reverse the selections. Either sensor can stop
+multiple pumps. A triggered sensor blocks starts and stops active runs for its
+selected pumps; it does not stop a pump that has not selected it.
+
+Missing or stale selected readings stop the affected pumps. Loss of the shared
+overflow board stops every pump using either sensor. **No overflow stop** disables
+overflow protection for that pump; runtime limits, cooldown, mutual exclusion,
+the external safety input, and emergency stop still apply. Changing these
+settings requires all outputs off and leaves schedules paused.
 
 ## Command API Security Configuration
 

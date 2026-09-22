@@ -42,6 +42,41 @@ Edit this AOG connection illustration. Preserve its title, labels, colors, layou
 All other text and elements remain unchanged. This is a logical connection overview, so do not add pin numbers, voltage labels, mains power wiring, or extra components.
 ```
 
+## Combined lights/air and tank-to-tank revision
+
+The current overview supersedes the separate Lights/Air layout above.
+Generation mode: built-in `image_gen` edit of the overview.
+
+Final revision prompt:
+
+```text
+Edit this existing AOG Rust v2 system connection illustration to match its updated four relay functions. Keep the title, Pi, laptop, sensor-kit Arduino and sensors, LCD, I2C bus, SDS011, optional USB camera, typography and colors.
+Replace only the controlled-equipment section on the lower right with FOUR clearly separated function groups, arranged as a compact 2-by-2 grid:
+1. "Lights + Air": show BOTH a grow light and an aquarium air pump together inside ONE group, with ONE control connection from a single relay channel splitting locally to the light and air pump. They must visibly share one relay.
+2. "Draining": one water pump with its own relay connection.
+3. "Filling": one water pump with its own relay connection. Small subtitle: "Into 55-gallon drum".
+4. "Tank-to-tank": one water pump with its own relay connection. Small subtitle: "Drum to display tank".
+There must be exactly FOUR separate logical relay connections from the four-relay board, one to each group. The shared Lights + Air group represents ONE channel, not two. Route connectors cleanly around labels.
+Keep "Assign functions in Setup" underneath the groups.
+In the Overflow + pH panel, change the two switch labels from "Tank 1" and "Tank 2" to exactly "Sensor 1" and "Sensor 2", because their locations are configurable. Add a short readable note below or beside them: "Assign pump stops in Setup". Keep the pH probe connected through the pH interface board to this Arduino.
+Footer stays: "Connection overview • Exact pins and power details are in the README".
+This is a logical connection overview, not electrical or mains wiring. Do not add a fifth relay, separate Lights and Air relay channels, mains wiring, or fixed sensor-to-pump wiring. Leave all other components and labels unchanged.
+```
+
+Connection-layout refinement (built-in image edit):
+
+```text
+Refine ONLY the right-hand relay/output connection area of this illustration. Preserve every label, module, sensor, Pi, LCD, laptop, camera, color and position elsewhere.
+Remove ALL individual green relay-to-load wires below the four-relay board, including the incomplete wires into Filling and Tank-to-tank. Replace these with ONE centered broad downward arrow from the relay board to the outer frame containing the four function cards. Put the clear label "4 assignable outputs" on that arrow or just above the cards; make enough vertical room by slightly compressing the cards if needed.
+The 2-by-2 cards remain:
+"Lights + Air" with both light and air pump inside this ONE card,
+"Draining" with one pump,
+"Filling" with one pump and "Into 55-gallon drum",
+"Tank-to-tank" with one pump and "Drum to display tank".
+There should be NO green lines between or inside these four cards. Their shared enclosing frame and the single labeled arrow communicate that the relay board controls all four functions. The Lights + Air card must add the small caption "One shared relay" so the two pictured devices clearly switch together. Preserve "Assign functions in Setup" below the cards.
+This is an overview diagram. Do not introduce terminal wiring, mains power, channel numbers, a fifth output, or changes to the rest of the illustration.
+```
+
 ## Exact pin map
 
 Outputs: `aog-pin-map.svg` (editable vector source and image) and

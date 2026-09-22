@@ -179,18 +179,61 @@ pub fn overflow_allows_pumping() -> bool {
 }
 
 pub(crate) fn overflow_allows_pumping_in(directory: &Path) -> bool {
-    !directory.join("overflow_error").exists()
-        && ["t1_ovf", "t2_ovf"].iter().all(|name| {
-            let path = directory.join(name);
-            let fresh = fs::metadata(&path)
-                .and_then(|metadata| metadata.modified())
-                .ok()
-                .and_then(|modified| modified.elapsed().ok())
-                .is_some_and(|age| age < STALE_TIMEOUT);
-            fresh
-                && fs::read_to_string(path)
-                    .is_ok_and(|value| matches!(value.trim(), "NONE" | "NORMAL"))
-        })
+    overflow_block_reason_in(
+        directory,
+        [true; 2],
+        &["Sensor 1".into(), "Sensor 2".into()],
+    )
+    .is_none()
+}
+
+pub(crate) fn overflow_block_reason_in(
+    directory: &Path,
+    selected: [bool; 2],
+    labels: &[String; 2],
+) -> Option<String> {
+    if !selected.iter().any(|enabled| *enabled) {
+        return None;
+    }
+    if directory.join("overflow_error").exists() {
+        return Some("Overflow sensor board unavailable".into());
+    }
+    for (index, name) in ["t1_ovf", "t2_ovf"].iter().enumerate() {
+        if !selected[index] {
+            continue;
+        }
+        let path = directory.join(name);
+        let fresh = fs::metadata(&path)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age < STALE_TIMEOUT);
+        if !fresh {
+            return Some(format!(
+                "{} (sensor {}): reading missing or stale",
+                labels[index],
+                index + 1
+            ));
+        }
+        match fs::read_to_string(path).as_deref().map(str::trim) {
+            Ok("NONE" | "NORMAL") => (),
+            Ok("OVERFLOW") => {
+                return Some(format!(
+                    "{} (sensor {}): overflow detected",
+                    labels[index],
+                    index + 1
+                ))
+            }
+            _ => {
+                return Some(format!(
+                    "{} (sensor {}): reading unavailable",
+                    labels[index],
+                    index + 1
+                ))
+            }
+        }
+    }
+    None
 }
 
 fn write_sensor(directory: &Path, name: &str, value: &str) -> io::Result<()> {
