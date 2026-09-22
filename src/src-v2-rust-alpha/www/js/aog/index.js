@@ -177,7 +177,7 @@
       });
     }
     setup.overflow.sensor_labels.forEach((label, i) => text(`tank${i + 1}-name`, label));
-    text('pump-limit-summary', `Configured maximum: ${pump.pump_runtime_limit_seconds} seconds. Cooldown: ${pump.pump_cooldown_seconds} seconds.${pump.photo_cycle_enabled ? ` Additional pump operating window: ${timeText(pump.photo_cycle_start_hour * 60)}–${timeText(pump.photo_cycle_end_hour * 60)}.` : ''}`);
+    text('pump-limit-summary', `Filling and Tank-to-tank: configured maximum ${pump.pump_runtime_limit_seconds} seconds, cooldown ${pump.pump_cooldown_seconds} seconds.${pump.photo_cycle_enabled ? ` Operating window: ${timeText(pump.photo_cycle_start_hour * 60)}–${timeText(pump.photo_cycle_end_hour * 60)}.` : ''} Draining has no timer, cooldown, or operating-hour restriction.`);
     text('ph-target', `Target ${ph.optimal_min.toFixed(1)}–${ph.optimal_max.toFixed(1)}`);
     renderSchedules();
     previewSchedules();
@@ -451,7 +451,7 @@
     $('pause-schedules').disabled = data.automation_paused;
     $('outputs-error').hidden = !(data.error || data.pump_block_reason || data.stop_pending);
     text('outputs-error', data.error || (data.stop_pending ? 'Shutdown is retrying. Check the relay board connection.' : data.pump_block_reason || ''));
-    text('water-safety-note', data.pump_block_reason || 'Assigned overflow checks allow pumping. Runtime, cooldown, and one-pump-at-a-time limits still apply.');
+    text('water-safety-note', data.pump_block_reason || 'Assigned overflow checks allow pumping. Only one water pump can run at a time. Draining uses manual Start/Stop.');
     $('water-safety-note').classList.toggle('warning', Boolean(data.pump_block_reason));
     text('last-event', data.last_event);
     $('output-summary').replaceChildren();
@@ -462,13 +462,19 @@
       const kind = output.on ? 'good' : 'neutral';
       badge($(`output-state-${channel}`), label, kind);
       $(`output-card-${channel}`).classList.toggle('is-on', output.on === true);
-      let detail = !known ? 'Relay state is unavailable' : output.on ? finite(output.remaining_seconds) ? `Stops in ${duration(output.remaining_seconds)}` : 'On outside a dashboard timed run' : output.cooldown_seconds > 0 ? `Cooldown: ${duration(output.cooldown_seconds)} remaining` : `Maximum timed run: ${duration(output.maximum_seconds)}`;
       const role = state.settings.setup.relay_roles[channel - 1];
+      let detail;
+      if (!known) detail = 'Relay state is unavailable';
+      else if (output.role === 'draining') detail = output.on ? 'Draining until you press Stop · no timer' : 'Manual Start/Stop · no timer or cooldown';
+      else if (output.on) detail = finite(output.remaining_seconds) ? `Stops in ${duration(output.remaining_seconds)}` : 'On outside a dashboard timed run';
+      else detail = output.cooldown_seconds > 0 ? `Cooldown: ${duration(output.cooldown_seconds)} remaining` : `Maximum timed run: ${duration(output.maximum_seconds)}`;
       const controlled = output.schedule_controlled;
       if (controlled) detail = output.on ? 'On for the scheduled lighting period' : 'Waiting for the lighting period';
       if (output.blocked_reason) detail = output.blocked_reason;
       text(`output-timing-${channel}`, detail);
-      document.querySelector(`[data-start="${channel}"]`).disabled = !known || output.on || data.stop_pending || controlled || Boolean(output.blocked_reason) || output.cooldown_seconds > 0 || role === 'unassigned' || output.role !== role;
+      const startButton = document.querySelector(`[data-start="${channel}"]`);
+      startButton.textContent = role === 'draining' ? 'Start draining' : 'Start timed run';
+      startButton.disabled = !known || output.on || data.stop_pending || controlled || Boolean(output.blocked_reason) || output.cooldown_seconds > 0 || role === 'unassigned' || output.role !== role;
       const chip = document.createElement('div');
       chip.className = 'output-chip';
       const name = document.createElement('strong');
@@ -600,6 +606,7 @@
       globalError(error.message);
     } finally {
       button.disabled = false;
+      renderOutputs();
     }
   }
   makeOutputCards();
@@ -645,6 +652,9 @@
   document.querySelectorAll('[data-start]').forEach(button => button.addEventListener('click', () => {
     const channel = Number(button.dataset.start),
       output = state.outputs.outputs.find(item => item.channel === channel);
+    if (output.role === 'draining') {
+      return actionButton(button, () => outputAction('/api/outputs/start', {channel}));
+    }
     state.selectedOutput = channel;
     text('run-dialog-title', `Start ${state.settings.setup.relay_labels[channel-1]}?`);
     text('run-dialog-description', `This switches physical relay ${channel} on for ${roleNames[output.role]}. Maximum duration: ${duration(output.maximum_seconds)}.`);

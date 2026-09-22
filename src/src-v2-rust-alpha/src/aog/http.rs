@@ -566,7 +566,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
             #[serde(deny_unknown_fields)]
             struct Start {
                 channel: u8,
-                seconds: u64,
+                seconds: Option<u64>,
             }
             let input: Start = match json_body(request) {
                 Ok(value) => value,

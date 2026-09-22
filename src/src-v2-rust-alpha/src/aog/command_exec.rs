@@ -10,7 +10,7 @@ pub fn execute_with_output(cmd: String) -> Result<String, Box<dyn Error>> {
         aog::cls();
         output.push_str("Screen cleared");
     }
-    
+
     if command.starts_with("install") {
         output.push_str("Install command is not available in library mode");
     }
@@ -18,11 +18,14 @@ pub fn execute_with_output(cmd: String) -> Result<String, Box<dyn Error>> {
     if command.starts_with("uninstall") {
         output.push_str("Uninstall command is not available in library mode");
     }
-    
+
     if command.starts_with("stats") {
         // Capture stats output
         output.push_str("System Statistics:\n");
-        output.push_str(&format!("Temperature: {}\n", aog::sensors::get_value("temp")));
+        output.push_str(&format!(
+            "Temperature: {}\n",
+            aog::sensors::get_value("temp")
+        ));
         output.push_str(&format!("Humidity: {}\n", aog::sensors::get_value("hum")));
         output.push_str(&format!("CO2: {}\n", aog::sensors::get_value("co2")));
         output.push_str(&format!("PM2.5: {}\n", aog::sensors::get_value("pm25")));
@@ -92,7 +95,9 @@ pub fn execute_with_output(cmd: String) -> Result<String, Box<dyn Error>> {
         output.push_str("  pm10      - Show PM10 level\n");
         output.push_str("  gpio status  - Show GPIO status\n");
         output.push_str("  relay status - Show relay states and assignments\n");
-        output.push_str("  relay on <1-4> <seconds> - Start a timed run\n");
+        output.push_str(
+            "  relay on <1-4> [seconds] - Start output; omit seconds for Draining only\n",
+        );
         output.push_str("  relay off <1-4|all> - Stop outputs and pause schedules\n");
         output.push_str("  pump status  - Show pump status\n");
         output.push_str("  cls/clear    - Clear screen\n");

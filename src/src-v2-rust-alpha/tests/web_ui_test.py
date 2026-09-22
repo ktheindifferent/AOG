@@ -38,7 +38,7 @@ class Device:
         for output in self.outputs['outputs']:
             role = self.settings['setup']['relay_roles'][output['channel']-1]
             output['role'] = role
-            output['maximum_seconds'] = 86400 if role == 'lights_air' else 0 if role == 'unassigned' else min(300 if role == 'filling' else 600, self.settings['pump']['pump_runtime_limit_seconds'])
+            output['maximum_seconds'] = None if role == 'draining' else 86400 if role == 'lights_air' else 0 if role == 'unassigned' else min(300 if role == 'filling' else 600, self.settings['pump']['pump_runtime_limit_seconds'])
             output['blocked_reason'] = 'Assign a function in Setup settings' if role == 'unassigned' else self.outputs['pump_block_reason'] if role in ['filling','draining','tank_cycle'] else None
             output['schedule_controlled'] = role == 'lights_air' and self.settings['schedules']['lighting']['enabled'] and not self.outputs['automation_paused']
         return self.outputs
@@ -77,7 +77,7 @@ class Device:
                     self.outputs['automation_paused'] = False; reply(self.output_status()); return
                 if path == '/api/outputs/start':
                     output = self.outputs['outputs'][data['channel']-1]
-                    output['on'] = True; output['remaining_seconds'] = data['seconds']; reply(self.output_status()); return
+                    output['on'] = True; output['remaining_seconds'] = data.get('seconds'); reply(self.output_status()); return
                 if path == '/api/outputs/stop':
                     self.outputs['outputs'][data['channel']-1]['on'] = False
                     self.outputs['automation_paused'] = True; reply(self.output_status()); return

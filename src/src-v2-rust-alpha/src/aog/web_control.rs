@@ -1,5 +1,5 @@
-//! Timed dashboard output controls. The watchdog owns shutdown deadlines;
-//! closing a browser never leaves a timed run without supervision.
+//! Dashboard output controls. Draining uses manual start/stop; other outputs
+//! have watchdog-owned deadlines. All runs retain their configured interlocks.
 use crate::{Config, OverflowConfig, PhConfig, PumpConfig, RelayRole, ScheduleConfig};
 use chrono::{Local, Timelike};
 use i2cdev::core::I2CDevice;
@@ -83,7 +83,8 @@ impl SettingsPatch {
         if let Some(pump) = self.pump {
             if pump.continuous_mode {
                 return Err(
-                    "Use timed runs; unattended continuous pumping is not available".into(),
+                    "Filling and Tank-to-tank use timed runs; Draining already supports start/stop"
+                        .into(),
                 );
             }
             if !(1..=1800).contains(&pump.pump_runtime_limit_seconds) {
@@ -172,10 +173,13 @@ impl SettingsPatch {
         let pump = config.pump_config.clone().unwrap_or_default();
         if !(1..=1440).contains(&schedules.watering.every_minutes)
             || schedules.watering.run_seconds == 0
-            || schedules.watering.run_seconds > watering_role.maximum_seconds(1800)
+            || watering_role
+                .maximum_seconds(1800)
+                .is_some_and(|limit| schedules.watering.run_seconds > limit)
             || (schedules.watering.enabled
-                && (schedules.watering.run_seconds
-                    > watering_role.maximum_seconds(pump.pump_runtime_limit_seconds)
+                && (watering_role
+                    .maximum_seconds(pump.pump_runtime_limit_seconds)
+                    .is_some_and(|limit| schedules.watering.run_seconds > limit)
                     || schedules.watering.every_minutes * 60
                         < schedules.watering.run_seconds + pump.pump_cooldown_seconds))
         {
@@ -251,7 +255,7 @@ impl RelayBoard for QuadBoard {
 }
 
 struct Run {
-    deadline: Instant,
+    deadline: Option<Instant>,
     scheduled: bool,
 }
 
@@ -278,7 +282,7 @@ pub struct OutputStatus {
     pub on: Option<bool>,
     pub remaining_seconds: Option<u64>,
     pub cooldown_seconds: u64,
-    pub maximum_seconds: u64,
+    pub maximum_seconds: Option<u64>,
     pub blocked_reason: Option<String>,
     pub schedule_controlled: bool,
     pub overflow_sensors: [bool; 2],
@@ -327,7 +331,7 @@ impl OutputController {
             active: std::array::from_fn(|_| None),
             stopped: [None; 4],
             stop_pending: false,
-            last_event: "Ready for manual timed runs".into(),
+            last_event: "Ready for manual output control".into(),
             schedules: ScheduleConfig::default(),
             automation_paused: directory.join("automation_paused").exists(),
             next_water: Instant::now() + Duration::from_secs(3600),
@@ -427,7 +431,7 @@ impl OutputController {
         stop.and(pause)
     }
 
-    fn maximum(&self, index: usize) -> u64 {
+    fn maximum(&self, index: usize) -> Option<u64> {
         self.roles[index].maximum_seconds(self.pump.pump_runtime_limit_seconds)
     }
 
@@ -442,7 +446,8 @@ impl OutputController {
         ) {
             return Some(reason);
         }
-        if self.pump.photo_cycle_enabled
+        if role != RelayRole::Draining
+            && self.pump.photo_cycle_enabled
             && !within_window(
                 hour,
                 self.pump.photo_cycle_start_hour,
@@ -464,7 +469,7 @@ impl OutputController {
     }
 
     fn cooldown(&self, index: usize, now: Instant) -> u64 {
-        if !self.roles[index].is_water_pump() {
+        if !matches!(self.roles[index], RelayRole::Filling | RelayRole::TankCycle) {
             return 0;
         }
         self.stopped[index]
@@ -476,7 +481,7 @@ impl OutputController {
             .unwrap_or(0)
     }
 
-    pub fn start(&mut self, channel: u8, seconds: u64) -> Result<(), String> {
+    pub fn start(&mut self, channel: u8, seconds: Option<u64>) -> Result<(), String> {
         if self.channel_for(RelayRole::LightsAir) == Some(channel)
             && self.schedules.lighting.enabled
             && !self.automation_paused
@@ -489,7 +494,7 @@ impl OutputController {
     fn start_at(
         &mut self,
         channel: u8,
-        seconds: u64,
+        seconds: Option<u64>,
         now: Instant,
         hour: u8,
     ) -> Result<(), String> {
@@ -503,12 +508,18 @@ impl OutputController {
                 "Assign a function to this relay in Setup settings before starting it".into(),
             );
         }
-        if seconds == 0 || seconds > self.maximum(index) {
-            return Err(format!(
-                "Run duration must be 1–{} seconds",
-                self.maximum(index)
-            ));
-        }
+        let deadline = match (self.maximum(index), seconds) {
+            (None, None) => None,
+            (None, Some(_)) => {
+                return Err("Draining uses Start/Stop; omit the duration to start draining".into());
+            }
+            (Some(maximum), Some(seconds)) if seconds > 0 && seconds <= maximum => {
+                Some(now + Duration::from_secs(seconds))
+            }
+            (Some(maximum), _) => {
+                return Err(format!("Run duration must be 1–{} seconds", maximum));
+            }
+        };
         if self.stop_pending {
             return Err("Shutdown is pending; check the relay connection".into());
         }
@@ -536,19 +547,25 @@ impl OutputController {
             return Err("Another pump is already running".into());
         }
         self.active[index] = Some(Run {
-            deadline: now + Duration::from_secs(seconds),
+            deadline,
             scheduled: false,
         });
         if let Err(error) = self.board.set(channel, true) {
             let _ = self.stop_all();
             return Err(error);
         }
-        self.last_event = format!(
-            "{} on relay {} started for {} seconds",
-            self.roles[index].label(),
-            channel,
-            seconds
-        );
+        self.last_event = match seconds {
+            Some(seconds) => format!(
+                "{} on relay {} started for {} seconds",
+                self.roles[index].label(),
+                channel,
+                seconds
+            ),
+            None => format!(
+                "Draining on relay {} started; press Stop to finish",
+                channel
+            ),
+        };
         log::info!("Dashboard: {}", self.last_event);
         Ok(())
     }
@@ -616,7 +633,7 @@ impl OutputController {
                 match self.board.set(channel, true) {
                     Ok(()) => {
                         self.active[index] = Some(Run {
-                            deadline: now + Duration::from_secs(86400),
+                            deadline: Some(now + Duration::from_secs(86400)),
                             scheduled: true,
                         });
                         self.last_event =
@@ -659,7 +676,7 @@ impl OutputController {
         {
             let seconds = watering.run_seconds;
             let interval = watering.every_minutes;
-            match self.start_at(water_channel, seconds, now, (minute / 60) as u8) {
+            match self.start_at(water_channel, Some(seconds), now, (minute / 60) as u8) {
                 Ok(()) => {
                     if let Some(run) = self.active[water_index].as_mut() {
                         run.scheduled = true;
@@ -695,7 +712,7 @@ impl OutputController {
                 .then(|| self.pump_block_reason(self.roles[index], hour))
                 .flatten();
             if self.active[index].as_ref().is_some_and(|run| {
-                run.deadline <= now
+                run.deadline.is_some_and(|deadline| deadline <= now)
                     || emergency
                     || (run.scheduled && self.automation_paused)
                     || (self.roles[index].is_water_pump() && blocked.is_some())
@@ -757,7 +774,8 @@ impl OutputController {
                 on: states.as_ref().ok().map(|states| states[index]),
                 remaining_seconds: self.active[index]
                     .as_ref()
-                    .map(|run| run.deadline.saturating_duration_since(now).as_secs()),
+                    .and_then(|run| run.deadline)
+                    .map(|deadline| deadline.saturating_duration_since(now).as_secs()),
                 cooldown_seconds: self.cooldown(index, now),
                 maximum_seconds: self.maximum(index),
                 schedule_controlled: self.roles[index] == RelayRole::LightsAir
@@ -835,13 +853,15 @@ pub fn relay_command(command: &str) -> Result<String, String> {
                 .collect::<Vec<_>>()
                 .join("\n"));
         }
-        ["relay", "on", channel, seconds] => {
+        ["relay", "on", channel] | ["relay", "on", channel, _] => {
             if SHUTTING_DOWN.load(Ordering::SeqCst) {
                 return Err("AOG is shutting down".into());
             }
             let channel = channel.parse::<u8>().map_err(|_| "Relay must be 1–4")?;
-            let seconds = seconds
-                .parse::<u64>()
+            let seconds = parts
+                .get(3)
+                .map(|seconds| seconds.parse::<u64>())
+                .transpose()
                 .map_err(|_| "Duration must be a whole number of seconds")?;
             controller.start(channel, seconds)?;
         }
@@ -851,7 +871,7 @@ pub fn relay_command(command: &str) -> Result<String, String> {
             controller.stop_from_dashboard(Some(channel))?;
         }
         _ => {
-            return Err("Use: relay status | relay on <1–4> <seconds> | relay off <1–4|all>".into())
+            return Err("Use: relay status | relay on <1–4> [seconds] (omit seconds for Draining only) | relay off <1–4|all>".into())
         }
     }
     Ok(controller.last_event.clone())
@@ -940,31 +960,31 @@ mod tests {
     fn pump_interlocks_limits_exclusion_and_cooldown_are_enforced() {
         let (dir, mut controller, states, _) = fixture();
         let now = Instant::now();
-        assert!(controller.start_at(0, 1, now, 12).is_err());
-        assert!(controller.start_at(3, 301, now, 12).is_err());
-        controller.start_at(3, 5, now, 12).unwrap();
+        assert!(controller.start_at(0, Some(1), now, 12).is_err());
+        assert!(controller.start_at(3, Some(301), now, 12).is_err());
+        controller.start_at(3, Some(5), now, 12).unwrap();
         assert!(states.lock().unwrap()[2]);
-        assert!(controller.start_at(2, 5, now, 12).is_err());
+        assert!(controller.start_at(2, None, now, 12).is_err());
         std::fs::write(dir.path().join("sensors/t1_ovf"), "OVERFLOW").unwrap();
         controller.tick_at(now, 12);
         assert!(!states.lock().unwrap()[2]);
         std::fs::write(dir.path().join("sensors/t1_ovf"), "NONE").unwrap();
         assert!(controller
-            .start_at(3, 5, now + Duration::from_secs(1), 12)
+            .start_at(3, Some(5), now + Duration::from_secs(1), 12)
             .is_err());
         assert!(controller
-            .start_at(3, 5, now + Duration::from_secs(61), 12)
+            .start_at(3, Some(5), now + Duration::from_secs(61), 12)
             .is_ok());
     }
     #[test]
     fn watchdog_stops_runs_without_a_browser_and_retries_failed_shutdown() {
         let (_dir, mut controller, states, fail) = fixture();
         let now = Instant::now();
-        controller.start_at(1, 5, now, 12).unwrap();
+        controller.start_at(1, Some(5), now, 12).unwrap();
         *fail.lock().unwrap() = true;
         controller.tick_at(now + Duration::from_secs(6), 12);
         assert!(controller.stop_pending);
-        assert!(controller.start_at(1, 5, now, 12).is_err());
+        assert!(controller.start_at(1, Some(5), now, 12).is_err());
         *fail.lock().unwrap() = false;
         controller.tick_at(now + Duration::from_secs(7), 12);
         assert_eq!(*states.lock().unwrap(), [false; 4]);
@@ -974,9 +994,9 @@ mod tests {
     fn missing_sensor_readings_and_emergency_stop_block_starts() {
         let (dir, mut controller, _, _) = fixture();
         std::fs::remove_file(dir.path().join("sensors/t2_ovf")).unwrap();
-        assert!(controller.start(3, 5).is_err());
+        assert!(controller.start(3, Some(5)).is_err());
         std::fs::write(dir.path().join("emergency_stop"), "stop").unwrap();
-        assert!(controller.start(1, 5).is_err());
+        assert!(controller.start(1, Some(5)).is_err());
     }
     #[test]
     fn operating_window_supports_midnight_and_overnight() {
@@ -1067,7 +1087,7 @@ mod tests {
         let now = Instant::now();
         controller.schedules.lighting.enabled = true;
         controller.schedule_tick(now, 12 * 60);
-        controller.start_at(3, 10, now, 12).unwrap();
+        controller.start_at(3, Some(10), now, 12).unwrap();
         controller.stop_from_dashboard(Some(3)).unwrap();
         controller.tick_at(now, 12);
         assert_eq!(*states.lock().unwrap(), [false; 4]);

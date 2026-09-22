@@ -278,12 +278,13 @@ impl RelayRole {
         matches!(self, Self::Filling | Self::Draining | Self::TankCycle)
     }
 
-    pub fn maximum_seconds(self, pump_limit: u64) -> u64 {
+    pub fn maximum_seconds(self, pump_limit: u64) -> Option<u64> {
         match self {
-            Self::LightsAir => 86400,
-            Self::Filling => 300.min(pump_limit),
-            Self::Draining | Self::TankCycle => 600.min(pump_limit),
-            Self::Unassigned => 0,
+            Self::LightsAir => Some(86400),
+            Self::Filling => Some(300.min(pump_limit)),
+            Self::TankCycle => Some(600.min(pump_limit)),
+            Self::Draining => None,
+            Self::Unassigned => Some(0),
         }
     }
 
