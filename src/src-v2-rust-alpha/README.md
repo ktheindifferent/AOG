@@ -112,17 +112,14 @@ The dashboard works on desktop and mobile and provides:
   its current window immediately. Watering waits one interval after enabling,
   saving schedules, resuming, or restarting AOG. Changing the scheduled pump
   stops any scheduled run on the previous pump before applying the new target.
-- **Outputs:** Draining uses **Start draining / Stop**, with no timer, cooldown,
-  or operating-hour restriction. It keeps running when the browser closes;
-  press **Stop** when finished. Other outputs use timed manual runs with actual
-  relay readback, remaining runtime, cooldown, and stop controls. Lights + Air
-  switch together for up to 24 hours per manual run. Configured overflow stops,
-  the external safety input, emergency stop, and one-pump-at-a-time protection
-  apply to every water pump, regardless of relay number. Unassigned relays cannot be started.
-  Each relay has one button that switches between **Start** and **Stop**, with
-  pending feedback until the device responds. **Stop all** remains available.
+- **Outputs:** each assigned relay has one **Start / Stop** button. Manual runs
+  continue until stopped, including when the browser closes. There are no runtime
+  caps, cooldowns, pump operating-hour restrictions, or one-pump-at-a-time rules.
+  Several water pumps can run together. Configured overflow stops, the external
+  safety input, emergency stop, and relay readback remain active. Unassigned
+  relays must be assigned before starting. **Stop all** remains available.
 - **Setup:** setup name, output labels and assignments, sensor names and per-pump
-  overflow stops, pump runtime/cooldown/safety limits,
+  overflow stops, the optional external safety switch,
   pH monitoring thresholds and interval, history retention, and buffer
   calibration. One buffer immediately normalizes pH; a second distinct buffer
   calibrates the slope. Individual points can be removed or replaced. Calibration
@@ -267,10 +264,9 @@ separate from functions and do not determine the safety rules.
 
 Use **Stop all** before changing assignments. The server verifies that every
 relay is off, saves the assignments, and leaves schedules paused. Resume
-schedules when the assignments match the connected equipment. Only one of
-Filling, Draining, and Tank-to-tank can run at a time; Lights + Air can run alongside it.
-Overflow checks follow the water-pump functions even when assigned to relay 1.
-Cooldown and runtime limits apply to Filling and Tank-to-tank; Draining is untimed.
+schedules when the assignments match the connected equipment. All four relays
+can run simultaneously. Overflow checks follow the water-pump functions even
+when assigned to relay 1. Manual runs use Start/Stop without a timer or cooldown.
 
 New installations default to Lights + Air on relay 1, Draining on relay 2,
 Filling on relay 3, and Tank-to-tank on relay 4. Tank-to-tank moves water from the
@@ -278,9 +274,13 @@ Filling on relay 3, and Tank-to-tank on relay 4. Tank-to-tank moves water from t
 Existing saved maps are preserved: legacy `lights` reads as `lights_air`, legacy
 standalone `air` becomes unassigned, and an unassigned fourth relay requires an
 explicit assignment. Existing water schedules keep targeting Filling until
-changed in **Schedules → Scheduled pump**. Filling runs are capped at 300 seconds;
-Tank-to-tank runs are capped at 600 seconds, subject to your lower configured
-pump runtime limit. Draining has no runtime limit.
+changed in **Schedules → Scheduled pump**. Scheduled water runs use the duration
+you enter, with no role-specific cap or required cooldown. A 5-second run every
+minute is valid. Repeat intervals can exceed a day; equal daily window times
+mean all day. A run that outlasts its interval finishes before another starts.
+Blocked runs retry each second. Legacy `pump_runtime_limit_seconds`,
+`pump_cooldown_seconds`, and pump photo-cycle settings remain in the configuration
+for compatibility with legacy GPIO pump code, but do not restrict relay controls.
 
 ### Configure overflow stops
 
@@ -297,34 +297,33 @@ block that pump. Losing the shared sensor board stops all pumps using either
 sensor. **No overflow stop** explicitly disables this protection for that pump.
 
 Save these settings with all outputs off; schedules remain paused afterward.
-Emergency stop, the external safety input, and one-pump-at-a-time checks continue
-to apply independently. Runtime, cooldown, and the pump operating window apply
-to Filling and Tank-to-tank. Output cards list each pump's selected
+Emergency stop and the external safety input continue to apply independently.
+There are no automatic runtime caps, cooldowns, or restrictions between pumps. Output cards list each pump's selected
 sensors and the particular sensor preventing a run.
 
 Console and command API relay actions use the same controller and protections:
 `relay on <1–4> [seconds]`, `relay off <1–4|all>`, and `relay status`.
-For Draining, omit the duration: with the default map, use `relay on 2` and
-`relay off 2`. Other outputs require an explicit duration. Likewise,
-`POST /api/outputs/start` takes `{"channel":2}` for Draining and requires
-`seconds` for timed outputs; a duration supplied for Draining is rejected.
-Draining status reports `maximum_seconds` and `remaining_seconds` as `null`,
-with `cooldown_seconds` always zero. Commands report failures instead of
-silently retrying through a separate hardware control path.
+Omit the duration for manual Start/Stop on any assigned relay, for example
+`relay on 4`, followed by `relay off 4`. An explicit positive duration remains
+available through the command API, e.g. `relay on 4 3600`. Likewise,
+`POST /api/outputs/start` accepts `{"channel":4}` or an optional `seconds` value.
+All output statuses report `maximum_seconds: null` and `cooldown_seconds: 0`.
+`remaining_seconds` is null for untimed runs and a countdown for explicitly
+requested timers or scheduled water runs. Commands report hardware failures
+instead of silently retrying through a separate control path.
 
 Stopping any output pauses schedules; scheduled outputs then stop. **Stop all**
 and **Pause schedules** stop all four outputs immediately. The pause survives
 restarts until explicitly resumed. Schedule settings persist in
 `/opt/aog/data.json`; pause state is in `/opt/aog/automation_paused`.
 
-The server supervises timed runs even after the browser closes. Draining stays
-on until stopped manually or by a configured safety input, emergency stop, or
-service shutdown; it does not restart automatically. Scheduled
-water runs require fresh, safe readings from their selected sensors and observe pump cooldown, any configured
-operating window, the optional GPIO safety input, and emergency stop. Only one
-pump can run at a time. A watering run also stops when its daily window closes.
-Shutdown failures block new starts and are retried. Lighting and watering
-schedules run only while AOG is running.
+Manual runs continue until stopped manually, by a configured overflow/safety
+input, emergency stop, or service shutdown; manual runs do not resume after a
+restart. The server supervises explicit timers even after the browser closes.
+Scheduled water runs use their chosen daily window and duration, their selected
+overflow sensors, the optional GPIO safety input, and emergency stop. A watering
+run stops when its schedule window closes. Shutdown failures block new starts
+and are retried. Lighting and watering schedules run only while AOG is running.
 
 Settings, password, calibration, and output APIs require a dashboard session;
 mutations also require its `X-AOG-CSRF` token. Settings responses omit password

@@ -541,7 +541,10 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
             || updated.dashboard_config.overflow != config.dashboard_config.overflow;
         let mut outputs = state.outputs.lock().unwrap();
         if pump_changed && outputs.is_running() {
-            return api_error(409, "Stop active outputs before changing pump limits");
+            return api_error(
+                409,
+                "Stop active outputs before changing the external safety switch",
+            );
         }
         if assignments_changed {
             if let Err(error) = outputs.prepare_reassignment() {

@@ -28,7 +28,7 @@ SETTINGS = {
 class Device:
     def __init__(self):
         self.settings = copy.deepcopy(SETTINGS)
-        self.outputs = {'outputs': [{'channel': i, 'on': False, 'remaining_seconds': None, 'cooldown_seconds': 0, 'maximum_seconds': 86400 if i == 1 else 300} for i in range(1, 5)], 'error': None, 'pump_block_reason': None, 'last_event': 'Ready for manual timed runs', 'stop_pending': False, 'automation_paused': False, 'next_watering_in_seconds': None}
+        self.outputs = {'outputs': [{'channel': i, 'on': False, 'remaining_seconds': None, 'cooldown_seconds': 0, 'maximum_seconds': None} for i in range(1, 5)], 'error': None, 'pump_block_reason': None, 'last_event': 'Ready for manual timed runs', 'stop_pending': False, 'automation_paused': False, 'next_watering_in_seconds': None}
         self.history = [{'timestamp': NOW - (119-i)*60, 'ph_value': 6.85 + .15*math.sin(i/15), 'raw_value': 6.85, 'temperature': 24.5, 'alert_level': 'Normal'} for i in range(120)]
         self.requests = []
         self.ph_error = False
@@ -38,7 +38,7 @@ class Device:
         for output in self.outputs['outputs']:
             role = self.settings['setup']['relay_roles'][output['channel']-1]
             output['role'] = role
-            output['maximum_seconds'] = None if role == 'draining' else 86400 if role == 'lights_air' else 0 if role == 'unassigned' else min(300 if role == 'filling' else 600, self.settings['pump']['pump_runtime_limit_seconds'])
+            output['maximum_seconds'] = None
             output['blocked_reason'] = 'Assign a function in Setup settings' if role == 'unassigned' else self.outputs['pump_block_reason'] if role in ['filling','draining','tank_cycle'] else None
             output['schedule_controlled'] = role == 'lights_air' and self.settings['schedules']['lighting']['enabled'] and not self.outputs['automation_paused']
         return self.outputs
@@ -68,8 +68,6 @@ class Device:
                 self.requests.append((path, data))
                 assert request.headers.get('x-aog-csrf') == 'browser-test-token', request.headers
                 if path == '/api/settings':
-                    if 'schedules' in data and data['schedules']['watering']['every_minutes'] == 1:
-                        reply({'error': 'Watering interval must include cooldown'}, 400); return
 
                     for key, value in data.items(): self.settings[key].update(value)
                     reply(self.settings); return
@@ -131,15 +129,12 @@ def run():
         assert device.settings['schedules']['watering']['every_minutes']==15
         page.screenshot(path='/tmp/aog-ui-schedules.png',full_page=True)
         page.fill('#watering-interval','1'); page.click('#schedule-form [type=submit]')
-        expect(page.locator('#schedule-result')).to_contain_text('cooldown')
+        expect(page.locator('#schedule-result')).to_contain_text('Saved')
         expect(page.locator('#schedule-form [type=submit]')).to_be_enabled()
         page.click('#stop-all'); expect(page.locator('#paused-banner')).to_be_visible()
         page.click('[data-page=outputs]'); page.click('[data-output="1"]')
-        expect(page.locator('#run-dialog')).to_be_visible()
-        page.fill('#run-seconds','10'); page.click('#run-form [type=submit]')
-        expect(page.locator('#run-dialog')).not_to_be_visible()
         expect(page.locator('#output-state-1')).to_have_text('On')
-        assert ('/api/outputs/start', {'channel':1, 'seconds':10}) in device.requests
+        assert ('/api/outputs/start', {'channel':1}) in device.requests
         page.click('[data-output="1"]'); expect(page.locator('#output-state-1')).to_have_text('Off')
         page.click('[data-page=settings]'); page.fill('#setup-name-input','Kitchen grow')
         page.click('#setup-form [type=submit]'); expect(page.locator('#setup-result')).to_contain_text('Saved')

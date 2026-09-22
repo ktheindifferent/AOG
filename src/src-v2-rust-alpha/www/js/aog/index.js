@@ -28,7 +28,6 @@
     outputs: null,
     range: 24,
     chartPoints: [],
-    selectedOutput: null,
     refreshing: false
   };
   const pageCopy = {
@@ -37,7 +36,7 @@
     cameras: ['Live cameras', 'A window into your grow, from both cameras.'],
     reports: ['Reports & exports', 'Capture your air quality story and keep the underlying data.'],
     schedules: ['Lighting & watering', 'Build a daily rhythm for your grow.'],
-    outputs: ['Equipment controls', 'Start and stop draining, or use timed runs for other equipment.'],
+    outputs: ['Equipment controls', 'Start and stop each relay independently.'],
     settings: ['Setup settings', 'Tune your environment and make this setup your own.'],
     account: ['Your account', 'Manage your password and device access.']
   };
@@ -197,8 +196,6 @@
       $('watering-pump').value = schedules.watering.pump;
     }
     if (hydrate && !state.dirtyForms.has('pump-form')) {
-      $('pump-runtime').value = pump.pump_runtime_limit_seconds;
-      $('pump-cooldown').value = pump.pump_cooldown_seconds;
       $('safety-enabled').checked = pump.safety_gpio_pin !== null;
       $('safety-pin').value = pump.safety_gpio_pin === null ? 17 : pump.safety_gpio_pin;
       $('safety-pin-field').hidden = !$('safety-enabled').checked;
@@ -218,7 +215,7 @@
       });
     }
     setup.overflow.sensor_labels.forEach((label, i) => text(`tank${i + 1}-name`, label));
-    text('pump-limit-summary', `Filling and Tank-to-tank: configured maximum ${pump.pump_runtime_limit_seconds} seconds, cooldown ${pump.pump_cooldown_seconds} seconds.${pump.photo_cycle_enabled ? ` Operating window: ${timeText(pump.photo_cycle_start_hour * 60)}–${timeText(pump.photo_cycle_end_hour * 60)}.` : ''} Draining has no timer, cooldown, or operating-hour restriction.`);
+    text('pump-limit-summary', 'All relays support manual Start/Stop without runtime caps, cooldowns, or operating-hour restrictions. Multiple pumps can run together.');
     text('ph-target', `Target ${ph.optimal_min.toFixed(1)}–${ph.optimal_max.toFixed(1)}`);
     renderSchedules();
     previewSchedules();
@@ -259,16 +256,14 @@
 
   function previewSchedules() {
     const waterRole = $('watering-pump').value;
-    const maximum = waterRole === 'filling' ? 300 : 600;
-    $('watering-duration').max = $('watering-enabled').checked && state.settings ? Math.min(maximum, state.settings.pump.pump_runtime_limit_seconds) : maximum;
     const start = minutes($('lighting-start').value),
       end = minutes($('lighting-end').value);
     const enabled = $('lighting-enabled').checked;
     const from = start / 1440 * 100,
       to = end / 1440 * 100;
     $('lighting-preview').style.background = !enabled ? '#edf1e7' : start < end ? `linear-gradient(to right,#edf1e7 ${from}%,#a9c77c ${from}%,#a9c77c ${to}%,#edf1e7 ${to}%)` : `linear-gradient(to right,#a9c77c ${to}%,#edf1e7 ${to}%,#edf1e7 ${from}%,#a9c77c ${from}%)`;
-    const hours = ((end - start + 1440) % 1440) / 60;
-    text('lighting-preview-text', enabled ? `${hours.toFixed(1)} hours of lights and air per day${start > end ? ', crossing midnight' : ''}. Both switch together.` : 'Lights + Air schedule is disabled. Manual timed runs remain available.');
+    const hours = start === end ? 24 : ((end - start + 1440) % 1440) / 60;
+    text('lighting-preview-text', enabled ? `${hours.toFixed(1)} hours of lights and air per day${start > end ? ', crossing midnight' : ''}. Both switch together.` : 'Lights + Air schedule is disabled. Manual Start/Stop remains available.');
     text('watering-preview-text', $('watering-enabled').checked ? `${roleNames[waterRole]}: run for ${$('watering-duration').value || '—'} seconds every ${$('watering-interval').value || '—'} minutes. The first run waits one interval; blocked runs retry once conditions allow.` : 'Water pump schedule is disabled. Choose the pump and interval, then enable it when ready.');
   }
 
@@ -648,7 +643,7 @@
     $('pause-schedules').disabled = data.automation_paused || Boolean($('pause-schedules').dataset.busy);
     $('outputs-error').hidden = !(data.error || data.pump_block_reason || data.stop_pending);
     text('outputs-error', data.error || (data.stop_pending ? 'Shutdown is retrying. Check the relay board connection.' : data.pump_block_reason || ''));
-    text('water-safety-note', data.pump_block_reason || 'Assigned overflow checks allow pumping. Only one water pump can run at a time. Draining uses manual Start/Stop.');
+    text('water-safety-note', data.pump_block_reason || 'Assigned overflow checks allow pumping. Each pump can run independently with manual Start/Stop.');
     $('water-safety-note').classList.toggle('warning', Boolean(data.pump_block_reason));
     text('last-event', data.last_event);
     $('output-summary').replaceChildren();
@@ -663,11 +658,8 @@
       const role = state.settings.setup.relay_roles[channel - 1];
       let detail;
       if (!known) detail = 'Relay state is unavailable';
-      else if (output.role === 'draining') detail = output.on ? 'Draining until you press Stop · no timer' : 'Manual Start/Stop · no timer or cooldown';
-      else if (output.on) detail = finite(output.remaining_seconds) ? `Stops in ${duration(Math.max(0, output.remaining_seconds - elapsed))}` : 'On outside a dashboard timed run';
-      else detail = output.cooldown_seconds > elapsed ? `Cooldown: ${duration(output.cooldown_seconds - elapsed)} remaining` : `Maximum timed run: ${duration(output.maximum_seconds)}`;
-      const controlled = output.schedule_controlled;
-      if (controlled) detail = output.on ? 'On for the scheduled lighting period' : 'Waiting for the lighting period';
+      else if (output.on) detail = finite(output.remaining_seconds) ? `Stops in ${duration(Math.max(0, output.remaining_seconds - elapsed))}` : output.schedule_controlled ? 'On for the scheduled lighting period' : 'Running until you press Stop · no timer';
+      else detail = 'Manual Start/Stop · no timer or cooldown';
       if (output.blocked_reason) detail = output.blocked_reason;
       text(`output-timing-${channel}`, detail);
       const button = document.querySelector(`[data-output="${channel}"]`);
@@ -676,7 +668,7 @@
       button.textContent = pending || (stop ? 'Stop' : 'Start');
       button.className = `button ${stop ? 'danger-outline' : 'primary'}`;
       button.setAttribute('aria-label', `${stop ? 'Stop' : 'Start'} ${state.settings.setup.relay_labels[channel - 1]}`);
-      button.disabled = Boolean(pending) || Boolean(button.dataset.busy) || (!stop && (state.outputPending.size > 0 || data.stop_pending || controlled || Boolean(output.blocked_reason) || output.cooldown_seconds > elapsed || role === 'unassigned' || output.role !== role));
+      button.disabled = Boolean(pending) || Boolean(button.dataset.busy) || (!stop && (state.outputPending.size > 0 || data.stop_pending || Boolean(output.blocked_reason) || role === 'unassigned' || output.role !== role));
       const chip = document.createElement('div');
       chip.className = 'output-chip';
       const name = document.createElement('strong');
@@ -965,7 +957,7 @@
       const button = $(id).querySelector('[type=submit]');
       const label = button.textContent;
       button.disabled = true;
-      button.textContent = id === 'run-form' ? 'Starting…' : id === 'calibration-form' ? 'Applying…' : 'Saving…';
+      button.textContent = id === 'calibration-form' ? 'Applying…' : 'Saving…';
       $(id).setAttribute('aria-busy', 'true');
       message(result, '');
       try {
@@ -1129,30 +1121,8 @@
     if (output.on || output.on === null) {
       return actionButton(button, () => outputAction('/api/outputs/stop', {channel}));
     }
-    if (output.role === 'draining') {
-      return actionButton(button, () => outputAction('/api/outputs/start', {channel}));
-    }
-    state.selectedOutput = channel;
-    state.selectedRole = output.role;
-    text('run-dialog-title', `Start ${state.settings.setup.relay_labels[channel-1]}?`);
-    text('run-dialog-description', `This switches physical relay ${channel} on for ${roleNames[output.role]}. Maximum duration: ${duration(output.maximum_seconds)}.`);
-    $('run-seconds').max = output.maximum_seconds;
-    $('run-seconds').value = Math.min(output.role === 'lights_air' ? 600 : 30, output.maximum_seconds);
-    message('run-result', '');
-    $('run-dialog').showModal();
+    return actionButton(button, () => outputAction('/api/outputs/start', {channel}));
   }));
-  $('cancel-run').addEventListener('click', () => {
-    $('run-dialog').close();
-  });
-  form('run-form', 'run-result', async () => {
-    if (state.settings.setup.relay_roles[state.selectedOutput - 1] !== state.selectedRole) throw new Error('This relay assignment changed. Close this dialog and choose the output again.');
-    await outputAction('/api/outputs/start', {
-      channel: state.selectedOutput,
-      seconds: Number($('run-seconds').value)
-    });
-    $('run-dialog').close();
-    return '';
-  });
   form('schedule-form', 'schedule-result', () => saveSettings({
     schedules: {
       lighting: {
@@ -1188,9 +1158,6 @@
   form('pump-form', 'pump-result', () => saveSettings({
     pump: {
       ...state.settings.pump,
-      continuous_mode: false,
-      pump_runtime_limit_seconds: Number($('pump-runtime').value),
-      pump_cooldown_seconds: Number($('pump-cooldown').value),
       safety_gpio_pin: $('safety-enabled').checked ? Number($('safety-pin').value) : null
     }
   }));

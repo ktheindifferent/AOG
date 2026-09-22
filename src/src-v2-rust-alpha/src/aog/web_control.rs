@@ -1,5 +1,5 @@
-//! Dashboard output controls. Draining uses manual start/stop; other outputs
-//! have watchdog-owned deadlines. All runs retain their configured interlocks.
+//! Dashboard outputs use manual start/stop, with optional requested deadlines.
+//! Configured overflow sensors and emergency inputs supervise every water pump.
 use crate::{Config, OverflowConfig, PhConfig, PumpConfig, RelayRole, ScheduleConfig};
 use chrono::{Local, Timelike};
 use i2cdev::core::I2CDevice;
@@ -81,24 +81,6 @@ impl SettingsPatch {
             }
         }
         if let Some(pump) = self.pump {
-            if pump.continuous_mode {
-                return Err(
-                    "Filling and Tank-to-tank use timed runs; Draining already supports start/stop"
-                        .into(),
-                );
-            }
-            if !(1..=1800).contains(&pump.pump_runtime_limit_seconds) {
-                return Err("Pump runtime limit must be 1–1800 seconds".into());
-            }
-            if !(30..=3600).contains(&pump.pump_cooldown_seconds) {
-                return Err("Pump cooldown must be 30–3600 seconds".into());
-            }
-            if pump.photo_cycle_start_hour > 23
-                || pump.photo_cycle_end_hour > 24
-                || pump.photo_cycle_start_hour == pump.photo_cycle_end_hour
-            {
-                return Err("Operating window needs different hours: start 0–23, end 0–24".into());
-            }
             if pump
                 .safety_gpio_pin
                 .is_some_and(|pin| !(4..=27).contains(&pin))
@@ -164,27 +146,21 @@ impl SettingsPatch {
                 schedules.watering.end_minute,
             ),
         ] {
-            if start >= 1440 || end >= 1440 || start == end {
+            if start >= 1440 || end >= 1440 {
                 return Err(
-                    "Schedule start and end must be different times between 00:00 and 23:59".into(),
+                    "Schedule times must be between 00:00 and 23:59; equal times mean all day"
+                        .into(),
                 );
             }
         }
-        let pump = config.pump_config.clone().unwrap_or_default();
-        if !(1..=1440).contains(&schedules.watering.every_minutes)
-            || schedules.watering.run_seconds == 0
-            || watering_role
-                .maximum_seconds(1800)
-                .is_some_and(|limit| schedules.watering.run_seconds > limit)
-            || (schedules.watering.enabled
-                && (watering_role
-                    .maximum_seconds(pump.pump_runtime_limit_seconds)
-                    .is_some_and(|limit| schedules.watering.run_seconds > limit)
-                    || schedules.watering.every_minutes * 60
-                        < schedules.watering.run_seconds + pump.pump_cooldown_seconds))
-        {
-            return Err("The water schedule must fit the selected pump's runtime limit, with enough time between runs for cooldown".into());
-        }
+        let now = Instant::now();
+        let interval = schedules
+            .watering
+            .every_minutes
+            .checked_mul(60)
+            .ok_or("The interval exceeds the device clock range")?;
+        requested_deadline(now, interval)?;
+        requested_deadline(now, schedules.watering.run_seconds)?;
         Ok(())
     }
 }
@@ -266,7 +242,6 @@ pub struct OutputController {
     roles: [RelayRole; 4],
     overflow: OverflowConfig,
     active: [Option<Run>; 4],
-    stopped: [Option<Instant>; 4],
     stop_pending: bool,
     schedules: ScheduleConfig,
     automation_paused: bool,
@@ -299,12 +274,12 @@ pub struct ControllerStatus {
     pub next_watering_in_seconds: Option<u64>,
 }
 
-pub fn within_window(hour: u8, start: u8, end: u8) -> bool {
-    if start < end {
-        hour >= start && hour < end
-    } else {
-        hour >= start || hour < end
+fn requested_deadline(now: Instant, seconds: u64) -> Result<Instant, String> {
+    if seconds == 0 {
+        return Err("Run duration and repeat interval must be greater than zero".into());
     }
+    now.checked_add(Duration::from_secs(seconds))
+        .ok_or_else(|| "The duration exceeds the device clock range".into())
 }
 
 fn in_schedule(minute: u16, start: u16, end: u16) -> bool {
@@ -329,7 +304,6 @@ impl OutputController {
             roles,
             overflow: OverflowConfig::default(),
             active: std::array::from_fn(|_| None),
-            stopped: [None; 4],
             stop_pending: false,
             last_event: "Ready for manual output control".into(),
             schedules: ScheduleConfig::default(),
@@ -388,8 +362,7 @@ impl OutputController {
             }
         }
         self.schedules = schedules;
-        self.next_water = Instant::now()
-            + Duration::from_secs(self.schedules.watering.every_minutes.clamp(1, 1440) * 60);
+        self.set_next_water(Instant::now());
         self.last_schedule_check = None;
     }
 
@@ -412,8 +385,7 @@ impl OutputController {
             Err(e) => return Err(e.to_string()),
         }
         self.automation_paused = false;
-        self.next_water = Instant::now()
-            + Duration::from_secs(self.schedules.watering.every_minutes.clamp(1, 1440) * 60);
+        self.set_next_water(Instant::now());
         self.last_schedule_check = None;
         self.last_event = "Schedules resumed; watering begins after the configured interval".into();
         Ok(())
@@ -431,11 +403,25 @@ impl OutputController {
         stop.and(pause)
     }
 
-    fn maximum(&self, index: usize) -> Option<u64> {
-        self.roles[index].maximum_seconds(self.pump.pump_runtime_limit_seconds)
+    fn set_next_water(&mut self, now: Instant) {
+        // API saves validate this first. Invalid hand-edited configuration must
+        // not panic the watchdog or silently replace the requested interval.
+        let deadline = self
+            .schedules
+            .watering
+            .every_minutes
+            .checked_mul(60)
+            .and_then(|seconds| requested_deadline(now, seconds).ok());
+        if let Some(deadline) = deadline {
+            self.next_water = deadline;
+        } else {
+            self.schedules.watering.enabled = false;
+            self.last_event =
+                "Water schedule disabled: invalid interval in saved configuration".into();
+        }
     }
 
-    fn pump_block_reason(&self, role: RelayRole, hour: u8) -> Option<String> {
+    fn pump_block_reason(&self, role: RelayRole, _hour: u8) -> Option<String> {
         if self.directory.join("emergency_stop").exists() {
             return Some("Emergency stop is active".into());
         }
@@ -445,16 +431,6 @@ impl OutputController {
             &self.overflow.sensor_labels,
         ) {
             return Some(reason);
-        }
-        if role != RelayRole::Draining
-            && self.pump.photo_cycle_enabled
-            && !within_window(
-                hour,
-                self.pump.photo_cycle_start_hour,
-                self.pump.photo_cycle_end_hour,
-            )
-        {
-            return Some("Outside the configured pump operating window".into());
         }
         if let Some(pin) = self.pump.safety_gpio_pin {
             let safe = rppal::gpio::Gpio::new()
@@ -468,26 +444,7 @@ impl OutputController {
         None
     }
 
-    fn cooldown(&self, index: usize, now: Instant) -> u64 {
-        if !matches!(self.roles[index], RelayRole::Filling | RelayRole::TankCycle) {
-            return 0;
-        }
-        self.stopped[index]
-            .map(|stopped| {
-                self.pump
-                    .pump_cooldown_seconds
-                    .saturating_sub(now.saturating_duration_since(stopped).as_secs())
-            })
-            .unwrap_or(0)
-    }
-
     pub fn start(&mut self, channel: u8, seconds: Option<u64>) -> Result<(), String> {
-        if self.channel_for(RelayRole::LightsAir) == Some(channel)
-            && self.schedules.lighting.enabled
-            && !self.automation_paused
-        {
-            return Err("Pause schedules before starting a manual Lights + Air run".into());
-        }
         self.start_at(channel, seconds, Instant::now(), Local::now().hour() as u8)
     }
 
@@ -508,18 +465,9 @@ impl OutputController {
                 "Assign a function to this relay in Setup settings before starting it".into(),
             );
         }
-        let deadline = match (self.maximum(index), seconds) {
-            (None, None) => None,
-            (None, Some(_)) => {
-                return Err("Draining uses Start/Stop; omit the duration to start draining".into());
-            }
-            (Some(maximum), Some(seconds)) if seconds > 0 && seconds <= maximum => {
-                Some(now + Duration::from_secs(seconds))
-            }
-            (Some(maximum), _) => {
-                return Err(format!("Run duration must be 1–{} seconds", maximum));
-            }
-        };
+        let deadline = seconds
+            .map(|seconds| requested_deadline(now, seconds))
+            .transpose()?;
         if self.stop_pending {
             return Err("Shutdown is pending; check the relay connection".into());
         }
@@ -530,21 +478,10 @@ impl OutputController {
             if let Some(reason) = self.pump_block_reason(self.roles[index], hour) {
                 return Err(reason);
             }
-            if self.cooldown(index, now) > 0 {
-                return Err("Pump cooldown is still active".into());
-            }
         }
         let states = self.board.states()?;
         if states[index] || self.active[index].is_some() {
             return Err("Output is already on; stop it before starting another run".into());
-        }
-        if self.roles[index].is_water_pump()
-            && states
-                .iter()
-                .enumerate()
-                .any(|(other, on)| *on && self.roles[other].is_water_pump())
-        {
-            return Err("Another pump is already running".into());
         }
         self.active[index] = Some(Run {
             deadline,
@@ -562,7 +499,8 @@ impl OutputController {
                 seconds
             ),
             None => format!(
-                "Draining on relay {} started; press Stop to finish",
+                "{} on relay {} started; press Stop to finish",
+                self.roles[index].label(),
                 channel
             ),
         };
@@ -579,15 +517,13 @@ impl OutputController {
             return Err(error);
         }
         self.active[(channel - 1) as usize] = None;
-        self.stopped[(channel - 1) as usize] = Some(Instant::now());
         self.last_event = format!("Output {} stopped", channel);
         Ok(())
     }
 
     pub fn stop_all(&mut self) -> Result<(), String> {
-        for (index, active) in self.active.iter_mut().enumerate() {
+        for active in &mut self.active {
             *active = None;
-            self.stopped[index] = Some(Instant::now());
         }
         self.stop_pending = true;
         match self.board.all_off() {
@@ -633,7 +569,7 @@ impl OutputController {
                 match self.board.set(channel, true) {
                     Ok(()) => {
                         self.active[index] = Some(Run {
-                            deadline: Some(now + Duration::from_secs(86400)),
+                            deadline: None,
                             scheduled: true,
                         });
                         self.last_event =
@@ -671,17 +607,17 @@ impl OutputController {
         }
         let watering = &self.schedules.watering;
         if watering.enabled
+            && self.active[water_index].is_none()
             && now >= self.next_water
             && in_schedule(minute, watering.start_minute, watering.end_minute)
         {
             let seconds = watering.run_seconds;
-            let interval = watering.every_minutes;
             match self.start_at(water_channel, Some(seconds), now, (minute / 60) as u8) {
                 Ok(()) => {
                     if let Some(run) = self.active[water_index].as_mut() {
                         run.scheduled = true;
                     }
-                    self.next_water = now + Duration::from_secs(interval * 60);
+                    self.set_next_water(now);
                     self.last_event = format!(
                         "Water schedule started {} on relay {} for {} seconds",
                         water_role.label(),
@@ -690,7 +626,7 @@ impl OutputController {
                     );
                 }
                 Err(error) => {
-                    self.next_water = now + Duration::from_secs(30);
+                    self.next_water = now + Duration::from_secs(1);
                     self.last_event = format!("Watering waiting: {}", error);
                 }
             }
@@ -729,7 +665,6 @@ impl OutputController {
                     "Run timer completed"
                 };
                 if self.stop((index + 1) as u8).is_ok() {
-                    self.stopped[index] = Some(now);
                     self.last_event = format!("Output {} stopped: {}", index + 1, reason);
                     log::info!("Dashboard: {}", self.last_event);
                 }
@@ -776,26 +711,14 @@ impl OutputController {
                     .as_ref()
                     .and_then(|run| run.deadline)
                     .map(|deadline| deadline.saturating_duration_since(now).as_secs()),
-                cooldown_seconds: self.cooldown(index, now),
-                maximum_seconds: self.maximum(index),
-                schedule_controlled: self.roles[index] == RelayRole::LightsAir
-                    && self.schedules.lighting.enabled
-                    && !self.automation_paused,
+                cooldown_seconds: 0,
+                maximum_seconds: None,
+                schedule_controlled: self.active[index].as_ref().is_some_and(|run| run.scheduled),
                 blocked_reason: global_block.clone().or_else(|| {
                     if self.roles[index] == RelayRole::Unassigned {
                         Some("Assign a function to this relay in Setup settings".into())
                     } else if self.roles[index].is_water_pump() {
-                        pump_blocks[index].clone().or_else(|| {
-                            states.as_ref().ok().and_then(|states| {
-                                states
-                                    .iter()
-                                    .enumerate()
-                                    .any(|(other, on)| {
-                                        other != index && *on && self.roles[other].is_water_pump()
-                                    })
-                                    .then(|| "Another water pump is running".into())
-                            })
-                        })
+                        pump_blocks[index].clone()
                     } else {
                         None
                     }
@@ -871,7 +794,7 @@ pub fn relay_command(command: &str) -> Result<String, String> {
             controller.stop_from_dashboard(Some(channel))?;
         }
         _ => {
-            return Err("Use: relay status | relay on <1–4> [seconds] (omit seconds for Draining only) | relay off <1–4|all>".into())
+            return Err("Use: relay status | relay on <1–4> [seconds] (omit seconds for manual Start/Stop) | relay off <1–4|all>".into())
         }
     }
     Ok(controller.last_event.clone())
@@ -957,24 +880,28 @@ mod tests {
         (dir, controller, states, fail)
     }
     #[test]
-    fn pump_interlocks_limits_exclusion_and_cooldown_are_enforced() {
+    fn pumps_allow_long_parallel_runs_and_immediate_restarts_with_overflow_stops() {
         let (dir, mut controller, states, _) = fixture();
         let now = Instant::now();
-        assert!(controller.start_at(0, Some(1), now, 12).is_err());
-        assert!(controller.start_at(3, Some(301), now, 12).is_err());
-        controller.start_at(3, Some(5), now, 12).unwrap();
+        controller.pump.photo_cycle_enabled = true;
+        controller.pump.photo_cycle_start_hour = 6;
+        controller.pump.photo_cycle_end_hour = 18;
+        assert!(controller.start_at(0, Some(1), now, 23).is_err());
+        assert!(controller.start_at(3, Some(0), now, 23).is_err());
+        assert!(controller.start_at(3, Some(u64::MAX), now, 23).is_err());
+        controller.start_at(3, Some(7200), now, 23).unwrap();
+        controller.start_at(2, None, now, 23).unwrap();
+        controller.start_at(4, None, now, 23).unwrap();
+        assert_eq!(*states.lock().unwrap(), [false, true, true, true]);
+        controller.stop(3).unwrap();
+        controller.start_at(3, None, now, 23).unwrap();
+        controller.tick_at(now + Duration::from_secs(86400), 23);
         assert!(states.lock().unwrap()[2]);
-        assert!(controller.start_at(2, None, now, 12).is_err());
         std::fs::write(dir.path().join("sensors/t1_ovf"), "OVERFLOW").unwrap();
-        controller.tick_at(now, 12);
+        controller.tick_at(now, 23);
         assert!(!states.lock().unwrap()[2]);
         std::fs::write(dir.path().join("sensors/t1_ovf"), "NONE").unwrap();
-        assert!(controller
-            .start_at(3, Some(5), now + Duration::from_secs(1), 12)
-            .is_err());
-        assert!(controller
-            .start_at(3, Some(5), now + Duration::from_secs(61), 12)
-            .is_ok());
+        controller.start_at(3, None, now, 23).unwrap();
     }
     #[test]
     fn watchdog_stops_runs_without_a_browser_and_retries_failed_shutdown() {
@@ -999,12 +926,12 @@ mod tests {
         assert!(controller.start(1, Some(5)).is_err());
     }
     #[test]
-    fn operating_window_supports_midnight_and_overnight() {
-        assert!(within_window(23, 6, 24));
-        assert!(!within_window(5, 6, 24));
-        assert!(within_window(1, 22, 6));
-        assert!(within_window(23, 22, 6));
-        assert!(!within_window(12, 22, 6));
+    fn schedule_windows_support_all_day_and_overnight() {
+        assert!(in_schedule(23 * 60, 22 * 60, 6 * 60));
+        assert!(in_schedule(60, 22 * 60, 6 * 60));
+        assert!(!in_schedule(12 * 60, 22 * 60, 6 * 60));
+        assert!(in_schedule(0, 6 * 60, 6 * 60));
+        assert!(in_schedule(12 * 60, 6 * 60, 6 * 60));
     }
 
     #[test]
@@ -1057,28 +984,35 @@ mod tests {
     }
 
     #[test]
-    fn schedule_validation_rejects_identical_times_and_unsafe_cycles() {
+    fn schedule_validation_accepts_all_day_short_cycles_and_long_runs() {
+        for (interval, duration) in [(1, 5), (1, 120), (2880, 7200)] {
+            let mut config = Config::new();
+            let mut schedules = ScheduleConfig::default();
+            schedules.lighting.end_minute = schedules.lighting.start_minute;
+            schedules.watering.every_minutes = interval;
+            schedules.watering.run_seconds = duration;
+            schedules.watering.enabled = true;
+            schedules.watering.pump = crate::WateringPump::TankCycle;
+            SettingsPatch {
+                setup: None,
+                pump: None,
+                ph: None,
+                schedules: Some(schedules),
+            }
+            .apply(&mut config)
+            .unwrap();
+        }
         let mut config = Config::new();
         let mut schedules = ScheduleConfig::default();
-        schedules.lighting.end_minute = schedules.lighting.start_minute;
-        let patch = SettingsPatch {
+        schedules.watering.every_minutes = u64::MAX;
+        assert!(SettingsPatch {
             setup: None,
             pump: None,
             ph: None,
-            schedules: Some(schedules),
-        };
-        assert!(patch.apply(&mut config).is_err());
-        let mut schedules = ScheduleConfig::default();
-        schedules.watering.every_minutes = 1;
-        schedules.watering.run_seconds = 60;
-        schedules.watering.enabled = true;
-        let patch = SettingsPatch {
-            setup: None,
-            pump: None,
-            ph: None,
-            schedules: Some(schedules),
-        };
-        assert!(patch.apply(&mut config).is_err());
+            schedules: Some(schedules)
+        }
+        .apply(&mut config)
+        .is_err());
     }
 
     #[test]

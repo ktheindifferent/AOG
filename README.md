@@ -194,10 +194,11 @@ Each function can be used once. There are no permanently fixed function pins.
 Use **Stop all** before changing assignments. A successful assignment change
 leaves schedules paused until resumed. Lighting schedules follow **Lights + Air**.
 The repeating water schedule can target **Filling** or **Tank-to-tank**; existing
-schedules retain Filling until changed. **Draining** uses **Start draining / Stop**
+schedules retain Filling until changed. Every assigned relay uses **Start / Stop**
 with no timer, cooldown, or operating-hour restriction. It keeps running when
-you close the browser; press **Stop** when finished. Filling and Tank-to-tank
-use timed manual runs. Only one water pump can run at a time. Saved relay maps are preserved:
+you close the browser; press **Stop** when finished. Several water pumps can run
+together. Scheduled runs have no runtime caps or required cooldown; 5 seconds
+every minute is valid. Equal schedule start/end times mean all day. Saved relay maps are preserved:
 old `lights` becomes `lights_air`, a former standalone `air` becomes unassigned,
 and an already-unassigned relay stays off until assigned. These roles replace
 the historical eight-relay layouts in the old build notes.
@@ -217,9 +218,9 @@ selected pumps; it does not stop a pump that has not selected it.
 
 Missing or stale selected readings stop the affected pumps. Loss of the shared
 overflow board stops every pump using either sensor. **No overflow stop** disables
-overflow protection for that pump. Mutual exclusion, the external safety input,
-and emergency stop still apply to all pumps. Runtime limits, cooldown, and the
-pump operating window apply to Filling and Tank-to-tank. Changing these settings
+overflow protection for that pump. The external safety input and emergency stop
+still apply to all pumps. Relay controls have no automatic runtime caps,
+cooldowns, or restrictions between pumps. Changing these settings
 requires all outputs off and leaves schedules paused.
 
 ## Command API Security Configuration

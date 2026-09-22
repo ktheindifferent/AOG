@@ -96,7 +96,7 @@ pub fn execute_with_output(cmd: String) -> Result<String, Box<dyn Error>> {
         output.push_str("  gpio status  - Show GPIO status\n");
         output.push_str("  relay status - Show relay states and assignments\n");
         output.push_str(
-            "  relay on <1-4> [seconds] - Start output; omit seconds for Draining only\n",
+            "  relay on <1-4> [seconds] - Start output; omit seconds for manual Start/Stop\n",
         );
         output.push_str("  relay off <1-4|all> - Stop outputs and pause schedules\n");
         output.push_str("  pump status  - Show pump status\n");

@@ -142,7 +142,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>> {
         println!("api token generate:           generate new API authentication token");
         println!("api token remove:             remove API authentication requirement");
         println!("api token status:             check API token configuration status");
-        println!("relay on <1-4> [seconds]:     start output; omit seconds for Draining only");
+        println!("relay on <1-4> [seconds]:     start output; omit seconds for manual Start/Stop");
         println!("relay off <1-4|all>:          stop outputs and pause schedules");
         println!("relay status:                show states and assigned functions");
         println!("help [command]:               shows help");
