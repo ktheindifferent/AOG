@@ -39,6 +39,14 @@ pub enum PhAlertLevel {
     Critical,
 }
 
+pub(super) enum LivePhHealth {
+    Normal,
+    Warning,
+    Critical,
+    Unavailable,
+    InvalidCalibration,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum PhTrend {
     Rising,
@@ -329,6 +337,31 @@ impl PhSensor {
     }
     pub fn last_error(&self) -> Option<String> {
         self.last_error.lock().unwrap().clone()
+    }
+
+    /// A read-only health check that uses today's calibration and thresholds,
+    /// without reprojecting the entire history or waiting for the next sample.
+    pub(super) fn live_health(&self) -> LivePhHealth {
+        let config = self.config.lock().unwrap().clone();
+        if !config.enabled {
+            return LivePhHealth::Normal;
+        }
+        let raw = match self.read_raw_value() {
+            Ok(raw) if raw.is_finite() => raw,
+            _ => return LivePhHealth::Unavailable,
+        };
+        let value = self.calibration.lock().unwrap().value(raw, self.get_temperature());
+        if !value.is_finite() || !(0.0..=14.0).contains(&value) {
+            return LivePhHealth::InvalidCalibration;
+        }
+        if !config.alert_enabled {
+            return LivePhHealth::Normal;
+        }
+        match Self::alert_level_with_config(value, &config) {
+            PhAlertLevel::Normal => LivePhHealth::Normal,
+            PhAlertLevel::Warning => LivePhHealth::Warning,
+            PhAlertLevel::Critical => LivePhHealth::Critical,
+        }
     }
 
     fn save_calibration(&self, calibration: &PhCalibration) -> Result<(), std::io::Error> {

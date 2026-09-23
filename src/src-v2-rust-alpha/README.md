@@ -359,6 +359,35 @@ AOG Pi 4 at the default 100 kHz. Slowing the bus is a documented
 [Raspberry Pi clock-stretching workaround](https://learn.adafruit.com/raspberry-pi-i2c-clock-stretching-fixes/change-the-clock-speed).
 The LCD also spaces out commands and characters and retries connection failures.
 
+The 20×4 LCD keeps the IP address, CO₂, PM2.5, and status on separate rows.
+It samples readings and health every two seconds and checks the IP every 30
+seconds. Only changed character spans are written; unchanged labels and the IP
+stay in place. Shorter text erases its old suffix with spaces. The screen clears
+once on connection or recovery from an I²C error, rather than on every reading.
+Backlight commands are sent only when the color changes or the LCD reconnects.
+
+| Backlight | Status | Meaning |
+| --- | --- | --- |
+| Green | `Status: Ok` | Current monitored sensors and relay controller are healthy. |
+| Yellow | `Status: Starting` | Waiting for initial readings/controller discovery, for up to 30 seconds. |
+| Yellow | `Sensor malfunction: … (S1–S4)` | Missing, invalid, or stale air-kit (S1), particulate (S2), overflow-board (S3), or enabled pH (S4) readings. |
+| Yellow | `pH outside target (W1)` | Calibrated pH is outside the configured target but not critical; honors the pH alerts setting. |
+| Yellow | `Network unavailable (W2)` | No local IP address is available. |
+| Red | `Relay stop failed (E1)` / `Relay control fault (E2)` | A stop is pending, the relay board cannot be read, or the relay assignments are invalid. |
+| Red | `Emergency stop (E3)` | The emergency-stop flag is active. |
+| Red | `Overflow 1 (E4)` / `Overflow 2 (E5)` | A fresh reading reports an actual overflow. |
+| Red | `Critical pH (E6)` / `Check pH calibration (E7)` | Calibrated pH is critical (when alerts are enabled), or the calibrated value is outside 0–14. |
+| Red | `Controller unavailable (E8)` / `Safety input active (E9)` | Relay control is unavailable or the configured external safety input is low/unreadable. |
+
+The `Status: ` prefix stays fixed; longer messages scroll within the remaining
+12 columns, pausing at both ends. Multiple messages of the highest active
+severity rotate. Red faults take priority over yellow warnings, and cleared
+conditions disappear automatically. This is current device health, not a count
+of historical errors. The overflow board's communication-failure marker is
+reported as a yellow sensor malfunction, even though its fail-safe readings
+block pumps. Stale CO₂/PM2.5 values show `unavailable` instead of old numbers.
+pH status uses the current calibration and configured thresholds immediately.
+
 Relay startup switches all four outputs off and verifies their status. Periodic
 health checks only read status registers. Do not use the dependency's single-relay
 `get_version()` function on a quad board: its register address toggles relay 4.

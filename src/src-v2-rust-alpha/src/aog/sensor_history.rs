@@ -81,6 +81,41 @@ const METRICS: [Metric; 6] = [
     },
 ];
 
+/// Current readings for the LCD use the same validity and freshness rules as
+/// the dashboard and exports, without loading or changing recorded history.
+pub(super) fn current_readings(directory: &Path) -> [(&'static str, Option<f64>); 6] {
+    std::array::from_fn(|index| {
+        let metric = &METRICS[index];
+        (metric.key, read_latest(directory, metric).map(|reading| reading.0))
+    })
+}
+
+fn read_latest(directory: &Path, metric: &Metric) -> Option<(f64, i64)> {
+    // Open first so the metadata and value refer to the same atomically
+    // replaced sensor file, even when a new reading arrives during sampling.
+    let file = File::open(directory.join("sensors").join(metric.key)).ok()?;
+    let modified = file.metadata().ok()?.modified().ok()?;
+    if SystemTime::now().duration_since(modified).ok()?.as_secs() > metric.freshness {
+        return None;
+    }
+    let mut raw = String::new();
+    use std::io::Read;
+    file.take(128).read_to_string(&mut raw).ok()?;
+    let raw = raw.trim();
+    let value = raw
+        .strip_suffix(metric.suffix)
+        .unwrap_or(raw)
+        .trim()
+        .parse::<f64>()
+        .ok()?;
+    let timestamp = modified
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()?
+        .as_secs() as i64;
+    (value.is_finite() && (metric.minimum..=metric.maximum).contains(&value))
+        .then_some((value, timestamp))
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Sample {
     pub timestamp: i64,
@@ -243,29 +278,7 @@ impl SensorHistory {
     }
 
     fn read_latest(&self, metric: &Metric) -> Option<(f64, i64)> {
-        // Open first so the metadata and value refer to the same atomically
-        // replaced sensor file, even when a new reading arrives during sampling.
-        let file = File::open(self.directory.join("sensors").join(metric.key)).ok()?;
-        let modified = file.metadata().ok()?.modified().ok()?;
-        if SystemTime::now().duration_since(modified).ok()?.as_secs() > metric.freshness {
-            return None;
-        }
-        let mut raw = String::new();
-        use std::io::Read;
-        file.take(128).read_to_string(&mut raw).ok()?;
-        let raw = raw.trim();
-        let value = raw
-            .strip_suffix(metric.suffix)
-            .unwrap_or(raw)
-            .trim()
-            .parse::<f64>()
-            .ok()?;
-        let timestamp = modified
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .ok()?
-            .as_secs() as i64;
-        (value.is_finite() && (metric.minimum..=metric.maximum).contains(&value))
-            .then_some((value, timestamp))
+        read_latest(&self.directory, metric)
     }
 
     fn record(&self, now: DateTime<Utc>, clean_logs: bool) -> io::Result<bool> {

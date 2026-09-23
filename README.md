@@ -173,6 +173,10 @@ specifies 3.3 V data signals and Qwiic power; do not put 5 V on the Pi's I²C bu
 
 Enable I²C and use the documented 10 kHz bus setting for this installation;
 see [Rust v2 I²C setup](src/src-v2-rust-alpha/README.md#i²c-display-and-relay-board).
+The LCD updates only changed text, leaving the IP and labels in place. Its
+human-readable status uses a green backlight for `Ok`, yellow for sensor
+malfunctions/warnings, and red for active errors. Long status messages scroll
+only within the status row; the same link documents the messages and codes.
 There are no separate Pi GPIO control pins for relay channels 1–4 in this setup.
 Use suitably rated, normally-open load contacts when an unpowered relay must
 leave the equipment off; the diagrams do not specify mains terminal wiring.

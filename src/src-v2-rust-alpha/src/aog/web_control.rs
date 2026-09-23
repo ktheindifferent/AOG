@@ -746,6 +746,17 @@ impl OutputController {
 static CONTROLLER: OnceLock<Arc<Mutex<OutputController>>> = OnceLock::new();
 static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
 
+/// The LCD only observes the controller. It must not wait behind a relay
+/// command or hold this lock while sending display characters over I²C.
+pub(super) fn current_status() -> Option<ControllerStatus> {
+    let controller = CONTROLLER.get()?;
+    match controller.try_lock() {
+        Ok(mut controller) => Some(controller.status()),
+        Err(std::sync::TryLockError::Poisoned(error)) => Some(error.into_inner().status()),
+        Err(std::sync::TryLockError::WouldBlock) => None,
+    }
+}
+
 /// Console and command API relay actions share the dashboard's wiring map,
 /// deadlines, interlocks, and lock. Never bypass them with direct relay writes.
 pub fn relay_command(command: &str) -> Result<String, String> {
