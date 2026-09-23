@@ -247,6 +247,7 @@ pub struct OutputController {
     automation_paused: bool,
     next_water: Instant,
     last_schedule_check: Option<Instant>,
+    last_board_check: Option<Instant>,
     pub last_event: String,
 }
 
@@ -310,6 +311,7 @@ impl OutputController {
             automation_paused: directory.join("automation_paused").exists(),
             next_water: Instant::now() + Duration::from_secs(3600),
             last_schedule_check: None,
+            last_board_check: None,
         }
     }
 
@@ -352,17 +354,22 @@ impl OutputController {
     }
 
     pub fn configure_schedules(&mut self, schedules: ScheduleConfig) {
-        // Finish any run started by the old water schedule before changing its
-        // pump or timing, so the former target cannot outlive that schedule.
-        for index in 0..4 {
-            if self.roles[index].is_water_pump()
-                && self.active[index].as_ref().is_some_and(|run| run.scheduled)
-            {
-                let _ = self.stop(index as u8 + 1);
+        let watering_changed = self.schedules.watering != schedules.watering;
+        // Lighting edits and unchanged saves must not interrupt a water run
+        // or repeatedly postpone the next one.
+        if watering_changed {
+            for index in 0..4 {
+                if self.roles[index].is_water_pump()
+                    && self.active[index].as_ref().is_some_and(|run| run.scheduled)
+                {
+                    let _ = self.stop(index as u8 + 1);
+                }
             }
         }
         self.schedules = schedules;
-        self.set_next_water(Instant::now());
+        if watering_changed {
+            self.set_next_water(Instant::now());
+        }
         self.last_schedule_check = None;
     }
 
@@ -550,7 +557,9 @@ impl OutputController {
     pub fn tick(&mut self) {
         let now = Instant::now();
         let local = Local::now();
-        self.tick_at(now, local.hour() as u8);
+        if !self.tick_at(now, local.hour() as u8) {
+            return;
+        }
         if self
             .last_schedule_check
             .is_none_or(|last| now.duration_since(last) >= Duration::from_secs(1))
@@ -642,13 +651,42 @@ impl OutputController {
         }
     }
 
-    fn tick_at(&mut self, now: Instant, hour: u8) {
+    fn tick_at(&mut self, now: Instant, hour: u8) -> bool {
         if self.stop_pending {
             let _ = self.stop_all();
-            return;
+            return false;
+        }
+        // Observe the physical board even while idle. A power reset can turn
+        // managed runs off, and a previously disconnected board can return
+        // with an output on that this process never started.
+        if self.last_board_check.is_none_or(|last| {
+            now.saturating_duration_since(last) >= Duration::from_secs(1)
+        }) {
+            self.last_board_check = Some(now);
+            let states = match self.board.states() {
+                Ok(states) => states,
+                Err(error) => {
+                    let _ = self.stop_all();
+                    log::warn!("Relay state unavailable; stopping outputs: {}", error);
+                    return false;
+                }
+            };
+            if states.iter().enumerate().any(|(index, on)| *on && self.active[index].is_none()) {
+                if self.stop_all().is_ok() {
+                    self.last_event = "Unexpected relay ON state; all outputs stopped".into();
+                }
+                log::warn!("{}", self.last_event);
+                return false;
+            }
+            for (index, on) in states.iter().enumerate() {
+                if !on && self.active[index].take().is_some() {
+                    self.last_event = format!("Output {} switched off at the relay board", index + 1);
+                    log::warn!("{}", self.last_event);
+                }
+            }
         }
         if !self.active.iter().any(Option::is_some) {
-            return;
+            return true;
         }
         let emergency = self.directory.join("emergency_stop").exists();
         for index in 0..4 {
@@ -679,6 +717,7 @@ impl OutputController {
                 }
             }
         }
+        true
     }
 
     pub fn status(&mut self) -> ControllerStatus {
@@ -773,7 +812,7 @@ pub fn relay_command(command: &str) -> Result<String, String> {
     let mut controller = controller.lock().unwrap_or_else(|error| error.into_inner());
     let parts: Vec<_> = command.split_whitespace().collect();
     match parts.as_slice() {
-        ["relay", "status"] => {
+        ["relay", "status"] | ["pump", "status"] => {
             let status = controller.status();
             if let Some(error) = status.error {
                 return Err(error);
@@ -781,6 +820,7 @@ pub fn relay_command(command: &str) -> Result<String, String> {
             return Ok(status
                 .outputs
                 .iter()
+                .filter(|output| parts[0] != "pump" || output.role.is_water_pump())
                 .map(|output| {
                     format!(
                         "Relay {} ({}): {}",
@@ -813,8 +853,33 @@ pub fn relay_command(command: &str) -> Result<String, String> {
             let channel = channel.parse::<u8>().map_err(|_| "Relay must be 1–4")?;
             controller.stop_from_dashboard(Some(channel))?;
         }
+        ["pump", action @ ("fill" | "drain" | "cycle")] => {
+            let role = match *action {
+                "fill" => RelayRole::Filling,
+                "drain" => RelayRole::Draining,
+                _ => RelayRole::TankCycle,
+            };
+            let channel = controller.channel_for(role)
+                .ok_or_else(|| format!("Assign a relay to {} in Setup first", role.label()))?;
+            controller.start(channel, None)?;
+        }
+        ["pump", "stop"] => {
+            // Try every pump even if one stop or the pause marker fails.
+            let mut failure = controller.pause_schedules().err();
+            for index in 0..4 {
+                if controller.roles[index].is_water_pump() {
+                    if let Err(error) = controller.stop(index as u8 + 1) {
+                        failure.get_or_insert(error);
+                    }
+                }
+            }
+            if let Some(error) = failure {
+                return Err(error);
+            }
+            controller.last_event = "Water pumps stopped; schedules paused".into();
+        }
         _ => {
-            return Err("Use: relay status | relay on <1–4> [seconds] (omit seconds for manual Start/Stop) | relay off <1–4|all>".into())
+            return Err("Use: relay status | relay on <1–4> [seconds] | relay off <1–4|all> | pump status | pump fill | pump drain | pump cycle | pump stop".into())
         }
     }
     Ok(controller.last_event.clone())
@@ -834,6 +899,11 @@ pub fn shutdown() {
 }
 
 pub fn start_watchdog(controller: Arc<Mutex<OutputController>>) {
+    // A failed startup shutdown remains pending and is retried by the same
+    // watchdog that gates every subsequent manual or scheduled start.
+    if let Err(error) = controller.lock().unwrap_or_else(|error| error.into_inner()).stop_all() {
+        log::warn!("Initial relay shutdown will be retried: {}", error);
+    }
     let _ = CONTROLLER.set(Arc::clone(&controller));
     std::thread::spawn(move || loop {
         if SHUTTING_DOWN.load(Ordering::SeqCst) {

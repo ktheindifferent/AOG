@@ -184,6 +184,13 @@ of being clipped to 0 or 14. The existing temperature correction is referenced t
 the saved neutral buffer's temperature (or another saved point when pH 7 is absent).
 Changing thresholds and sampling settings also updates the page immediately.
 
+Failed pH samples retry every five seconds, independently of the configured
+history interval. Re-enabling monitoring makes the next sample due immediately.
+Only successfully saved samples advance that interval; calibration samples
+also count toward it. A failed history save leaves the existing in-memory
+history intact. Repeated identical read failures are logged once until recovery
+or a different error, rather than filling the log every retry.
+
 `POST /api/ph/calibrate` accepts `buffer_ph` and an optional `raw_value`; omitting
 the latter captures the live sensor reading. `POST /api/ph/calibration/remove`
 accepts `buffer_ph` of `4`, `7`, or `10`. Both return the complete updated pH
@@ -212,6 +219,17 @@ recorded value, window statistics, and chart points. Storage failures are
 reported on the page while in-memory history remains available. Environmental
 retention is separate from the configurable pH sample interval and history size;
 the pH chart remains on Overview.
+
+The SDS011 particulate sensor uses continuous measurement while AOG queries it
+every ten seconds. Its device work-period setting uses **minutes**, so setting
+it to `10` would introduce a ten-minute measurement cycle, not ten-second
+sampling. The continuous setting is `0`; see Nova Fitness's
+[SDS011 control protocol, working-period command](https://cdn.sparkfun.com/assets/parts/1/2/2/7/5/Laser_Dust_Sensor_Control_Protocol_V1.3.pdf).
+The reader keeps its serial port claimed between polls, verifies packet headers,
+tails, checksums, and reply types, and skips unrelated or incomplete frames.
+Command acknowledgements cannot become pollution readings. It wakes the sensor
+on connection, allows a 30-second warmup, and rediscovers it after communication
+fails. Persistent sensor settings are written only when they need changing.
 
 ### Cameras
 
@@ -345,6 +363,18 @@ All output statuses report `maximum_seconds: null` and `cooldown_seconds: 0`.
 requested timers or scheduled water runs. Commands report hardware failures
 instead of silently retrying through a separate control path.
 
+`pump fill`, `pump drain`, and `pump cycle` start the relay currently assigned
+to Filling, Draining, or Tank-to-tank, respectively. These are untimed runs with
+the same overflow and safety checks as the dashboard. `pump stop` stops water
+pumps and pauses schedules; `pump status` reads their actual relay states.
+`stats` and individual sensor commands are available through the authenticated
+command API, apply the dashboard's freshness rules, and return calibrated pH.
+Commands accept surrounding or repeated whitespace, but must match their full
+syntax; unknown commands return an error. `gpio status` reports actual pin modes
+and levels. The old direct `gpio on/off/stress` commands are unsupported in Rust
+v2; they formerly bypassed relay management and could leave unstoppable threads.
+Use the assigned relay controls instead. Token management remains console-only.
+
 Stopping any output pauses schedules; scheduled outputs then stop. **Stop all**
 and **Pause schedules** stop all four outputs immediately. The pause survives
 restarts until explicitly resumed. Schedule settings persist in
@@ -357,6 +387,16 @@ Scheduled water runs use their chosen daily window and duration, their selected
 overflow sensors, the optional GPIO safety input, and emergency stop. A watering
 run stops when its schedule window closes. Shutdown failures block new starts
 and are retried. Lighting and watering schedules run only while AOG is running.
+Changing only the lighting schedule, or saving unchanged schedules, preserves
+the current water run and its next-run time. Changing the water schedule stops
+its existing scheduled run and starts a fresh interval.
+
+The watchdog checks relay readback every second, including while idle. An
+unexpected ON state triggers shutdown of all outputs; a run switched off at the
+board is removed from the active-run list. Manual runs stay off after a board
+reset, while enabled schedules continue to follow their configured windows.
+The controller confirms all outputs are off on startup and retries a failed
+shutdown before accepting new starts, including when the board reconnects later.
 
 Settings, password, calibration, and output APIs require a dashboard session;
 mutations also require its `X-AOG-CSRF` token. Settings responses omit password

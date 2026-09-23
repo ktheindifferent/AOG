@@ -267,6 +267,7 @@ pub struct PhSensor {
     directory: PathBuf,
     config: Mutex<crate::PhConfig>,
     last_error: Mutex<Option<String>>,
+    last_sampled: Mutex<Option<Instant>>,
 }
 
 #[derive(Debug, Clone)]
@@ -301,6 +302,7 @@ impl PhSensor {
             directory: directory.into(),
             config: Mutex::new(crate::PhConfig::default()),
             last_error: Mutex::new(None),
+            last_sampled: Mutex::new(None),
         }
     }
 
@@ -311,7 +313,11 @@ impl PhSensor {
             history.readings.pop_front();
         }
         drop(history);
-        *self.config.lock().unwrap() = config;
+        let mut current = self.config.lock().unwrap();
+        if current.enabled != config.enabled {
+            *self.last_sampled.lock().unwrap() = None;
+        }
+        *current = config;
     }
 
     pub fn history(&self) -> PhHistory {
@@ -467,10 +473,15 @@ impl PhSensor {
         };
 
         let mut history = self.history.lock().unwrap();
-        history.add_reading(reading.clone());
-        self.save_history(&history)
+        let mut updated = history.clone();
+        updated.add_reading(reading.clone());
+        self.save_history(&updated)
             .map_err(|e| format!("Cannot save pH history: {}", e))?;
+        // A failed disk write must not evict valid in-memory history or count
+        // an unsaved sample as successful. Publication is a separate step.
+        *history = updated;
         drop(history);
+        *self.last_sampled.lock().unwrap() = Some(Instant::now());
 
         crate::atomic_write(
             &self.directory.join("sensors/ph_calibrated"),
@@ -769,13 +780,21 @@ pub fn init_ph_monitoring() {
             if let Ok(config) = crate::Config::load(0) {
                 sensor.configure(config.ph_config.unwrap_or_default());
             }
-            let mut last_reading: Option<Instant> = None;
+            let mut last_attempt: Option<Instant> = None;
+            let retry_interval = Duration::from_secs(5);
 
             loop {
                 let config = sensor.config.lock().unwrap().clone();
                 let interval =
                     Duration::from_secs(config.monitoring_interval_seconds.clamp(5, 3600));
-                if !config.enabled || last_reading.is_some_and(|last| last.elapsed() < interval) {
+                if !config.enabled {
+                    last_attempt = None;
+                    thread::sleep(Duration::from_secs(1));
+                    continue;
+                }
+                let sampled_recently = sensor.last_sampled.lock().unwrap()
+                    .is_some_and(|last| last.elapsed() < interval);
+                if sampled_recently || last_attempt.is_some_and(|last| last.elapsed() < retry_interval) {
                     thread::sleep(Duration::from_secs(1));
                     continue;
                 }
@@ -797,12 +816,15 @@ pub fn init_ph_monitoring() {
                         }
                     }
                     Err(e) => {
-                        log::error!("Failed to read pH sensor: {}", e);
-                        *sensor.last_error.lock().unwrap() = Some(e);
+                        let mut previous = sensor.last_error.lock().unwrap();
+                        if previous.as_ref() != Some(&e) {
+                            log::error!("Failed to read pH sensor (will retry): {}", e);
+                        }
+                        *previous = Some(e);
                     }
                 }
 
-                last_reading = Some(Instant::now());
+                last_attempt = Some(Instant::now());
             }
         });
 }

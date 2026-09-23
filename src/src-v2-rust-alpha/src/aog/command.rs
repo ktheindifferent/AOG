@@ -21,257 +21,49 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::aog;
-
-use rppal::gpio::Gpio;
-
 use std::error::Error;
 
-use std::thread;
-use std::time::Duration;
-
-use std::io::{self, BufRead};
-use std::sync::mpsc::{self};
-
-// Gpio uses BCM pin numbering. BCM GPIO 23 is tied to physical pin 16.
-// const GPIO_LED: u8 = 23;
-
+/// Console-only credential actions stay separate from the remote command API.
+/// All shared commands use one parser and return their actual result.
 pub fn run(cmd: String) -> Result<(), Box<dyn Error>> {
-    let command = cmd.clone();
-
-    // Command API token management commands
-    if command == "api token generate" {
-        match crate::aog::auth::set_api_token() {
-            Ok(token) => {
-                println!("New Command API token generated: {}", token);
-                println!("Store this token securely. It will be required for all API requests.");
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("Failed to generate API token: {}", e);
-                return Err(e);
-            }
+    let parts: Vec<_> = cmd.split_whitespace().collect();
+    match parts.as_slice() {
+        ["api", "token", "generate"] => {
+            let token = aog::auth::set_api_token()?;
+            println!("New Command API token generated: {}", token);
+            println!("Store this token securely. It is required for remote command requests.");
         }
-    } else if command == "api token remove" {
-        match crate::aog::auth::remove_api_token() {
-            Ok(_) => {
-                println!("Command API token removed. Only local commands are accepted until a new token is configured.");
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("Failed to remove API token: {}", e);
-                return Err(e);
-            }
+        ["api", "token", "remove"] => {
+            aog::auth::remove_api_token()?;
+            println!("Command API token removed. Only local commands are accepted until a new token is configured.");
         }
-    } else if command == "api token status" {
-        let config = crate::Config::load(0)?;
-        if config.command_api_token.is_some() {
-            println!("Command API token is configured");
-            println!("API requires authentication with the configured token");
-        } else {
-            println!("No Command API token configured");
-            println!("API works without authentication (less secure)");
-        }
-        return Ok(());
-    }
-
-    if command.starts_with("cls") || command.starts_with("clear") {
-        aog::cls();
-    }
-
-    if command.starts_with("install") {
-        // crate::setup::install();
-    }
-
-    if command.starts_with("uninstall") {
-        // crate::setup::uninstall();
-        println!("Uninstall command is not available in library mode");
-    }
-
-    if command.starts_with("stats") {
-        aog::print_stats();
-    }
-
-    if command.starts_with("tvoc") {
-        println!("{}", aog::sensors::get_value("tvoc"));
-    }
-
-    if command.starts_with("temp") {
-        println!("{}", aog::sensors::get_value("temp"));
-    }
-
-    if command.starts_with("hum") {
-        println!("{}", aog::sensors::get_value("hum"));
-    }
-
-    if command.starts_with("co2") {
-        println!("{}", aog::sensors::get_value("co2"));
-    }
-
-    if command.starts_with("pm25") {
-        println!("{}", aog::sensors::get_value("pm25"));
-    }
-
-    if command.starts_with("pm10") {
-        println!("{}", aog::sensors::get_value("pm10"));
-    }
-
-    if command.starts_with("ph") {
-        println!("{}", aog::sensors::get_value("ph"));
-    }
-
-    if command.starts_with("t1_ovf") {
-        println!("{}", aog::sensors::get_value("t1_ovf"));
-    }
-
-    if command.starts_with("t2_ovf") {
-        println!("{}", aog::sensors::get_value("t2_ovf"));
-    }
-
-    if command.split_whitespace().next() == Some("relay") {
-        let message = aog::web_control::relay_command(&command)
-            .map_err(|error| io::Error::new(io::ErrorKind::Other, error))?;
-        println!("{}", message);
-        return Ok(());
-    }
-
-    if command.clone() == *"help" {
-        println!("gpio status:                  prints status of the gpio bus");
-        println!("gpio [on/off] [gpio_bdm]:     change state of a gpio pin");
-        println!("clear/cls:                    clears screen");
-        println!("api token generate:           generate new API authentication token");
-        println!("api token remove:             remove API authentication requirement");
-        println!("api token status:             check API token configuration status");
-        println!("relay on <1-4> [seconds]:     start output; omit seconds for manual Start/Stop");
-        println!("relay off <1-4|all>:          stop outputs and pause schedules");
-        println!("relay status:                show states and assigned functions");
-        println!("help [command]:               shows help");
-    }
-
-    // Test command disabled - infinite loop removed
-    if command == *"test" {
-        log::info!("Test command is currently disabled");
-    }
-
-    if command == *"stdout" {
-        match get_stdout() {
-            Ok(stdout) => println!("{}", stdout),
-            Err(e) => log::error!("Failed to get stdout: {}", e),
-        }
-    }
-
-    // 0-21
-    if command.starts_with("gpio") {
-        if command == *"gpio status" {
-            let _ = aog::gpio::status::print();
-        }
-
-        if command.contains("on") {
-            println!("Press enter to terminate the gpio on(set-low) thread");
-            let (tx, _rx) = mpsc::channel();
-            let split = cmd.split(' ');
-            let split_vec = split.collect::<Vec<&str>>();
-            let selected_pin = match split_vec[2].parse::<u8>() {
-                Ok(pin) => pin,
-                Err(e) => {
-                    log::error!("Invalid pin number: {}", e);
-                    return Ok(());
-                }
-            };
-
-            let gpio = Gpio::new();
-            if gpio.is_ok() {
-                let gpio_pin = gpio.ok().and_then(|g| g.get(selected_pin).ok());
-                if let Some(pin_result) = gpio_pin {
-                    let mut pin = pin_result.into_output();
-                    thread::spawn(move || loop {
-                        pin.set_low();
-                        thread::sleep(Duration::from_millis(500));
-                    });
-                } else {
-                    log::warn!("Command '{}' failed. GPIO pin is unavailable.", command);
-                }
+        ["api", "token", "status"] => {
+            let config = crate::Config::load(0)?;
+            if config
+                .command_api_token
+                .as_ref()
+                .is_some_and(|token| !token.is_empty())
+            {
+                println!(
+                    "Command API token is configured; command requests require authentication."
+                );
+            } else if config.command_api_token.is_some() {
+                println!(
+                    "The configured Command API token is empty; command requests are disabled."
+                );
             } else {
-                log::warn!("Command '{}' failed. GPIO is unavailable.", command);
+                println!(
+                    "No Command API token configured; only local command requests are accepted."
+                );
             }
-
-            if !command.contains("nolock") {
-                let mut line = String::new();
-                let stdin = io::stdin();
-                let _ = stdin.lock().read_line(&mut line);
-                let _ = tx.send(());
-            }
-        } else if command.contains("off") {
-            let split = cmd.split(' ');
-            let split_vec = split.collect::<Vec<&str>>();
-            let selected_pin = match split_vec[2].parse::<u8>() {
-                Ok(pin) => pin,
-                Err(e) => {
-                    log::error!("Invalid pin number: {}", e);
-                    return Ok(());
-                }
-            };
-
-            let gpio = Gpio::new();
-            if gpio.is_ok() {
-                let gpio_pin = gpio.ok().and_then(|g| g.get(selected_pin).ok());
-                if let Some(pin_result) = gpio_pin {
-                    pin_result.into_input();
-                } else {
-                    log::warn!("Command '{}' failed. GPIO pin is unavailable.", command);
-                }
-            } else {
-                log::warn!("Command '{}' failed. GPIO is unavailable.", command);
-            }
-        } else if command.contains("stress") {
-            println!("Press enter to terminate the gpio stress thread");
-            let (tx, _rx) = mpsc::channel();
-            let split = cmd.split(' ');
-            let split_vec = split.collect::<Vec<&str>>();
-            let selected_pin = match split_vec[2].parse::<u8>() {
-                Ok(pin) => pin,
-                Err(e) => {
-                    log::error!("Invalid pin number: {}", e);
-                    return Ok(());
-                }
-            };
-
-            let gpio = Gpio::new();
-            if gpio.is_ok() {
-                let gpio_pin = gpio.ok().and_then(|g| g.get(selected_pin).ok());
-                if let Some(pin_result) = gpio_pin {
-                    let mut pin = pin_result.into_output();
-                    thread::spawn(move || loop {
-                        pin.set_low();
-                        thread::sleep(Duration::from_millis(2000));
-                        pin.set_high();
-                        thread::sleep(Duration::from_millis(2000));
-                    });
-                } else {
-                    log::warn!("Command '{}' failed. GPIO pin is unavailable.", command);
-                }
-            } else {
-                log::warn!("Command '{}' failed. GPIO is unavailable.", command);
-            }
-
-            if !command.contains("nolock") {
-                let mut line = String::new();
-                let stdin = io::stdin();
-                let _ = stdin.lock().read_line(&mut line);
-                let _ = tx.send(());
+        }
+        _ => {
+            let show_local_help = parts.as_slice() == ["help"];
+            println!("{}", aog::command_exec::execute_with_output(cmd)?);
+            if show_local_help {
+                println!("  api token generate | remove | status - Manage command authentication locally");
             }
         }
     }
-
     Ok(())
-}
-
-// use std::io::{self, Write};
-
-fn get_stdout() -> io::Result<String> {
-    let stdout = io::stdout();
-    // let mut handle = stdout.lock();
-
-    // handle.write_all(b"hello world")?;
-
-    Ok(format!("{:?}", stdout))
 }

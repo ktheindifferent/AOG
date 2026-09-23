@@ -23,7 +23,6 @@
 
 use std::error::Error;
 use std::fmt;
-use std::process;
 
 use rppal::gpio::Gpio;
 use rppal::system::{DeviceInfo, Model};
@@ -112,7 +111,7 @@ fn format_pin(
     }
 }
 
-fn print_header(header: &[PinType]) -> Result<(), Box<dyn Error>> {
+fn format_header(header: &[PinType]) -> Result<String, Box<dyn Error>> {
     let gpio = Gpio::new()?;
 
     let mut buf = String::with_capacity(1600);
@@ -143,12 +142,10 @@ fn print_header(header: &[PinType]) -> Result<(), Box<dyn Error>> {
 
     buf.push_str("+------+-------+---+----+----+---+-------+------+\n");
 
-    print!("{}", buf);
-
-    Ok(())
+    Ok(buf)
 }
 
-pub fn print() -> Result<(), Box<dyn Error>> {
+pub fn snapshot() -> Result<String, Box<dyn Error>> {
     // Identify the Pi's model, so we can print the appropriate GPIO header.
     match DeviceInfo::new()?.model() {
         Model::RaspberryPiBRev1 => {
@@ -159,9 +156,9 @@ pub fn print() -> Result<(), Box<dyn Error>> {
             header_rev1[4] = PinType::Gpio(1);
             header_rev1[12] = PinType::Gpio(21);
 
-            print_header(&header_rev1[..MAX_PINS_SHORT])
+            format_header(&header_rev1[..MAX_PINS_SHORT])
         }
-        Model::RaspberryPiA | Model::RaspberryPiBRev2 => print_header(&HEADER[..MAX_PINS_SHORT]),
+        Model::RaspberryPiA | Model::RaspberryPiBRev2 => format_header(&HEADER[..MAX_PINS_SHORT]),
         Model::RaspberryPiAPlus
         | Model::RaspberryPiBPlus
         | Model::RaspberryPi2B
@@ -169,11 +166,18 @@ pub fn print() -> Result<(), Box<dyn Error>> {
         | Model::RaspberryPi3B
         | Model::RaspberryPi3BPlus
         | Model::RaspberryPi4B
+        | Model::RaspberryPi400
         | Model::RaspberryPiZero
-        | Model::RaspberryPiZeroW => print_header(&HEADER[..MAX_PINS_LONG]),
-        model => {
-            log::error!("Error: No GPIO header information available for {}", model);
-            process::exit(1);
-        }
+        | Model::RaspberryPiZeroW => format_header(&HEADER[..MAX_PINS_LONG]),
+        model => Err(std::io::Error::other(format!(
+            "No GPIO header information available for {}",
+            model
+        ))
+        .into()),
     }
+}
+
+pub fn print() -> Result<(), Box<dyn Error>> {
+    print!("{}", snapshot()?);
+    Ok(())
 }

@@ -1364,61 +1364,8 @@ pub fn init_command_api() {
                     input_command: String,
                 }));
 
-                // Validate and sanitize input command
-                let command = input.input_command.trim();
-
-                // Define allowed commands whitelist
-                let allowed_commands = vec![
-                    "help",
-                    "cls",
-                    "clear",
-                    "gpio status",
-                    "stdout",
-                    "test",
-                    "pump status",
-                    "pump fill",
-                    "pump drain",
-                    "pump stop",
-                    "relay status",
-                ];
-
-                // Check if command is in whitelist or is a safe gpio command
-                let is_safe = allowed_commands.contains(&command)
-                    || (command.starts_with("gpio on ") && command.split_whitespace().count() == 3)
-                    || (command.starts_with("gpio off ")
-                        && command.split_whitespace().count() == 3)
-                    || (command.starts_with("relay on ")
-                        && matches!(command.split_whitespace().count(), 3 | 4))
-                    || (command.starts_with("relay off ")
-                        && command.split_whitespace().count() == 3);
-
-                if !is_safe {
-                    log::warn!("Blocked potentially unsafe command: {}", command);
-                    let response = Response::json(&CommandStatus {
-                        status: "blocked: unauthorized command".to_string(),
-                        output: None,
-                    });
-                    return response;
-                }
-
-                // Additional validation for gpio/relay commands
-                if command.starts_with("gpio ") {
-                    let parts: Vec<&str> = command.split_whitespace().collect();
-                    if parts.len() >= 3 {
-                        // Validate pin/relay number is numeric
-                        if parts[2].parse::<u8>().is_err() {
-                            log::warn!("Invalid pin/relay number in command: {}", command);
-                            let response = Response::json(&CommandStatus {
-                                status: "error: invalid pin/relay number".to_string(),
-                                output: None,
-                            });
-                            return response;
-                        }
-                    }
-                }
-
-                if input.input_command == *"admin" {}
-
+                // The shared exact parser is the allowlist. Unknown commands
+                // return an error instead of a fabricated successful result.
                 // Execute command and capture output
                 let output =
                     match aog::command_exec::execute_with_output(input.input_command.clone()) {

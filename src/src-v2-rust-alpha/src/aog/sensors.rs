@@ -20,7 +20,10 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use sds011::{Message, SDS011};
+mod particulate;
+
+use particulate::Sds011;
+use sds011::Message;
 use serial2::SerialPort;
 use std::collections::HashSet;
 use std::fs;
@@ -102,22 +105,62 @@ pub fn init_serial_monitoring() {
         fetch_arduino(ENVIRONMENT_DEVICE.to_owned());
         if let Err(error) = thread::Builder::new()
             .name("particulates".into())
-            .spawn(|| loop {
-                if let Some(reading) = fetch_particulates() {
-                    for (name, value) in [("pm10", reading.pm10), ("pm25", reading.pm25)] {
-                        if let Err(error) =
-                            write_sensor(Path::new(SENSOR_DIR), name, &value.to_string())
-                        {
-                            log::error!("Cannot save {}: {}", name, error);
+            .spawn(|| {
+                let mut connection: Option<ParticulateConnection> = None;
+                loop {
+                    if connection.is_none() {
+                        connection = connect_particulates();
+                    }
+                    if let Some(connected) = &connection {
+                        // Nova specifies 30 seconds for stable readings after
+                        // waking. Keep the port claimed throughout warmup and
+                        // between polls so Arduino discovery cannot steal it.
+                        if Instant::now() >= connected.ready_at {
+                            match connected.sensor.query() {
+                                Ok(reading) => {
+                                    for (name, value) in [("pm10", reading.pm10), ("pm25", reading.pm25)] {
+                                        if let Err(error) = write_sensor(Path::new(SENSOR_DIR), name, &value.to_string()) {
+                                            log::error!("Cannot save {}: {}", name, error);
+                                        }
+                                    }
+                                }
+                                Err(error) => {
+                                    log::warn!("Particulate sensor disconnected; rediscovering: {}", error);
+                                    connection = None;
+                                }
+                            }
                         }
                     }
+                    thread::sleep(Duration::from_secs(10));
                 }
-                thread::sleep(Duration::from_secs(10));
             })
         {
             log::error!("Cannot start particulate reader: {}", error);
         }
     });
+}
+
+struct ParticulateConnection {
+    sensor: Sds011,
+    _claim: PortClaim,
+    ready_at: Instant,
+}
+
+fn connect_particulates() -> Option<ParticulateConnection> {
+    for path in sensor_ports_in(Path::new("/dev")) {
+        let Some(claim) = PortClaim::acquire(&path) else {
+            continue;
+        };
+        if let Ok(sensor) = Sds011::open(&path) {
+            log::info!("Particulate sensor connected on {}; warming up", path.display());
+            return Some(ParticulateConnection {
+                sensor,
+                _claim: claim,
+                ready_at: Instant::now() + Duration::from_secs(30),
+            });
+        }
+    }
+    None
 }
 
 fn first_particulate_reading<T>(
@@ -138,8 +181,7 @@ fn first_particulate_reading<T>(
 
 fn fetch_particulates() -> Option<Message> {
     first_particulate_reading(sensor_ports_in(Path::new("/dev")), |path| {
-        let mut sensor = SDS011::new(path.to_str()?).ok()?;
-        sensor.set_work_period(10).ok()?;
+        let sensor = Sds011::open(path).ok()?;
         sensor.query().ok()
     })
 }

@@ -1,114 +1,82 @@
 use crate::aog;
 use std::error::Error;
+use std::io;
+use std::path::Path;
 
-/// Execute a command and return the output as a string
+const HELP: &str = "Available commands:
+  stats                         - Show current sensor readings
+  temp | hum | co2 | tvoc        - Show a current air-kit reading
+  pm25 | pm10 | ph               - Show particulate or calibrated pH readings
+  t1_ovf | t2_ovf                - Show current overflow readings
+  gpio status                   - Show GPIO header modes and levels
+  relay status                  - Show relay states and assignments
+  relay on <1-4> [seconds]       - Start an output; omit seconds for Start/Stop
+  relay off <1-4|all>            - Stop outputs and pause schedules
+  pump status                   - Show water-pump states and assignments
+  pump fill | drain | cycle     - Start the relay assigned to that pump
+  pump stop                     - Stop water pumps and pause schedules
+  cls | clear                   - Clear the console screen
+  help                          - Show this help";
+
+fn sensor_value(name: &str) -> String {
+    match name {
+        "ph" => aog::ph_sensor::active_sensor()
+            .get_status()
+            .current_ph
+            .map(|value| format!("{value:.2}"))
+            .unwrap_or_else(|| "N/A".into()),
+        "t1_ovf" | "t2_ovf" => {
+            let readings = aog::sensors::overflow_readings_in(Path::new("/opt/aog/sensors"));
+            readings[usize::from(name == "t2_ovf")].as_str().into()
+        }
+        _ => aog::sensor_history::current_readings(Path::new("/opt/aog"))
+            .into_iter()
+            .find(|(key, _)| *key == name)
+            .and_then(|(_, value)| value)
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "N/A".into()),
+    }
+}
+
+/// This exact parser is also the remote command allowlist. Never fall back to
+/// console execution: credential changes are local-only, and output writes
+/// must not bypass the relay controller's ownership/interlocks.
 pub fn execute_with_output(cmd: String) -> Result<String, Box<dyn Error>> {
-    let command = cmd.clone();
-    let mut output = String::new();
-
-    if command.starts_with("cls") || command.starts_with("clear") {
-        aog::cls();
-        output.push_str("Screen cleared");
+    let parts: Vec<_> = cmd.split_whitespace().collect();
+    match parts.as_slice() {
+        ["help"] => Ok(HELP.into()),
+        ["cls" | "clear"] => {
+            aog::cls();
+            Ok("Screen cleared".into())
+        }
+        ["stats"] => {
+            let mut output = String::from("Current sensor readings:\n");
+            for (name, label, unit) in [
+                ("temp", "Temperature", " °C"),
+                ("hum", "Humidity", " %"),
+                ("co2", "CO2", " ppm"),
+                ("tvoc", "TVOC", " ppb"),
+                ("pm25", "PM2.5", " µg/m³"),
+                ("pm10", "PM10", " µg/m³"),
+                ("ph", "pH", ""),
+                ("t1_ovf", "Overflow sensor 1", ""),
+                ("t2_ovf", "Overflow sensor 2", ""),
+            ] {
+                let value = sensor_value(name);
+                let unit = if value == "N/A" { "" } else { unit };
+                output.push_str(&format!("{label}: {value}{unit}\n"));
+            }
+            Ok(output.trim_end().into())
+        }
+        [name @ ("temp" | "hum" | "co2" | "tvoc" | "pm25" | "pm10" | "ph" | "t1_ovf" | "t2_ovf")] => {
+            Ok(sensor_value(name))
+        }
+        ["gpio", "status"] => aog::gpio::status::snapshot(),
+        ["relay", ..] | ["pump", ..] => aog::web_control::relay_command(&cmd)
+            .map_err(|error| io::Error::other(error).into()),
+        ["gpio", ..] => Err(io::Error::other(
+            "Raw GPIO control is not supported by the Rust v2 relay controller. Use relay on/off with the assigned relay number."
+        ).into()),
+        _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "Unknown or malformed command; use help for supported commands").into()),
     }
-
-    if command.starts_with("install") {
-        output.push_str("Install command is not available in library mode");
-    }
-
-    if command.starts_with("uninstall") {
-        output.push_str("Uninstall command is not available in library mode");
-    }
-
-    if command.starts_with("stats") {
-        // Capture stats output
-        output.push_str("System Statistics:\n");
-        output.push_str(&format!(
-            "Temperature: {}\n",
-            aog::sensors::get_value("temp")
-        ));
-        output.push_str(&format!("Humidity: {}\n", aog::sensors::get_value("hum")));
-        output.push_str(&format!("CO2: {}\n", aog::sensors::get_value("co2")));
-        output.push_str(&format!("PM2.5: {}\n", aog::sensors::get_value("pm25")));
-        output.push_str(&format!("PM10: {}\n", aog::sensors::get_value("pm10")));
-    }
-
-    if command.starts_with("tvoc") {
-        output = aog::sensors::get_value("tvoc");
-    }
-
-    if command.starts_with("temp") {
-        output = aog::sensors::get_value("temp");
-    }
-
-    if command.starts_with("hum") {
-        output = aog::sensors::get_value("hum");
-    }
-
-    if command.starts_with("co2") {
-        output = aog::sensors::get_value("co2");
-    }
-
-    if command.starts_with("pm25") {
-        output = aog::sensors::get_value("pm25");
-    }
-
-    if command.starts_with("pm10") {
-        output = aog::sensors::get_value("pm10");
-    }
-
-    if command.starts_with("ph") {
-        output = aog::sensors::get_value("ph");
-    }
-
-    if command.starts_with("t1_ovf") {
-        output = aog::sensors::get_value("t1_ovf");
-    }
-
-    if command.starts_with("t2_ovf") {
-        output = aog::sensors::get_value("t2_ovf");
-    }
-
-    if command.starts_with("gpio status") {
-        output.push_str("GPIO Status:\n");
-        // Add GPIO status information
-        output.push_str("GPIO pins configured and active\n");
-    }
-
-    if command.split_whitespace().next() == Some("relay") {
-        return aog::web_control::relay_command(&command)
-            .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error).into());
-    }
-
-    if command.starts_with("pump status") {
-        output.push_str("Pump Status:\n");
-        // Add pump status information
-        output.push_str("Pumps operational\n");
-    }
-
-    if command.starts_with("help") {
-        output.push_str("Available commands:\n");
-        output.push_str("  stats     - Show system statistics\n");
-        output.push_str("  temp      - Show temperature\n");
-        output.push_str("  hum       - Show humidity\n");
-        output.push_str("  co2       - Show CO2 level\n");
-        output.push_str("  pm25      - Show PM2.5 level\n");
-        output.push_str("  pm10      - Show PM10 level\n");
-        output.push_str("  gpio status  - Show GPIO status\n");
-        output.push_str("  relay status - Show relay states and assignments\n");
-        output.push_str(
-            "  relay on <1-4> [seconds] - Start output; omit seconds for manual Start/Stop\n",
-        );
-        output.push_str("  relay off <1-4|all> - Stop outputs and pause schedules\n");
-        output.push_str("  pump status  - Show pump status\n");
-        output.push_str("  cls/clear    - Clear screen\n");
-        output.push_str("  help         - Show this help\n");
-    }
-
-    if output.is_empty() {
-        // Still execute the original command for side effects
-        aog::command::run(cmd)?;
-        output.push_str("Command executed");
-    }
-
-    Ok(output)
 }

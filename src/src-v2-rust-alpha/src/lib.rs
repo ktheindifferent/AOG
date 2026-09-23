@@ -312,14 +312,14 @@ impl OverflowConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ScheduleConfig {
     pub lighting: LightingSchedule,
     pub watering: WateringSchedule,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct LightingSchedule {
     pub enabled: bool,
@@ -337,7 +337,7 @@ impl Default for LightingSchedule {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct WateringSchedule {
     pub enabled: bool,
