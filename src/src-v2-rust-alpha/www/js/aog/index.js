@@ -713,6 +713,11 @@
       if (request === state.statsRequest) showStats(stats);
     } catch (error) {
       if (request === state.statsRequest) {
+        for (const id of ['temperature-value', 'humidity-value', 'co2-value', 'pm25-value', 'pm10-value', 'tvoc-value']) text(id, 'Unavailable');
+        for (const index of [1, 2]) {
+          badge($(`tank${index}-status`), 'Unavailable', 'warning');
+          text(`tank${index}-detail`, 'Cannot confirm the current sensor state');
+        }
         badge($('connection'), '● Offline', 'warning');
         text('updated-at', 'Readings unavailable — retrying');
       }
@@ -729,6 +734,8 @@
     } catch (error) {
       if (request === state.phRequest && !state.phBusy) {
         state.phError = error.message;
+        text('ph-value', '—');
+        badge($('ph-badge'), 'Unavailable', 'warning');
         text('ph-trend', 'Trend unavailable');
         renderChart();
       }

@@ -24,7 +24,7 @@ use sds011::{Message, SDS011};
 use serial2::SerialPort;
 use std::collections::HashSet;
 use std::fs;
-use std::io::{self, ErrorKind};
+use std::io::{self, ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, Once};
 use std::thread;
@@ -172,6 +172,50 @@ pub fn parse_arduino(raw: String, line_key: &str, on_fail_string: String) -> Str
 
 pub fn get_value(sensor: &str) -> String {
     fs::read_to_string(Path::new(SENSOR_DIR).join(sensor)).unwrap_or_else(|_| "N/A".into())
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OverflowReading {
+    Normal,
+    Overflow,
+    Unavailable,
+}
+
+impl OverflowReading {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "NONE",
+            Self::Overflow => "OVERFLOW",
+            Self::Unavailable => "N/A",
+        }
+    }
+}
+
+pub(super) fn overflow_readings_in(directory: &Path) -> [OverflowReading; 2] {
+    let readings = ["t1_ovf", "t2_ovf"].map(|name| {
+        match fresh_text(&directory.join(name), STALE_TIMEOUT).as_deref().map(str::trim) {
+            Some("NONE" | "NORMAL") => OverflowReading::Normal,
+            Some("OVERFLOW") => OverflowReading::Overflow,
+            _ => OverflowReading::Unavailable,
+        }
+    });
+    // Failure writes this marker before publishing synthetic OVERFLOW values.
+    // Those values must be shown as communication failures, not real overflows.
+    if directory.join("overflow_error").exists() {
+        [OverflowReading::Unavailable; 2]
+    } else {
+        readings
+    }
+}
+
+pub(super) fn fresh_text(path: &Path, maximum_age: Duration) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    if file.metadata().ok()?.modified().ok()?.elapsed().ok()? >= maximum_age {
+        return None;
+    }
+    let mut value = String::new();
+    file.take(128).read_to_string(&mut value).ok()?;
+    Some(value)
 }
 
 pub fn overflow_allows_pumping() -> bool {

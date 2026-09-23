@@ -454,45 +454,31 @@ pub fn mkdir(apath: &str) -> Result<String>{
     return Ok(String::from_utf8_lossy(&output.stdout).to_string());    
 }
 
-/// Sets secure permissions for AOG files and directories
-/// Directories: 755 (owner: rwx, group: r-x, others: r-x)
-/// Config files: 644 (owner: rw-, group: r--, others: r--)
-/// Log files: 664 (owner: rw-, group: rw-, others: r--)
-pub fn fix_permissions(apath: &str) -> Result<String>{
-    use std::path::Path;
-    
-    // Set directory permissions to 755
-    let dir_perms = if Path::new(apath).is_dir() {
-        "755"
-    } else if apath.ends_with(".log") {
-        "664"  // Log files need group write for rotation
-    } else if apath.ends_with(".json") || apath.ends_with(".conf") {
-        "644"  // Config files: owner write, others read
-    } else {
-        "644"  // Default for other files
-    };
-    
-    let child = Command::new("/bin/chmod")
-    .arg("-R")
-    .arg(dir_perms)
-    .arg(apath)
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to execute chmod: {}", e)))?;
+fn private_path(path: &std::path::Path) -> bool {
+    path.components().any(|component| matches!(component.as_os_str().to_str(), Some("bak" | "crt")))
+        || path.extension().is_some_and(|extension| matches!(extension.to_str(), Some("json" | "conf" | "key")))
+}
 
-    let output = child
-    .wait_with_output()
-    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to wait on child: {}", e)))?;
-    
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(std::io::Error::new(std::io::ErrorKind::Other, 
-            format!("chmod failed: {}", stderr)).into());
+/// Change only the requested path. Recursively applying a directory's 755 mode
+/// made saved passwords, TLS keys, and private backups readable on every boot.
+pub fn fix_permissions(apath: &str) -> Result<String>{
+    use std::os::unix::fs::PermissionsExt;
+    let path = std::path::Path::new(apath);
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Refusing to change permissions through a symlink").into());
     }
-    
-    log::info!("Set permissions {} on {}", dir_perms, apath);
-    return Ok(String::from_utf8_lossy(&output.stdout).to_string()); 
+    let mode = if metadata.is_dir() {
+        if private_path(path) { 0o700 } else { 0o755 }
+    } else if private_path(path) {
+        0o600
+    } else if path.extension().is_some_and(|extension| extension == "log") {
+        0o640
+    } else {
+        0o644
+    };
+    fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+    Ok(format!("Set permissions {:o} on {}", mode, apath))
 }
 
 /// Sets ownership to the aog user and group
@@ -524,15 +510,20 @@ pub fn set_ownership(apath: &str, user: &str, group: &str) -> Result<String> {
 pub fn validate_permissions(apath: &str) -> Result<bool> {
     use std::os::unix::fs::PermissionsExt;
     
-    let metadata = fs::metadata(apath)?;
+    let metadata = fs::symlink_metadata(apath)?;
+    if metadata.file_type().is_symlink() {
+        return Ok(false);
+    }
     let permissions = metadata.permissions();
     let mode = permissions.mode();
     
     // Check if world-writable (last 3 bits for 'others' permissions)
     let world_writable = (mode & 0o002) != 0;
     
-    if world_writable {
-        log::error!("SECURITY WARNING: {} is world-writable (mode: {:o})", apath, mode);
+    let private_exposed = private_path(std::path::Path::new(apath)) && mode & 0o077 != 0;
+    let executable_data = metadata.is_file() && mode & 0o111 != 0;
+    if world_writable || private_exposed || executable_data {
+        log::error!("Insecure permissions on {} (mode: {:o})", apath, mode);
         return Ok(false);
     }
     

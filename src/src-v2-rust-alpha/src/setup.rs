@@ -70,7 +70,9 @@ pub fn install(_args: aog::Args) -> Result<()> {
     }
     
     // Generate secure initial password if config doesn't exist
-    if !Path::new("/opt/aog/data.json").exists() {
+    if !Path::new("/opt/aog/data.json").exists()
+        && !Path::new("/opt/aog/data.bak.json").exists()
+    {
         let initial_password = match crate::aog::auth::get_initial_password() {
             Ok(pwd) => pwd,
             Err(e) => {
@@ -125,6 +127,8 @@ pub fn install(_args: aog::Args) -> Result<()> {
         Ok(_) => {},
         Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to mkdir /opt/aog/crt/default").into()),
     }
+    crate::aog::tools::fix_permissions("/opt/aog/bak")?;
+    crate::aog::tools::fix_permissions("/opt/aog/crt")?;
     
     match crate::aog::tools::mkdir("/opt/aog/dat"){
         Ok(_) => {},
@@ -166,16 +170,8 @@ pub fn install(_args: aog::Args) -> Result<()> {
     }
 
     
-    let www_build = rebuild_www();
-
-    if www_build.is_ok() {
-        if let Err(e) = Command::new("sh")
-        .arg("-c")
-        .arg("rm -rf /opt/aog/www.zip")
-        .output() {
-            log::warn!("Failed to remove www.zip: {}", e);
-        }    
-    }
+    rebuild_www()?;
+    fs::remove_file("/opt/aog/www.zip")?;
     
     // Final permission validation
     validate_installation_permissions()?;
@@ -260,7 +256,13 @@ fn validate_installation_permissions() -> Result<()> {
     
     let paths_to_check = vec![
         "/opt/aog",
-        "/opt/aog/config.json",
+        "/opt/aog/data.json",
+        "/opt/aog/data.bak.json",
+        "/opt/aog/sessions.json",
+        "/opt/aog/sessions.bak.json",
+        "/opt/aog/bak",
+        "/opt/aog/crt",
+        "/opt/aog/crt/default/aog.local.key",
         "/opt/aog/output.log",
     ];
     
@@ -288,13 +290,9 @@ fn rebuild_www() -> std::io::Result<()> {
 
     let data = include_bytes!("www.zip");
 
-    let mut pos = 0;
     let mut buffer = File::create("/opt/aog/www.zip")?;
-
-    while pos < data.len() {
-        let bytes_written = buffer.write(&data[pos..])?;
-        pos += bytes_written;
-    }
+    buffer.write_all(data)?;
+    drop(buffer);
 
     extract_zip("/opt/aog/www.zip")
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to extract www.zip: {:?}", e)))?;

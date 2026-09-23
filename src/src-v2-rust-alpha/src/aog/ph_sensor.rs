@@ -382,15 +382,8 @@ impl PhSensor {
         match &self.sensor_type {
             PhSensorType::Arduino => {
                 let path = self.directory.join("sensors/ph");
-                let age = std::fs::metadata(&path)
-                    .and_then(|meta| meta.modified())
-                    .ok()
-                    .and_then(|modified| modified.elapsed().ok());
-                if !age.is_some_and(|age| age < Duration::from_secs(10)) {
-                    return Err("pH sensor reading is missing or stale".into());
-                }
-                std::fs::read_to_string(path)
-                    .map_err(|e| e.to_string())?
+                super::sensors::fresh_text(&path, Duration::from_secs(10))
+                    .ok_or_else(|| "pH sensor reading is missing or stale".to_string())?
                     .trim()
                     .parse::<f32>()
                     .map_err(|e| format!("Failed to parse pH value: {}", e))
@@ -427,7 +420,7 @@ impl PhSensor {
     }
 
     pub fn get_temperature(&self) -> f32 {
-        if let Ok(data) = std::fs::read_to_string(self.directory.join("sensors/temp")) {
+        if let Some(data) = super::sensors::fresh_text(&self.directory.join("sensors/temp"), Duration::from_secs(15)) {
             if let Ok(temp) = data
                 .trim()
                 .trim_end_matches('C')
@@ -435,7 +428,7 @@ impl PhSensor {
                 .trim()
                 .parse::<f32>()
             {
-                if !temp.is_finite() {
+                if !temp.is_finite() || !(-80.0..=85.0).contains(&temp) {
                     return 25.0;
                 }
                 return temp;
@@ -651,7 +644,8 @@ impl PhSensor {
         let config = self.config.lock().unwrap().clone();
         let calibration = self.calibration.lock().unwrap();
         let history = self.projected_history(&calibration, &config);
-        Self::status_from_history(&history, &calibration, &config)
+        let status = Self::status_from_history(&history, &calibration, &config);
+        self.status_with_live_reading(status, &calibration, &config).0
     }
 
     fn status_from_history(
@@ -683,13 +677,19 @@ impl PhSensor {
         }
     }
 
-    pub fn snapshot(&self) -> serde_json::Value {
-        let config = self.config.lock().unwrap().clone();
+    fn status_with_live_reading(
+        &self,
+        mut status: PhSensorStatus,
+        calibration: &PhCalibration,
+        config: &crate::PhConfig,
+    ) -> (PhSensorStatus, Option<f32>, Option<String>) {
         let raw = self.read_raw_value();
         let temperature = self.get_temperature();
-        let calibration = self.calibration.lock().unwrap();
-        let history = self.projected_history(&calibration, &config);
-        let mut status = Self::status_from_history(&history, &calibration, &config);
+        // Historical averages remain useful, but the last saved sample is not
+        // a current reading when the probe has stopped communicating.
+        status.current_ph = None;
+        status.last_reading = None;
+        status.alert_level = PhAlertLevel::Normal;
         let mut error = self.last_error();
         let raw_value = raw.as_ref().ok().copied().filter(|raw| raw.is_finite());
         if let Some(raw) = raw_value {
@@ -697,7 +697,7 @@ impl PhSensor {
             status.current_ph =
                 (value.is_finite() && (0.0..=14.0).contains(&value)).then_some(value);
             status.last_reading = Some(chrono::Utc::now().timestamp().max(0) as u64);
-            status.alert_level = Self::alert_level_with_config(value, &config);
+            status.alert_level = Self::alert_level_with_config(value, config);
             if status.current_ph.is_none() {
                 error = Some(
                     "Calibrated pH is outside 0–14; check the probe and saved calibration points"
@@ -710,9 +710,18 @@ impl PhSensor {
                 // but do not keep showing an old sensor failure until the next sample.
                 error = None;
             }
-        } else if let Err(failure) = raw {
-            error = Some(failure);
+        } else {
+            error = Some(raw.err().unwrap_or_else(|| "pH sensor reading is not a finite number".into()));
         }
+        (status, raw_value, error)
+    }
+
+    pub fn snapshot(&self) -> serde_json::Value {
+        let config = self.config.lock().unwrap().clone();
+        let calibration = self.calibration.lock().unwrap();
+        let history = self.projected_history(&calibration, &config);
+        let status = Self::status_from_history(&history, &calibration, &config);
+        let (status, raw_value, error) = self.status_with_live_reading(status, &calibration, &config);
         let readings: Vec<_> = history.readings.iter().map(|reading| serde_json::json!({
             "timestamp": reading.timestamp,
             "ph_value": (reading.ph_value.is_finite() && (0.0..=14.0).contains(&reading.ph_value)).then_some(reading.ph_value),

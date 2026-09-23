@@ -67,11 +67,6 @@ fn main() -> Result<()> {
         "PG_ADDRESS",
     ])
     .map_err(|e| format!("Failed to set environment: {}", e))?;
-    setup::install(args.clone())?;
-
-    // Validate permissions on startup
-    validate_startup_permissions()?;
-
     // Check for running instance
     if !aog::instance::handle_instance_check(args.force)
         .map_err(|e| format!("Instance check failed: {}", e))?
@@ -85,9 +80,14 @@ fn main() -> Result<()> {
         .map_err(|e| format!("Failed to acquire instance lock: {}", e))?
     {
         log::error!("Another instance is already running");
-        println!("Another AOG instance is already running. Use --force to override.");
+        println!("Another AOG instance is already running. Stop it before starting another controller.");
         return Ok(());
     }
+
+    // Claim exclusive ownership before touching the running site's assets,
+    // settings, permissions, or hardware.
+    setup::install(args.clone())?;
+    validate_startup_permissions()?;
 
     let config = Arc::new(Mutex::new(
         Config::load(0).map_err(|e| format!("Failed to load config: {}", e))?,
@@ -277,7 +277,10 @@ fn validate_startup_permissions() -> Result<()> {
 
     let critical_paths = vec![
         ("/opt/aog", "directory"),
-        ("/opt/aog/config.json", "config"),
+        ("/opt/aog/data.json", "config"),
+        ("/opt/aog/data.bak.json", "config backup"),
+        ("/opt/aog/bak", "backup directory"),
+        ("/opt/aog/crt/default/aog.local.key", "private key"),
         ("/opt/aog/output.log", "log"),
         ("/opt/aog/sensors", "directory"),
         ("/opt/aog/crt", "directory"),

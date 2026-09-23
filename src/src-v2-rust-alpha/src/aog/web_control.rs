@@ -376,6 +376,9 @@ impl OutputController {
     }
 
     pub fn resume_schedules(&mut self) -> Result<(), String> {
+        if SHUTTING_DOWN.load(Ordering::SeqCst) {
+            return Err("AOG is shutting down".into());
+        }
         if self.stop_pending {
             return Err("Wait for output shutdown to finish".into());
         }
@@ -455,6 +458,11 @@ impl OutputController {
         now: Instant,
         hour: u8,
     ) -> Result<(), String> {
+        // Shutdown sets this flag before stopping outputs under this same lock.
+        // A queued HTTP Start must not switch a relay back on after that stop.
+        if SHUTTING_DOWN.load(Ordering::SeqCst) {
+            return Err("AOG is shutting down".into());
+        }
         if !(1..=4).contains(&channel) {
             return Err("Output must be 1–4".into());
         }
@@ -553,7 +561,8 @@ impl OutputController {
     }
 
     fn schedule_tick(&mut self, now: Instant, minute: u16) {
-        if self.automation_paused
+        if SHUTTING_DOWN.load(Ordering::SeqCst)
+            || self.automation_paused
             || self.stop_pending
             || self.directory.join("emergency_stop").exists()
             || validate_roles(&self.roles).is_err()

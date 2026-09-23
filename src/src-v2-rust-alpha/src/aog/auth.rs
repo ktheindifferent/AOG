@@ -136,36 +136,24 @@ pub fn get_initial_password() -> Result<String, Box<dyn Error>> {
 
 pub fn reset_password() -> Result<String, Box<dyn Error>> {
     let new_password = generate_secure_password();
-    
-    // Load existing config
-    let mut config = crate::Config::load(0)?;
-    
-    // Hash the new password
-    config.encrypted_password = hash_password(&new_password)?;
-    
-    // Save the updated config
-    config.save()?;
+    let hash = hash_password(&new_password)?;
+    super::http::update_credentials(|config| {
+        config.encrypted_password = hash;
+        Ok(())
+    })?;
     
     Ok(new_password)
 }
 
 pub fn change_password(current_password: &str, new_password: &str) -> Result<(), Box<dyn Error>> {
-    // Load existing config
-    let mut config = crate::Config::load(0)?;
-    
-    // Verify current password
-    if !verify_password(current_password, &config.encrypted_password)? {
-        return Err("Current password is incorrect".into());
-    }
-    
-    // Validate new password strength
-    validate_password_strength(new_password)?;
-    
-    // Hash and save new password
-    config.encrypted_password = hash_password(new_password)?;
-    config.save()?;
-    
-    Ok(())
+    super::http::update_credentials(|config| {
+        if !verify_password(current_password, &config.encrypted_password)? {
+            return Err("Current password is incorrect".into());
+        }
+        validate_password_strength(new_password)?;
+        config.encrypted_password = hash_password(new_password)?;
+        Ok(())
+    })
 }
 
 pub fn generate_api_token() -> String {
@@ -180,14 +168,10 @@ pub fn generate_api_token() -> String {
 pub fn set_api_token() -> Result<String, Box<dyn Error>> {
     let token = generate_api_token();
     
-    // Load existing config
-    let mut config = crate::Config::load(0)?;
-    
-    // Set the new token
-    config.command_api_token = Some(token.clone());
-    
-    // Save the updated config
-    config.save()?;
+    super::http::update_credentials(|config| {
+        config.command_api_token = Some(token.clone());
+        Ok(())
+    })?;
     
     log::info!("New Command API token generated and saved");
     
@@ -195,14 +179,10 @@ pub fn set_api_token() -> Result<String, Box<dyn Error>> {
 }
 
 pub fn remove_api_token() -> Result<(), Box<dyn Error>> {
-    // Load existing config
-    let mut config = crate::Config::load(0)?;
-    
-    // Remove the token
-    config.command_api_token = None;
-    
-    // Save the updated config
-    config.save()?;
+    super::http::update_credentials(|config| {
+        config.command_api_token = None;
+        Ok(())
+    })?;
     
     log::info!("Command API token removed");
     

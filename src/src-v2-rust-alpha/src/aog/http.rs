@@ -27,7 +27,7 @@ use rouille::session;
 use rouille::try_or_400;
 use rouille::{Request, Response};
 
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -71,12 +71,13 @@ pub fn init() {
         .unwrap_or_else(|| crate::DEFAULT_BIND_ADDRESS.to_string());
     let bind_port = config.https_bind_port.unwrap_or(8443);
     log::info!("Starting HTTPS server on {}:{}", bind_address, bind_port);
-    let state = WebState::new(
+    let state = Arc::new(WebState::new(
         config,
         Path::new("/opt/aog"),
         aog::ph_sensor::active_sensor(),
         Box::new(aog::web_control::QuadBoard),
-    );
+    ));
+    let _ = RUNTIME_WEB_STATE.set(Arc::clone(&state));
     aog::web_control::start_watchdog(Arc::clone(&state.outputs));
     aog::sensor_history::start_recording(Arc::clone(&state.history));
 
@@ -105,6 +106,33 @@ struct WebState {
     ph: Arc<aog::ph_sensor::PhSensor>,
     history: Arc<aog::sensor_history::SensorHistory>,
     outputs: Arc<Mutex<aog::web_control::OutputController>>,
+}
+
+static RUNTIME_WEB_STATE: OnceLock<Arc<WebState>> = OnceLock::new();
+
+/// Console credential changes and dashboard saves must share the same copy of
+/// configuration, or a later settings save can silently undo a token change.
+pub(super) fn update_credentials(
+    update: impl FnOnce(&mut Config) -> Result<(), Box<dyn std::error::Error>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(state) = RUNTIME_WEB_STATE.get() {
+        let mut config = state.config.lock().unwrap_or_else(|error| error.into_inner());
+        let mut updated = config.clone();
+        update(&mut updated)?;
+        updated.save_in(&state.directory)?;
+        let password_changed = updated.encrypted_password != config.encrypted_password;
+        *config = updated;
+        if password_changed {
+            state.sessions.lock().unwrap_or_else(|error| error.into_inner()).clear();
+        }
+        Ok(())
+    } else {
+        // Standalone maintenance utilities still operate without starting the
+        // server or touching hardware. Their existing restart requirement applies.
+        let mut config = Config::load(0)?;
+        update(&mut config)?;
+        config.save()
+    }
 }
 
 impl WebState {
@@ -139,6 +167,34 @@ fn request_session_id(request: &Request) -> Option<&str> {
 }
 
 fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> Response {
+    // Read untrusted network bodies before taking application locks. Otherwise
+    // a client that stalls mid-upload can block every dashboard request and,
+    // for output actions, the watchdog's timers and overflow checks.
+    let login = if request.url() == "/authenticate" {
+        if request.method() != "POST" {
+            return Response::text("Method not allowed")
+                .with_status_code(405)
+                .with_additional_header("Allow", "POST");
+        }
+        let input = try_or_400!(post_input!(request, {
+            input_username: String,
+            input_password: String,
+        }));
+        Some((input.input_username, input.input_password))
+    } else {
+        None
+    };
+    let body = if request.method() == "POST" && matches!(request.url().as_str(),
+        "/api/settings" | "/api/account/password" | "/api/ph/calibrate"
+            | "/api/ph/calibration/remove" | "/api/outputs/start" | "/api/outputs/stop"
+    ) {
+        match json_body::<serde_json::Value>(request) {
+            Ok(body) => Some(body),
+            Err(response) => return response,
+        }
+    } else {
+        None
+    };
     let mut config = state
         .config
         .lock()
@@ -151,19 +207,10 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
     let now = Instant::now();
     sessions.retain(|_, session| now.duration_since(session.created) < SESSION_LIFETIME);
 
-    if request.url() == "/authenticate" {
-        if request.method() != "POST" {
-            return Response::text("Method not allowed")
-                .with_status_code(405)
-                .with_additional_header("Allow", "POST");
-        }
-        let input = try_or_400!(post_input!(request, {
-            input_username: String,
-            input_password: String,
-        }));
+    if let Some((username, password)) = login {
         // Use secure password verification instead of plain text comparison
         let password_valid = match crate::aog::auth::verify_password(
-            &input.input_password,
+            &password,
             &config.encrypted_password,
         ) {
             Ok(valid) => valid,
@@ -173,7 +220,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
             }
         };
 
-        if input.input_username != "admin" || !password_valid {
+        if username != "admin" || !password_valid {
             return Response::text("Invalid username or password")
                 .with_status_code(401)
                 .with_no_cache();
@@ -305,7 +352,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
         if request.method() != "GET" && request.header("X-AOG-CSRF") != csrf.as_deref() {
             return api_error(403, "Invalid request token. Reload the page and try again.");
         }
-        return handle_dashboard_api(request, state, &mut config);
+        return handle_dashboard_api(request, state, &mut config, body);
     }
 
     if request.url().contains("/api/dat/") {
@@ -322,6 +369,15 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
         }
     }
 
+    if matches!(request.url().as_str(), "/api/stats" | "/api/alerts/overflow" | "/api/errors") {
+        if !session_authenticated {
+            return api_error(401, "Sign in to view device status");
+        }
+        if request.method() != "GET" {
+            return api_error(405, "Use GET for device status");
+        }
+    }
+
     // New API endpoint for overflow alerts
     if request.url() == "/api/alerts/overflow" {
         #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -334,14 +390,14 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
             critical: bool,
         }
 
-        let t1_status = crate::aog::sensors::get_value("t1_ovf");
-        let t2_status = crate::aog::sensors::get_value("t2_ovf");
-        let sensor_error = std::path::Path::new("/opt/aog/sensors/overflow_error").exists();
+        let sensors = state.directory.join("sensors");
+        let readings = aog::sensors::overflow_readings_in(&sensors);
+        let sensor_error = readings.contains(&aog::sensors::OverflowReading::Unavailable);
 
         let error_message = if sensor_error {
-            match std::fs::read_to_string("/opt/aog/sensors/overflow_error") {
+            match std::fs::read_to_string(sensors.join("overflow_error")) {
                 Ok(msg) => msg,
-                Err(_) => "Sensor communication failure".to_string(),
+                Err(_) => "Overflow reading missing, stale, or invalid".to_string(),
             }
         } else {
             "".to_string()
@@ -352,8 +408,8 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
             .unwrap_or_default()
             .as_secs();
 
-        let tank1_overflow = t1_status.contains("OVERFLOW");
-        let tank2_overflow = t2_status.contains("OVERFLOW");
+        let tank1_overflow = readings[0] == aog::sensors::OverflowReading::Overflow;
+        let tank2_overflow = readings[1] == aog::sensors::OverflowReading::Overflow;
         let critical = tank1_overflow || tank2_overflow || sensor_error;
 
         let response = Response::json(&OverflowAlert {
@@ -365,14 +421,14 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
             critical,
         });
 
-        return response;
+        return response.with_no_cache();
     }
 
     // Error monitoring dashboard endpoint
     if request.url() == "/api/errors" {
         let dashboard = crate::aog::error_monitor::GLOBAL_ERROR_MONITOR.get_dashboard();
         let response = Response::json(&dashboard);
-        return response.with_additional_header("Access-Control-Allow-Origin", "*");
+        return response.with_no_cache();
     }
 
     if request.url() == "/api/stats" {
@@ -394,21 +450,27 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
 
         // Live history exists before calibration; never hide its status behind
         // the presence of a calibration file.
-        let ph_status = Some(state.ph.get_status());
-
-        let overflow_error = std::path::Path::new("/opt/aog/sensors/overflow_error").exists();
+        let ph_status = state.ph.get_status();
+        let ph = ph_status.current_ph.map(|value| format!("{:.2}", value)).unwrap_or_else(|| "N/A".into());
+        let readings = aog::sensor_history::current_readings(&state.directory);
+        let value = |key, suffix| {
+            readings.iter().find(|reading| reading.0 == key).and_then(|reading| reading.1)
+                .map(|value| format!("{}{}", value, suffix)).unwrap_or_else(|| "N/A".into())
+        };
+        let overflow = aog::sensors::overflow_readings_in(&state.directory.join("sensors"));
+        let overflow_error = overflow.contains(&aog::sensors::OverflowReading::Unavailable);
         let response = Response::json(&WebApiStats {
-            co2: crate::aog::sensors::get_value("co2"),
-            tvoc: crate::aog::sensors::get_value("tvoc"),
-            temp: crate::aog::sensors::get_value("temp"),
-            hum: crate::aog::sensors::get_value("hum"),
-            pm25: crate::aog::sensors::get_value("pm25"),
-            pm10: crate::aog::sensors::get_value("pm10"),
-            t1_ovf: crate::aog::sensors::get_value("t1_ovf"),
-            t2_ovf: crate::aog::sensors::get_value("t2_ovf"),
+            co2: value("co2", "ppm"),
+            tvoc: value("tvoc", "ppb"),
+            temp: value("temp", "C"),
+            hum: value("hum", "%"),
+            pm25: value("pm25", ""),
+            pm10: value("pm10", ""),
+            t1_ovf: overflow[0].as_str().into(),
+            t2_ovf: overflow[1].as_str().into(),
             overflow_error: overflow_error,
-            ph: crate::aog::sensors::get_value("ph_calibrated"),
-            ph_status: ph_status,
+            ph,
+            ph_status: Some(ph_status),
             device_time: chrono::Local::now().to_rfc3339(),
         });
         return response.with_no_cache();
@@ -488,6 +550,11 @@ fn json_body<T: serde::de::DeserializeOwned>(request: &Request) -> Result<T, Res
     serde_json::from_slice(&bytes).map_err(|_| api_error(400, "Invalid or incomplete JSON data"))
 }
 
+fn json_input<T: serde::de::DeserializeOwned>(body: &Option<serde_json::Value>) -> Result<T, Response> {
+    let value = body.as_ref().ok_or_else(|| api_error(400, "Missing request body"))?;
+    serde_json::from_value(value.clone()).map_err(|_| api_error(400, "Invalid or incomplete JSON data"))
+}
+
 fn settings_response(config: &Config) -> Response {
     Response::json(&serde_json::json!({
         "setup": config.dashboard_config,
@@ -500,7 +567,7 @@ fn settings_response(config: &Config) -> Response {
     })).with_no_cache()
 }
 
-fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config) -> Response {
+fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config, body: Option<serde_json::Value>) -> Response {
     let path = request.url();
     if request.method() == "GET" {
         return match path.as_str() {
@@ -526,7 +593,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
         return api_error(405, "Method not allowed");
     }
     if path == "/api/settings" {
-        let patch: aog::web_control::SettingsPatch = match json_body(request) {
+        let patch: aog::web_control::SettingsPatch = match json_input(&body) {
             Ok(value) => value,
             Err(response) => return response,
         };
@@ -578,7 +645,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
             new_password: String,
             confirm_password: String,
         }
-        let input: PasswordChange = match json_body(request) {
+        let input: PasswordChange = match json_input(&body) {
             Ok(value) => value,
             Err(response) => return response,
         };
@@ -619,7 +686,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
             buffer_ph: f32,
             raw_value: Option<f32>,
         }
-        let input: CalibrationInput = match json_body(request) {
+        let input: CalibrationInput = match json_input(&body) {
             Ok(value) => value,
             Err(response) => return response,
         };
@@ -645,7 +712,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
         struct RemovePoint {
             buffer_ph: u8,
         }
-        let input: RemovePoint = match json_body(request) {
+        let input: RemovePoint = match json_input(&body) {
             Ok(value) => value,
             Err(response) => return response,
         };
@@ -669,7 +736,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
                 channel: u8,
                 seconds: Option<u64>,
             }
-            let input: Start = match json_body(request) {
+            let input: Start = match json_input(&body) {
                 Ok(value) => value,
                 Err(response) => return response,
             };
@@ -681,7 +748,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
             struct Stop {
                 channel: u8,
             }
-            let input: Stop = match json_body(request) {
+            let input: Stop = match json_input(&body) {
                 Ok(value) => value,
                 Err(response) => return response,
             };
@@ -1263,7 +1330,6 @@ pub fn init_command_api() {
         .unwrap_or_else(|| crate::DEFAULT_BIND_ADDRESS.to_string());
     let bind_port = bind_config.command_api_bind_port.unwrap_or(9443);
     let bind_addr = format!("{}:{}", bind_address, bind_port);
-    let api_token = bind_config.command_api_token.clone();
     drop(bind_config);
 
     // Initialize rate limiter: 10 requests per 60 seconds
@@ -1275,6 +1341,13 @@ pub fn init_command_api() {
         (bind_address.as_str(), bind_port),
         move |request| {
             {
+                // Observe token rotation immediately instead of retaining the
+                // credential that happened to be configured at server startup.
+                let api_token = RUNTIME_WEB_STATE.get().map(|state| {
+                    state.config.lock().unwrap_or_else(|error| error.into_inner()).command_api_token.clone()
+                }).unwrap_or_else(|| {
+                    config.lock().unwrap_or_else(|error| error.into_inner()).command_api_token.clone()
+                });
                 if let Some(response) =
                     check_command_access(request, api_token.as_deref(), &rate_limiter)
                 {

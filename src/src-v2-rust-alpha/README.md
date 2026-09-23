@@ -25,7 +25,7 @@ logic-level, firmware, and relay-assignment details before changing wiring.
 
 ## Building on Debian, Ubuntu, or Raspberry Pi OS
 
-With Rust installed, run these commands from this directory:
+With Rust 1.89 or newer installed, run these commands from this directory:
 
 ```sh
 sh ./setup.sh
@@ -55,6 +55,11 @@ and an `Authorization: Bearer <token>` header. Without a configured token,
 command requests are accepted only from loopback. The dashboard login uses
 the admin password independently of this token.
 
+Tokens generated or removed in the running AOG console take effect immediately
+and are retained by subsequent dashboard settings saves. Removing the token
+returns the command API to local-only access. Standalone password-reset tools
+still require restarting the running service to load their changes.
+
 Login sessions last one hour and are cleared by logout or a server restart.
 Dashboard readings and live pH refresh every five seconds. Output states refresh
 every second on Outputs and every three seconds on other visible pages, with
@@ -63,6 +68,34 @@ without replacing unsaved form edits. Returning to a page or browser tab refresh
 its content, and actions immediately apply the device's response. Environmental
 history is recorded and refreshed every minute. AOG
 continues serving when stdin is closed and exits on SIGTERM or Ctrl-C.
+
+The stats, overflow-alert, and error-status APIs require a dashboard session.
+Current cards use validated, fresh readings: air-kit values expire after 15
+seconds, particulate values after 120 seconds, overflow readings after 5 seconds,
+and pH after 10 seconds. Missing sensors and lost connections show unavailable
+values; historical charts keep their recorded samples. pH status applies the
+current calibration without waiting for the history sampling interval. HTTP
+request bodies are read before application locks are acquired, so an incomplete
+upload cannot hold the relay watchdog lock.
+Once shutdown begins, queued Start and Resume requests are rejected; a request
+that was waiting during shutdown cannot switch a relay back on after Stop All.
+
+### Settings recovery and single-instance operation
+
+Settings saves atomically update `data.json` and maintain `data.bak.json`, even
+when the legacy sensor log is empty. Recovery validates the backup before using
+it, preserves a malformed primary as `data.corrupt-*.json`, and stops with an
+error if neither copy is usable. It never replaces damaged settings with a new
+password or default relay map. File replacements sync both contents and the
+parent directory. Configuration files and TLS private keys use mode `600`;
+certificate and backup directories use mode `700`. Startup leaves private
+backup contents protected instead of recursively resetting everything to `755`.
+
+AOG claims an exclusive OS file lock before installation or hardware startup.
+The OS releases it when the process exits, including after a crash; leftover PID
+metadata does not block recovery. `--force` skips only the command-port check
+and cannot bypass a live instance's lock. The `aog.lock` file remains in place
+after shutdown and should not be removed while AOG is running.
 
 The binary embeds `src/www.zip`; changes to `www/` must also be packaged into
 that archive before rebuilding.

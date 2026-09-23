@@ -1,6 +1,4 @@
 use qwiic_lcd_rs::*;
-use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -246,8 +244,7 @@ fn health_status(
     }
 
     let sensors = directory.join("sensors");
-    let overflow =
-        ["t1_ovf", "t2_ovf"].map(|name| fresh_text(&sensors.join(name), Duration::from_secs(5)));
+    let overflow = super::sensors::overflow_readings_in(&sensors);
     // On communication failure the reader writes OVERFLOW as a fail-safe.
     // Check its error marker after reading the files so those synthetic values
     // are shown as a sensor malfunction, not an actual overflow.
@@ -255,9 +252,9 @@ fn health_status(
         status.add(Warning, "Sensor malfunction: overflow (S3)");
     } else {
         for (index, reading) in overflow.iter().enumerate() {
-            match reading.as_deref().map(str::trim) {
-                Some("NONE" | "NORMAL") => (),
-                Some("OVERFLOW") => {
+            match reading {
+                super::sensors::OverflowReading::Normal => (),
+                super::sensors::OverflowReading::Overflow => {
                     status.add(Error, format!("Overflow {} (E{})", index + 1, index + 4))
                 }
                 _ => status.add(
@@ -307,16 +304,6 @@ fn health_status(
     } else {
         status
     }
-}
-
-fn fresh_text(path: &Path, maximum_age: Duration) -> Option<String> {
-    let file = File::open(path).ok()?;
-    if file.metadata().ok()?.modified().ok()?.elapsed().ok()? >= maximum_age {
-        return None;
-    }
-    let mut value = String::new();
-    file.take(128).read_to_string(&mut value).ok()?;
-    Some(value)
 }
 
 struct StatusTicker {

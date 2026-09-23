@@ -32,7 +32,7 @@ pub struct Args {
         short,
         long,
         default_value_t = false,
-        help = "Force start even if another instance is running"
+        help = "Skip the command-port check; an active instance lock still prevents startup"
     )]
     pub force: bool,
 }
@@ -147,16 +147,10 @@ impl Config {
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
         atomic_write(&directory.join("data.json"), j.as_bytes())?;
 
-        if self.sensor_logs.len() > 0 {
-            if let Err(e) = std::fs::File::create(directory.join("data.bak.json")) {
-                log::warn!("Failed to create backup file: {}", e);
-            } else {
-                if let Ok(j) = serde_json::to_string(&self) {
-                    if let Err(e) = std::fs::write(directory.join("data.bak.json"), j) {
-                        log::warn!("Failed to write backup file: {}", e);
-                    }
-                }
-            }
+        // Modern sensor history does not populate sensor_logs. Configuration
+        // still needs a complete, private backup on every successful save.
+        if let Err(error) = atomic_write(&directory.join("data.bak.json"), j.as_bytes()) {
+            log::warn!("Settings saved, but the configuration backup could not be updated: {}", error);
         }
         Ok(())
     }
@@ -167,63 +161,45 @@ impl Config {
 
     pub(crate) fn load_in(
         directory: &std::path::Path,
-        retries: i64,
+        _retries: i64,
     ) -> Result<Config, Box<dyn Error>> {
-        if !directory.join("data.json").exists() {
-            let new_c = Config::new();
-            if let Err(e) = new_c.save_in(directory) {
-                log::warn!("Failed to save initial config: {}", e);
-            }
-            return Ok(new_c);
-        }
-
-        let save_file = std::fs::read_to_string(directory.join("data.json"));
-        match save_file {
-            Ok(save_data) => {
-                let v: Result<Config, _> = serde_json::from_str(&save_data);
-                match v {
-                    Ok(v2) => {
-                        return Ok(v2);
+        let primary = directory.join("data.json");
+        let backup = directory.join("data.bak.json");
+        let original = std::fs::read(&primary);
+        let primary_error = match &original {
+            Ok(bytes) => match serde_json::from_slice::<Config>(bytes) {
+                Ok(config) => {
+                    if !backup.exists() {
+                        atomic_write(&backup, bytes)?;
                     }
-                    Err(e) => {
-                        log::error!("{}", format!("Unable to parse save file: {}", e));
-
-                        if retries < 10 {
-                            std::fs::copy(
-                                directory.join("data.bak.json"),
-                                directory.join("data.json"),
-                            )?;
-                            std::thread::sleep(std::time::Duration::from_secs(2));
-                            return Self::load_in(directory, retries + 1);
-                        } else {
-                            log::warn!("Unable to parse save file after 10 attempts....creating new save file.");
-                            let new_c = Config::new();
-                            if let Err(e) = new_c.save_in(directory) {
-                                log::warn!("Failed to save new config: {}", e);
-                            }
-                            return Ok(new_c);
-                        }
-                    }
+                    return Ok(config);
                 }
+                Err(error) => error.to_string(),
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && !backup.exists() => {
+                let config = Config::new();
+                config.save_in(directory)?;
+                return Ok(config);
             }
-            Err(e) => {
-                log::error!("{}", format!("Unable to read save file: {}", e));
-                if retries < 10 {
-                    std::fs::copy(directory.join("data.bak.json"), directory.join("data.json"))?;
-                    std::thread::sleep(std::time::Duration::from_secs(2));
-                    return Self::load_in(directory, retries + 1);
-                } else {
-                    log::warn!(
-                        "Unable to read save file after 10 attempts....creating new save file."
-                    );
-                    let new_c = Config::new();
-                    if let Err(e) = new_c.save_in(directory) {
-                        log::warn!("Failed to save new config: {}", e);
-                    }
-                    return Ok(new_c);
-                }
-            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => error.to_string(),
+            Err(error) => return Err(format!("Cannot read configuration: {error}; files were left unchanged").into()),
+        };
+        // Validate the backup before touching the primary. A damaged pair must
+        // never silently reset passwords, relay assignments, or schedules.
+        let backup_bytes = std::fs::read(&backup).map_err(|error| {
+            format!("Cannot load configuration ({primary_error}) or its backup ({error}); files were left unchanged")
+        })?;
+        let config: Config = serde_json::from_slice(&backup_bytes).map_err(|error| {
+            format!("Cannot load configuration ({primary_error}); its backup is invalid ({error}); files were left unchanged")
+        })?;
+        if let Ok(bytes) = original {
+            let archive = directory.join(format!("data.corrupt-{}.json", rand::random::<u64>()));
+            atomic_write(&archive, &bytes)?;
+            log::warn!("Preserved damaged configuration in {}", archive.display());
         }
+        atomic_write(&primary, &backup_bytes)?;
+        log::warn!("Recovered configuration from validated data.bak.json");
+        Ok(config)
     }
 }
 
@@ -241,7 +217,12 @@ pub(crate) fn atomic_write(path: &std::path::Path, data: &[u8]) -> std::io::Resu
             .open(&temporary)?;
         file.write_all(data)?;
         file.sync_all()?;
-        std::fs::rename(&temporary, path)
+        std::fs::rename(&temporary, path)?;
+        // Persist the directory entry as well as the file contents, so a power
+        // loss immediately after saving does not lose the completed rename.
+        let parent = path.parent().filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or_else(|| std::path::Path::new("."));
+        std::fs::File::open(parent)?.sync_all()
     })();
     if result.is_err() {
         let _ = std::fs::remove_file(&temporary);

@@ -54,8 +54,7 @@ pub fn run(cmd: String) -> Result<(), Box<dyn Error>> {
     } else if command == "api token remove" {
         match crate::aog::auth::remove_api_token() {
             Ok(_) => {
-                println!("Command API token removed. API will work without authentication.");
-                println!("WARNING: This reduces security. Consider generating a new token.");
+                println!("Command API token removed. Only local commands are accepted until a new token is configured.");
                 return Ok(());
             }
             Err(e) => {
