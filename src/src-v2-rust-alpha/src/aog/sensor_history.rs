@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 const SAMPLE_SECONDS: u64 = 60;
+const SAVE_RETRY_SECONDS: u64 = 10;
+const SAVE_BATCH_SIZE: usize = 60;
 const RETENTION_HOURS: i64 = 7 * 24;
 const MAX_SAMPLES: usize = RETENTION_HOURS as usize * 60 + 1;
 const CHART_BUCKETS: usize = 240;
@@ -124,12 +126,15 @@ pub struct Sample {
 
 struct State {
     samples: VecDeque<Sample>,
+    pending: VecDeque<Sample>,
+    load_error: Option<String>,
     error: Option<String>,
 }
 
 pub struct SensorHistory {
     directory: PathBuf,
     state: Mutex<State>,
+    recording: Mutex<()>,
 }
 
 #[derive(Clone, Serialize)]
@@ -217,7 +222,7 @@ impl SensorHistory {
                         }
                         match File::open(&path) {
                             Ok(file) => {
-                                for line in BufReader::new(file).lines() {
+                                for line in BufReader::new(file).split(b'\n') {
                                     let line = match line {
                                         Ok(line) => line,
                                         Err(failure) => {
@@ -228,9 +233,9 @@ impl SensorHistory {
                                             break;
                                         }
                                     };
-                                    // A partial final record after a power loss must not
-                                    // prevent loading the remaining valid history.
-                                    let Ok(mut sample) = serde_json::from_str::<Sample>(&line)
+                                    // A torn record or invalid UTF-8 must not
+                                    // hide valid records later in the same file.
+                                    let Ok(mut sample) = serde_json::from_slice::<Sample>(&line)
                                     else {
                                         continue;
                                     };
@@ -268,8 +273,11 @@ impl SensorHistory {
             directory: directory.into(),
             state: Mutex::new(State {
                 samples: samples.into(),
+                pending: VecDeque::new(),
+                load_error: error.clone(),
                 error,
             }),
+            recording: Mutex::new(()),
         }
     }
 
@@ -282,6 +290,9 @@ impl SensorHistory {
     }
 
     fn record(&self, now: DateTime<Utc>, clean_logs: bool) -> io::Result<bool> {
+        // Serialize recorders without holding the history snapshot lock during
+        // filesystem I/O. Exports remain available during a slow or failed save.
+        let _recording = self.recording.lock().unwrap_or_else(|error| error.into_inner());
         let sample = Sample {
             timestamp: now.timestamp(),
             values: std::array::from_fn(|index| self.read_value(&METRICS[index])),
@@ -294,28 +305,30 @@ impl SensorHistory {
             state.samples.retain(|sample| {
                 (cutoff.timestamp()..=now.timestamp()).contains(&sample.timestamp)
             });
-            if state
+            state.pending.retain(|sample| {
+                (cutoff.timestamp()..=now.timestamp()).contains(&sample.timestamp)
+            });
+            let due = state
                 .samples
                 .back()
-                .is_some_and(|last| sample.timestamp - last.timestamp < SAMPLE_SECONDS as i64)
-            {
-                return Ok(false);
+                .is_none_or(|last| sample.timestamp - last.timestamp >= SAMPLE_SECONDS as i64);
+            if due {
+                state.samples.push_back(sample.clone());
+                state.pending.push_back(sample);
             }
-            state.samples.push_back(sample.clone());
             while state.samples.len() > MAX_SAMPLES {
                 state.samples.pop_front();
             }
+            while state.pending.len() > MAX_SAMPLES {
+                state.pending.pop_front();
+            }
+        }
+        // Retry the original timestamped samples, even when a new sample is
+        // not yet due. A temporary failure must not become a permanent gap.
+        if !self.flush_pending()? {
+            return Ok(false);
         }
         let logs = self.directory.join("sensor_history/v1");
-        fs::create_dir_all(&logs)?;
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(logs.join(format!("{}.jsonl", now.format("%Y-%m-%d"))))?;
-        // Prefix a newline as well, so a torn record cannot absorb this record.
-        let record = format!("\n{}\n", serde_json::to_string(&sample)?);
-        file.write_all(record.as_bytes())?;
-        file.sync_data()?;
         if clean_logs {
             for entry in fs::read_dir(&logs)? {
                 let path = entry?.path();
@@ -325,6 +338,53 @@ impl SensorHistory {
             }
         }
         Ok(true)
+    }
+
+    fn flush_pending(&self) -> io::Result<bool> {
+        let pending: Vec<_> = self.state.lock().unwrap_or_else(|error| error.into_inner())
+            .pending.iter().take(SAVE_BATCH_SIZE).cloned().collect();
+        if pending.is_empty() {
+            return Ok(true);
+        }
+        let logs = self.directory.join("sensor_history/v1");
+        fs::create_dir_all(&logs)?;
+        let mut index = 0;
+        while index < pending.len() {
+            let day = DateTime::from_timestamp(pending[index].timestamp, 0)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid history timestamp"))?
+                .date_naive();
+            let mut records = String::new();
+            let mut count = 0;
+            while index + count < pending.len()
+                && DateTime::from_timestamp(pending[index + count].timestamp, 0)
+                    .is_some_and(|time| time.date_naive() == day)
+            {
+                // Prefix a newline so an old torn record cannot absorb this one.
+                records.push('\n');
+                records.push_str(&serde_json::to_string(&pending[index + count])?);
+                records.push('\n');
+                count += 1;
+            }
+            let mut file = OpenOptions::new().create(true).append(true)
+                .open(logs.join(format!("{}.jsonl", day)))?;
+            let before = file.metadata()?.len();
+            let saved = file.write_all(records.as_bytes())
+                .and_then(|_| file.sync_data())
+                .and_then(|_| File::open(&logs)?.sync_all());
+            if let Err(error) = saved {
+                // A partial append must not accumulate duplicate rows on every
+                // retry. Keep the queue until the full append is durable.
+                if let Err(rollback) = file.set_len(before) {
+                    return Err(io::Error::other(format!("{error}; cannot rewind incomplete history append: {rollback}")));
+                }
+                let _ = file.sync_data();
+                return Err(error);
+            }
+            self.state.lock().unwrap_or_else(|error| error.into_inner())
+                .pending.drain(..count);
+            index += count;
+        }
+        Ok(self.state.lock().unwrap_or_else(|error| error.into_inner()).pending.is_empty())
     }
 
     /// Full-resolution saved samples, never the chart's reduced point set.
@@ -379,6 +439,7 @@ impl SensorHistory {
         let now = Utc::now().timestamp();
         let hours = hours.clamp(1, RETENTION_HOURS as u64);
         let start = now - hours as i64 * 3600;
+        let current = current_readings(&self.directory);
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let samples: Vec<_> = state
             .samples
@@ -402,7 +463,7 @@ impl SensorHistory {
                     .iter()
                     .filter_map(|sample| sample.values[index])
                     .collect();
-                let available = state.samples.back().is_some_and(|sample| {
+                let available = current[index].1.is_some() && state.samples.back().is_some_and(|sample| {
                     sample.timestamp <= now
                         && now - sample.timestamp <= SAMPLE_SECONDS as i64 * 2
                         && sample.values[index].is_some()
@@ -504,7 +565,7 @@ pub fn start_recording(history: Arc<SensorHistory>) {
                 let error = match worker.record(now, cleaned_date != Some(now.date_naive())) {
                     Ok(true) => {
                         cleaned_date = Some(now.date_naive());
-                        None
+                        worker.state.lock().unwrap_or_else(|error| error.into_inner()).load_error.clone()
                     }
                     Ok(false) => worker
                         .state
@@ -513,11 +574,20 @@ pub fn start_recording(history: Arc<SensorHistory>) {
                         .error
                         .clone(),
                     Err(error) => {
-                        log::warn!("Cannot save sensor history: {}", error);
-                        Some(format!(
-                            "History is available in memory but could not be saved: {}",
-                            error
-                        ))
+                        let state = worker.state.lock().unwrap_or_else(|error| error.into_inner());
+                        let message = if state.pending.is_empty() {
+                            format!("History storage maintenance will retry: {}", error)
+                        } else {
+                            format!("History is available in memory; saving will retry: {}", error)
+                        };
+                        let message = match &state.load_error {
+                            Some(previous) => format!("{}; {}", previous, message),
+                            None => message,
+                        };
+                        if state.error.as_ref() != Some(&message) {
+                            log::warn!("{}", message);
+                        }
+                        Some(message)
                     }
                 };
                 worker
@@ -525,7 +595,7 @@ pub fn start_recording(history: Arc<SensorHistory>) {
                     .lock()
                     .unwrap_or_else(|error| error.into_inner())
                     .error = error;
-                std::thread::sleep(Duration::from_secs(SAMPLE_SECONDS));
+                std::thread::sleep(Duration::from_secs(SAVE_RETRY_SECONDS));
             }
         })
     {

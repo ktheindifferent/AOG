@@ -14,6 +14,8 @@
     const form = event.currentTarget,
       button = form.querySelector('button'),
       error = document.getElementById('login-error');
+    if (form.dataset.saving) return;
+    form.dataset.saving = 'true';
     button.disabled = true;
     button.textContent = 'Signing in…';
     error.textContent = '';
@@ -26,12 +28,16 @@
         body: new URLSearchParams(new FormData(form)),
         signal: abort.signal
       });
-      if (!response.ok) throw new Error(response.status === 401 ? 'Username or password is incorrect.' : 'Could not sign in. Try again.');
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || (response.status === 401 ? 'Username or password is incorrect.' : 'Could not sign in. Try again.'));
+      }
       location.assign('/index.html');
     } catch (failure) {
       error.textContent = failure.name === 'AbortError' ? 'The device did not respond. Try again.' : failure.message;
     } finally {
       clearTimeout(timer);
+      delete form.dataset.saving;
       button.disabled = false;
       button.textContent = 'Sign in →';
     }

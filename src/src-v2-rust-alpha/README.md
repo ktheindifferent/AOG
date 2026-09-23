@@ -61,6 +61,19 @@ returns the command API to local-only access. Standalone password-reset tools
 still require restarting the running service to load their changes.
 
 Login sessions last one hour and are cleared by logout or a server restart.
+Password verification and hashing run outside the dashboard configuration and
+session locks. Concurrent password work returns a retry response instead of
+blocking controls or camera authorization. Login/password checks allow ten
+attempts per client IP in sixty seconds; successful authentication clears that
+client's attempt count. A password changed during an in-flight request cannot
+be overwritten or used to create a session with the previous credential.
+
+The Account page accepts 12–128 Unicode characters for new passwords, using
+the same strength rules as console changes. Existing passwords continue to
+work. Background polling pauses during a password change, and delayed session
+errors cannot replace its successful-change notice. Forms become usable when
+setup loading recovers, and Refresh preserves buttons for saves in progress.
+
 Dashboard readings and live pH refresh every five seconds. Output states refresh
 every second on Outputs and every three seconds on other visible pages, with
 countdowns updating between requests. Settings refresh every fifteen seconds
@@ -219,6 +232,17 @@ recorded value, window statistics, and chart points. Storage failures are
 reported on the page while in-memory history remains available. Environmental
 retention is separate from the configurable pH sample interval and history size;
 the pH chart remains on Overview.
+
+Unsaved environmental samples remain queued in memory and retry every ten
+seconds with their original timestamps and UTC daily files. The queue follows
+the same seven-day retention limit. Recovery writes bounded batches and clears
+the storage warning after the backlog is saved; failed appends are rolled back
+before retrying. Exporting and viewing history remain available during storage
+I/O. Queued samples require AOG to remain running until storage recovers.
+Invalid or truncated records, including invalid UTF-8, do not hide valid rows
+later in a history file. Startup read failures remain visible until history is
+successfully reloaded at restart. The Recording indicator also checks current
+sensor freshness.
 
 The SDS011 particulate sensor uses continuous measurement while AOG queries it
 every ten seconds. Its device work-period setting uses **minutes**, so setting

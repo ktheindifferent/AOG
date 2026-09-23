@@ -102,6 +102,8 @@ type WebSessions = Arc<Mutex<HashMap<String, WebSession>>>;
 struct WebState {
     config: Mutex<Config>,
     sessions: WebSessions,
+    authentication_limits: Mutex<RateLimiter>,
+    password_work: Mutex<()>,
     directory: std::path::PathBuf,
     ph: Arc<aog::ph_sensor::PhSensor>,
     history: Arc<aog::sensor_history::SensorHistory>,
@@ -109,6 +111,14 @@ struct WebState {
 }
 
 static RUNTIME_WEB_STATE: OnceLock<Arc<WebState>> = OnceLock::new();
+
+pub(super) fn current_password_hash() -> Result<String, Box<dyn std::error::Error>> {
+    if let Some(state) = RUNTIME_WEB_STATE.get() {
+        Ok(state.config.lock().unwrap_or_else(|error| error.into_inner()).encrypted_password.clone())
+    } else {
+        Ok(Config::load(0)?.encrypted_password)
+    }
+}
 
 /// Console credential changes and dashboard saves must share the same copy of
 /// configuration, or a later settings save can silently undo a token change.
@@ -154,6 +164,8 @@ impl WebState {
         Self {
             config: Mutex::new(config),
             sessions: Arc::new(Mutex::new(HashMap::new())),
+            authentication_limits: Mutex::new(RateLimiter::new(10, 60)),
+            password_work: Mutex::new(()),
             directory: directory.into(),
             ph,
             history: Arc::new(aog::sensor_history::SensorHistory::new(directory)),
@@ -166,24 +178,166 @@ fn request_session_id(request: &Request) -> Option<&str> {
     rouille::input::cookies(request).find_map(|(name, value)| (name == "SID").then_some(value))
 }
 
+fn authentication_limit(request: &Request, state: &WebState) -> Option<Response> {
+    if state.authentication_limits.lock().unwrap_or_else(|error| error.into_inner())
+        .check_rate_limit(request.remote_addr().ip())
+    {
+        None
+    } else {
+        Some(api_error(429, "Too many authentication attempts. Try again in one minute.")
+            .with_additional_header("Retry-After", "60"))
+    }
+}
+
+fn password_work(state: &WebState) -> Result<std::sync::MutexGuard<'_, ()>, Response> {
+    match state.password_work.try_lock() {
+        Ok(guard) => Ok(guard),
+        Err(std::sync::TryLockError::Poisoned(error)) => Ok(error.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => Err(
+            api_error(429, "Another password request is in progress. Try again shortly.")
+                .with_additional_header("Retry-After", "2"),
+        ),
+    }
+}
+
+fn authenticate(request: &Request, state: &WebState) -> Response {
+    if request.method() != "POST" {
+        return api_error(405, "Use POST to sign in").with_additional_header("Allow", "POST");
+    }
+    if let Some(response) = authentication_limit(request, state) {
+        return response;
+    }
+    let input = try_or_400!(post_input!(request, {
+        input_username: String,
+        input_password: String,
+    }));
+    if input.input_username != "admin" {
+        return api_error(401, "Invalid username or password");
+    }
+    let _work = match password_work(state) {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+    let expected_hash = state.config.lock().unwrap_or_else(|error| error.into_inner())
+        .encrypted_password.clone();
+    // Expensive password work must not hold the configuration/session locks
+    // used by output requests, status polling, and camera authorization.
+    let valid = match aog::auth::verify_password(&input.input_password, &expected_hash) {
+        Ok(valid) => valid,
+        Err(error) => {
+            log::error!("Password verification error: {}", error);
+            false
+        }
+    };
+    if !valid {
+        return api_error(401, "Invalid username or password");
+    }
+    let config = state.config.lock().unwrap_or_else(|error| error.into_inner());
+    if config.encrypted_password != expected_hash {
+        return api_error(409, "The password changed during sign-in. Try your current password again.");
+    }
+    // Keep config -> sessions lock order so a concurrent password reset cannot
+    // create a session using the credential it just revoked.
+    let mut sessions = state.sessions.lock().unwrap_or_else(|error| error.into_inner());
+    sessions.retain(|_, session| session.created.elapsed() < SESSION_LIFETIME);
+    if let Some(id) = request_session_id(request) {
+        sessions.remove(id);
+    }
+    let id = session::generate_session_id();
+    sessions.insert(id.clone(), WebSession {
+        created: Instant::now(),
+        csrf: session::generate_session_id(),
+    });
+    state.authentication_limits.lock().unwrap_or_else(|error| error.into_inner())
+        .requests.remove(&request.remote_addr().ip());
+    Response::redirect_302("/index.html")
+        .with_additional_header("Set-Cookie", format!(
+            "SID={}; Max-Age=3600; Path=/; HttpOnly; Secure; SameSite=Lax", id,
+        ))
+        .with_no_cache()
+}
+
+fn password_session(request: &Request, state: &WebState) -> Result<(), Response> {
+    let sessions = state.sessions.lock().unwrap_or_else(|error| error.into_inner());
+    let session = request_session_id(request).and_then(|id| sessions.get(id))
+        .filter(|session| session.created.elapsed() < SESSION_LIFETIME)
+        .ok_or_else(|| api_error(401, "Your session expired. Sign in again."))?;
+    if request.method() != "GET" && request.header("X-AOG-CSRF") != Some(session.csrf.as_str()) {
+        return Err(api_error(403, "Invalid request token. Reload the page and try again."));
+    }
+    Ok(())
+}
+
+fn change_account_password(request: &Request, state: &WebState, body: &Option<serde_json::Value>) -> Response {
+    if let Err(response) = password_session(request, state) {
+        return response;
+    }
+    if request.method() != "POST" {
+        return api_error(405, "Use POST to change the password").with_additional_header("Allow", "POST");
+    }
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct PasswordChange {
+        current_password: String,
+        new_password: String,
+        confirm_password: String,
+    }
+    let input: PasswordChange = match json_input(body) {
+        Ok(input) => input,
+        Err(response) => return response,
+    };
+    if input.new_password != input.confirm_password {
+        return api_error(400, "New passwords do not match");
+    }
+    if let Err(error) = aog::auth::validate_password_strength(&input.new_password) {
+        return api_error(400, error);
+    }
+    if let Some(response) = authentication_limit(request, state) {
+        return response;
+    }
+    let _work = match password_work(state) {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+    let expected_hash = state.config.lock().unwrap_or_else(|error| error.into_inner())
+        .encrypted_password.clone();
+    if !aog::auth::verify_password(&input.current_password, &expected_hash).unwrap_or(false) {
+        return api_error(403, "Current password is incorrect");
+    }
+    let hash = match aog::auth::hash_password(&input.new_password) {
+        Ok(hash) => hash,
+        Err(_) => return api_error(500, "Could not secure the new password"),
+    };
+    let mut config = state.config.lock().unwrap_or_else(|error| error.into_inner());
+    if config.encrypted_password != expected_hash {
+        return api_error(409, "The password changed during this request. Try again with the current password.");
+    }
+    if let Err(response) = password_session(request, state) {
+        return response;
+    }
+    // Copy the current config only after hashing, preserving any setup saves
+    // or token rotation that completed while the password was being checked.
+    let mut updated = config.clone();
+    updated.encrypted_password = hash;
+    if let Err(error) = updated.save_in(&state.directory) {
+        return api_error(500, format!("Could not save password: {}", error));
+    }
+    *config = updated;
+    state.sessions.lock().unwrap_or_else(|error| error.into_inner()).clear();
+    state.authentication_limits.lock().unwrap_or_else(|error| error.into_inner())
+        .requests.remove(&request.remote_addr().ip());
+    Response::json(&serde_json::json!({"message":"Password changed. Sign in with your new password."}))
+        .with_no_cache()
+        .with_additional_header("Set-Cookie", "SID=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax")
+}
+
 fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> Response {
     // Read untrusted network bodies before taking application locks. Otherwise
     // a client that stalls mid-upload can block every dashboard request and,
     // for output actions, the watchdog's timers and overflow checks.
-    let login = if request.url() == "/authenticate" {
-        if request.method() != "POST" {
-            return Response::text("Method not allowed")
-                .with_status_code(405)
-                .with_additional_header("Allow", "POST");
-        }
-        let input = try_or_400!(post_input!(request, {
-            input_username: String,
-            input_password: String,
-        }));
-        Some((input.input_username, input.input_password))
-    } else {
-        None
-    };
+    if request.url() == "/authenticate" {
+        return authenticate(request, state);
+    }
     let body = if request.method() == "POST" && matches!(request.url().as_str(),
         "/api/settings" | "/api/account/password" | "/api/ph/calibrate"
             | "/api/ph/calibration/remove" | "/api/outputs/start" | "/api/outputs/stop"
@@ -195,6 +349,9 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
     } else {
         None
     };
+    if request.url() == "/api/account/password" {
+        return change_account_password(request, state, &body);
+    }
     let mut config = state
         .config
         .lock()
@@ -206,47 +363,6 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
         .unwrap_or_else(|error| error.into_inner());
     let now = Instant::now();
     sessions.retain(|_, session| now.duration_since(session.created) < SESSION_LIFETIME);
-
-    if let Some((username, password)) = login {
-        // Use secure password verification instead of plain text comparison
-        let password_valid = match crate::aog::auth::verify_password(
-            &password,
-            &config.encrypted_password,
-        ) {
-            Ok(valid) => valid,
-            Err(e) => {
-                log::error!("Password verification error: {}", e);
-                false
-            }
-        };
-
-        if username != "admin" || !password_valid {
-            return Response::text("Invalid username or password")
-                .with_status_code(401)
-                .with_no_cache();
-        }
-        if let Some(id) = session_id {
-            sessions.remove(id);
-        }
-        // Never authenticate a client-supplied ID. Rotate it on every login.
-        let id = session::generate_session_id();
-        sessions.insert(
-            id.clone(),
-            WebSession {
-                created: Instant::now(),
-                csrf: session::generate_session_id(),
-            },
-        );
-        return Response::redirect_302("/index.html")
-            .with_additional_header(
-                "Set-Cookie",
-                format!(
-                    "SID={}; Max-Age=3600; Path=/; HttpOnly; Secure; SameSite=Lax",
-                    id
-                ),
-            )
-            .with_no_cache();
-    }
 
     if request.url() == "/logout" {
         if let Some(id) = session_id {
@@ -636,48 +752,6 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
             .configure(updated.ph_config.clone().unwrap_or_default());
         *config = updated;
         return settings_response(config);
-    }
-    if path == "/api/account/password" {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct PasswordChange {
-            current_password: String,
-            new_password: String,
-            confirm_password: String,
-        }
-        let input: PasswordChange = match json_input(&body) {
-            Ok(value) => value,
-            Err(response) => return response,
-        };
-        if !aog::auth::verify_password(&input.current_password, &config.encrypted_password)
-            .unwrap_or(false)
-        {
-            return api_error(403, "Current password is incorrect");
-        }
-        if input.new_password != input.confirm_password {
-            return api_error(400, "New passwords do not match");
-        }
-        if let Err(error) = aog::auth::validate_password_strength(&input.new_password) {
-            return api_error(400, error);
-        }
-        let mut updated = config.clone();
-        updated.encrypted_password = match aog::auth::hash_password(&input.new_password) {
-            Ok(hash) => hash,
-            Err(_) => return api_error(500, "Could not secure the new password"),
-        };
-        if let Err(error) = updated.save_in(&state.directory) {
-            return api_error(500, format!("Could not save password: {}", error));
-        }
-        *config = updated;
-        state.sessions.lock().unwrap().clear();
-        return Response::json(
-            &serde_json::json!({"message":"Password changed. Sign in with your new password."}),
-        )
-        .with_no_cache()
-        .with_additional_header(
-            "Set-Cookie",
-            "SID=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax",
-        );
     }
     if path == "/api/ph/calibrate" {
         #[derive(Deserialize)]

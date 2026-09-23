@@ -3,6 +3,9 @@
   const $ = id => document.getElementById(id);
   const state = {
     csrf: null,
+    passwordChanging: false,
+    sessionExpired: false,
+    loginRedirect: null,
     cameras: [],
     camerasRequest: 0,
     cameraViews: {},
@@ -102,6 +105,27 @@
     $('global-message').hidden = !value;
     $('global-message').classList.toggle('bad', Boolean(value));
   }
+  function redirectToLogin(reason = 'expired') {
+    // Background requests can receive 401 after a password change has already
+    // succeeded. They must not replace its confirmation with an expiry notice.
+    if (state.loginRedirect === 'changed') return;
+    if (reason === 'expired' && state.passwordChanging) {
+      state.sessionExpired = true;
+      return;
+    }
+    if (state.loginRedirect === reason) return;
+    state.loginRedirect = reason;
+    state.csrf = null;
+    window.location.replace(`/login.html?${reason}=1`);
+  }
+
+  function updateFormAvailability() {
+    document.querySelectorAll('form [type=submit]').forEach(button => {
+      button.disabled = !state.settings || !state.csrf || Boolean(state.loginRedirect)
+        || Boolean(button.closest('form').dataset.saving);
+    });
+  }
+
   async function api(path, options = {}) {
     const abort = new AbortController();
     const timeout = setTimeout(() => abort.abort(), 10000);
@@ -121,12 +145,16 @@
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
         signal: abort.signal
       });
-      const body = await response.json().catch(() => ({}));
+      const body = await response.json().catch(() => {
+        if (response.ok) throw new Error('The device returned an invalid response. Try Refresh.');
+        return {};
+      });
       if (response.status === 401) {
-        window.location.replace('/login.html?expired=1');
+        redirectToLogin();
         throw new Error('Your session expired. Sign in again.');
       }
-      if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+      if (!response.ok) throw new Error(body?.error || `Request failed (${response.status})`);
+      if (!body || typeof body !== 'object') throw new Error('The device returned an invalid response. Try Refresh.');
       return body;
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('The device took too long to respond. Try again.');
@@ -223,6 +251,7 @@
     previewOverflow();
     renderOutputs();
     renderChart();
+    updateFormAvailability();
   }
 
   function showClock(stamp) {
@@ -250,7 +279,9 @@
     text('watering-summary', watering.enabled ? `${roleNames[watering.pump]} · ${watering.run_seconds}s every ${watering.every_minutes} min · ${timeText(watering.start_minute)}–${timeText(watering.end_minute)}` : 'No automatic water pump cycle');
     badge($('lighting-state'), lighting.enabled ? paused ? 'Paused' : 'Scheduled' : 'Disabled', lighting.enabled && !paused ? 'good' : 'neutral');
     badge($('watering-state'), watering.enabled ? paused ? 'Paused' : 'Scheduled' : 'Disabled', watering.enabled && !paused ? 'good' : 'neutral');
-    const wait = state.outputs && state.outputs.next_watering_in_seconds;
+    const remaining = state.outputs && state.outputs.next_watering_in_seconds;
+    const elapsed = Math.max(0, Math.floor((performance.now() - state.outputsReceivedAt) / 1000));
+    const wait = finite(remaining) ? Math.max(0, remaining - elapsed) : null;
     text('next-watering', paused ? 'Schedules are paused. Resume when you are ready.' : watering.enabled && finite(wait) ? `Next watering check in ${duration(wait)}. Window and safety conditions must allow a run.` : 'Schedules run on the device when your browser is closed.');
   }
 
@@ -601,6 +632,7 @@
   async function pollHistory(schedule = true) {
     const request = ++state.historyRequest;
     try {
+      if (state.passwordChanging || state.loginRedirect) return;
       const history = await api(`/api/history?hours=${state.historyRange}`);
       if (request !== state.historyRequest) return;
       if (!Array.isArray(history.series)) throw new Error('Sensor history response is unavailable. Try Refresh.');
@@ -681,7 +713,7 @@
     renderSchedules();
   }
   async function loadSettings(hydrate = true) {
-    if (state.settingsBusy) return;
+    if (state.settingsBusy || state.passwordChanging || state.loginRedirect) return;
     const request = ++state.settingsRequest;
     const settings = await api('/api/settings');
     if (request === state.settingsRequest) showSettings(settings, hydrate);
@@ -709,6 +741,7 @@
   async function pollStats(schedule = true) {
     const request = ++state.statsRequest;
     try {
+      if (state.passwordChanging || state.loginRedirect) return;
       const stats = await api('/api/stats');
       if (request === state.statsRequest) showStats(stats);
     } catch (error) {
@@ -728,7 +761,7 @@
   async function pollPh(schedule = true) {
     const request = ++state.phRequest;
     try {
-      if (state.phBusy) return;
+      if (state.phBusy || state.passwordChanging || state.loginRedirect) return;
       const ph = await api('/api/ph');
       if (request === state.phRequest && !state.phBusy) showPh(ph);
     } catch (error) {
@@ -746,7 +779,7 @@
   async function pollOutputs(schedule = true) {
     const request = ++state.outputsRequest;
     try {
-      if (state.outputPending.size) return;
+      if (state.outputPending.size || state.passwordChanging || state.loginRedirect) return;
       const outputs = await api('/api/outputs');
       if (request !== state.outputsRequest || state.outputPending.size) return;
       state.outputs = outputs;
@@ -847,7 +880,7 @@
   async function pollCameras(schedule = true) {
     const request = ++state.camerasRequest;
     try {
-      if (!state.csrf || document.hidden || location.hash !== '#cameras') return;
+      if (!state.csrf || state.passwordChanging || state.loginRedirect || document.hidden || location.hash !== '#cameras') return;
       const cameras = await api('/api/cameras');
       if (request !== state.camerasRequest) return;
       state.cameras = cameras;
@@ -905,7 +938,7 @@
       params.set('format', kind);
       params.set('download', '1');
       const response = await fetch(`/api/air-quality/${endpoint}?${params}`, {credentials: 'same-origin', cache: 'no-store', signal: abort.signal});
-      if (response.status === 401) { window.location.replace('/login.html?expired=1'); return; }
+      if (response.status === 401) { redirectToLogin(); return; }
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || `Download failed (${response.status})`);
@@ -978,7 +1011,7 @@
       } finally {
         delete $(id).dataset.saving;
         $(id).removeAttribute('aria-busy');
-        button.disabled = false;
+        updateFormAvailability();
         button.textContent = label;
       }
     });
@@ -1224,17 +1257,27 @@
   form('password-form', 'password-result', async () => {
     if ($('new-password').value !== $('confirm-password').value) throw new Error('New passwords do not match.');
     const password = $('new-password').value;
-    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !(/[^a-zA-Z0-9]/.test(password))) throw new Error('Include uppercase, lowercase, a number, and a symbol.');
-    await api('/api/account/password', {
-      body: {
-        current_password: $('current-password').value,
-        new_password: password,
-        confirm_password: $('confirm-password').value
-      }
-    });
-    $('password-form').reset();
-    window.location.assign('/login.html?changed=1');
-    return 'Password changed. Sign in again.';
+    const length = Array.from(password).length;
+    if (length < 12 || length > 128) throw new Error('Use 12–128 characters for your new password.');
+    // The server applies one Unicode-aware strength policy to web and console
+    // changes. Do not reject valid non-ASCII letters with an ASCII-only regex.
+    state.passwordChanging = true;
+    state.sessionExpired = false;
+    try {
+      await api('/api/account/password', {
+        body: {
+          current_password: $('current-password').value,
+          new_password: password,
+          confirm_password: $('confirm-password').value
+        }
+      });
+      $('password-form').reset();
+      redirectToLogin('changed');
+      return 'Password changed. Sign in again.';
+    } finally {
+      state.passwordChanging = false;
+      if (state.sessionExpired && !state.loginRedirect) redirectToLogin();
+    }
   });
   $('refresh-button').addEventListener('click', event => actionButton(event.currentTarget, async () => {
     globalError('');
@@ -1242,9 +1285,7 @@
       state.csrf = (await api('/api/session')).csrf_token;
     }
     await loadSettings(!state.settings);
-    document.querySelectorAll('form [type=submit]').forEach(button => {
-      button.disabled = false;
-    });
+    updateFormAvailability();
     await Promise.all([pollStats(false), pollPh(false), pollHistory(false), pollOutputs(false), pollCameras(false)]);
   }));
   async function boot() {
@@ -1255,9 +1296,7 @@
       const session = await api('/api/session');
       state.csrf = session.csrf_token;
       await loadSettings();
-      document.querySelectorAll('form [type=submit]').forEach(button => {
-        button.disabled = false;
-      });
+      updateFormAvailability();
     } catch (error) {
       globalError(`Could not load setup: ${error.message} Use Refresh to try again.`);
     }

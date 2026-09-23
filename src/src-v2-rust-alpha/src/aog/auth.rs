@@ -48,6 +48,9 @@ pub fn hash_password(password: &str) -> Result<String, Box<dyn Error>> {
 }
 
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, Box<dyn Error>> {
+    if password.chars().take(MAX_PASSWORD_LENGTH + 1).count() > MAX_PASSWORD_LENGTH {
+        return Ok(false);
+    }
     let parsed_hash = PasswordHash::new(hash)
         .map_err(|e| format!("Invalid password hash format: {}", e))?;
     
@@ -59,11 +62,12 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, Box<dyn Error
 }
 
 pub fn validate_password_strength(password: &str) -> Result<(), PasswordError> {
-    if password.len() < MIN_PASSWORD_LENGTH {
+    let length = password.chars().count();
+    if length < MIN_PASSWORD_LENGTH {
         return Err(PasswordError::TooShort);
     }
     
-    if password.len() > MAX_PASSWORD_LENGTH {
+    if length > MAX_PASSWORD_LENGTH {
         return Err(PasswordError::TooLong);
     }
     
@@ -146,12 +150,17 @@ pub fn reset_password() -> Result<String, Box<dyn Error>> {
 }
 
 pub fn change_password(current_password: &str, new_password: &str) -> Result<(), Box<dyn Error>> {
+    let expected_hash = super::http::current_password_hash()?;
+    if !verify_password(current_password, &expected_hash)? {
+        return Err("Current password is incorrect".into());
+    }
+    validate_password_strength(new_password)?;
+    let new_hash = hash_password(new_password)?;
     super::http::update_credentials(|config| {
-        if !verify_password(current_password, &config.encrypted_password)? {
-            return Err("Current password is incorrect".into());
+        if config.encrypted_password != expected_hash {
+            return Err("The password changed during this request; try again with the current password".into());
         }
-        validate_password_strength(new_password)?;
-        config.encrypted_password = hash_password(new_password)?;
+        config.encrypted_password = new_hash;
         Ok(())
     })
 }
