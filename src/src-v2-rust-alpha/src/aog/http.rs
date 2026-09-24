@@ -1190,8 +1190,11 @@ mod tests {
         assert!(!root.path().join("ph_calibration.json").exists());
         let request = web_request("GET", "/api/ph", Some(&cookie), "");
         let data = json_response(handle_web_request(&request, &state, root.path()));
-        assert_eq!(data["status"]["current_ph"], 0.0);
+        // A saved sample remains history, not a live reading from the sensor.
+        assert!(data["status"]["current_ph"].is_null());
+        assert!(data["raw_value"].is_null());
         assert_eq!(data["history"].as_array().unwrap().len(), 1);
+        assert_eq!(data["history"][0]["ph_value"], 0.0);
         assert_eq!(data["status"]["calibration_valid"], false);
         state.ph.configure(crate::PhConfig {
             history_size: 0,

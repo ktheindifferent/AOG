@@ -1,5 +1,42 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#183d30"><title>AOG · Sign in</title><link rel="icon" href="/img/logo.png"><link rel="stylesheet" href="/css/aog.css"><script defer src="/js/aog/login.js"></script></head>
-<body class="login-body"><main class="login-card"><div class="brand"><span class="brand-mark" aria-hidden="true">↗</span><span>AOG<small>GROW CONTROL</small></span></div><h1>Welcome to your grow.</h1><p>Sign in to see your environment and manage your setup.</p><div id="login-notice" class="notice" role="status" hidden></div><form id="login-form" action="/authenticate" method="post"><label>Username<input id="input_username" name="input_username" value="admin" autocomplete="username" required></label><label>Password<input id="input_password" name="input_password" type="password" autocomplete="current-password" required autofocus></label><label class="check-label"><input id="show-password" type="checkbox"> Show password</label><button type="submit" class="button primary">Sign in →</button><p id="login-error" class="form-result error" role="alert"></p></form><div class="login-footer">Your grow. Your device. Your control.</div></main></body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#20372b">
+  <title>AOG · Sign in</title>
+  <link rel="icon" type="image/svg+xml" href="/img/aog-mark.svg">
+  <link rel="preload" href="/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/aog.css">
+  <script defer src="/js/aog/login.js"></script>
+</head>
+<body class="login-body">
+  <div class="login-shell">
+  <aside class="login-story" aria-label="AOG Grow observatory">
+    <div class="brand"><img class="brand-mark" src="/img/aog-mark.svg" width="48" height="48" alt=""><span class="brand-wordmark">aog<small>GROW OBSERVATORY</small></span></div>
+    <div class="login-story-copy"><span class="eyebrow">OBSERVE. UNDERSTAND. GROW.</span><h2>A little closer<br>to your grow.</h2><p>A clear view of your environment.<br>A thoughtful rhythm for everything growing.</p></div>
+    <img class="grow-study" src="/img/grow-study.svg" width="560" height="500" alt="">
+    <div class="login-story-footer"><span>Rooted in observation.</span><span>AOG</span></div>
+  </aside>
+  <main class="login-card" aria-labelledby="login-title">
+    <div class="login-form-heading"><span class="eyebrow">YOUR LOCAL GROW DASHBOARD</span>
+    <h1 id="login-title">Welcome to your grow.</h1>
+    <p>Sign in to see how things are growing.</p></div>
+    <div id="login-notice" class="notice" role="status" hidden></div>
+    <form id="login-form" action="/authenticate" method="post" aria-busy="false">
+      <label for="input_username">Username
+        <input id="input_username" name="input_username" value="admin" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="login-error" required>
+      </label>
+      <label for="input_password">Password
+        <input id="input_password" name="input_password" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="caps-lock-hint login-error" required autofocus>
+      </label>
+      <p id="caps-lock-hint" class="helper" role="status" hidden></p>
+      <label class="check-label" for="show-password"><input id="show-password" type="checkbox" aria-controls="input_password"> Show password</label>
+      <button type="submit" class="button primary">Sign in <svg class="icon" aria-hidden="true"><use href="/img/icons.svg#arrow"/></svg></button>
+      <p id="login-error" class="form-result error" role="alert" aria-atomic="true" tabindex="-1"></p>
+    </form>
+    <div class="login-footer"><svg class="icon" aria-hidden="true"><use href="/img/icons.svg#network"/></svg> Your grow. Your device. Your control.</div>
+  </main>
+  </div>
+</body>
 </html>

@@ -1,4 +1,11 @@
 /src/src-v2-rust-alpha/target
+/target/
+**/__pycache__/
+*.py[cod]
+/firmware/build/
+/.arduino/
+.env
+.env.*
 **/*.rs.bk
 
 .vscode
