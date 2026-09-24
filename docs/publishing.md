@@ -8,11 +8,13 @@ Use a Git credential helper or SSH key with write access. If using GitHub CLI:
 
 ```sh
 sudo apt-get install gh
-gh auth login --hostname github.com --git-protocol https --web
+gh auth login --hostname github.com --git-protocol https --web --scopes workflow
 gh auth setup-git
 ```
 
 Authenticate as an account with write access to the existing AOG repository. Keep tokens out of commands, repository files, and chat. Revoke the token previously shared in chat.
+
+The additional `workflow` scope allows publication of the included GitHub Actions workflow. See [GitHub CLI authentication](https://cli.github.com/manual/gh_auth_login) and [GitHub OAuth scopes](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps).
 
 ## Publish the committed v2 tree
 
