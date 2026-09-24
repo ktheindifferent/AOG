@@ -1,0 +1,2 @@
+firmware/package/*.hex -text -diff
+firmware/package/*.zip -text -diff

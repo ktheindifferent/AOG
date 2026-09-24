@@ -1,0 +1,9 @@
+AOG 2.0.0 adds a visual hardware workspace: Arduino link status, individual sensor diagnostics, raw frames, wiring guides, and managed firmware updates. D6/D8 water temperature is included in live readings, retained history, and CSV/JSON/HTML reports. Probe model, tank assignment, and source board are explicit rather than assumed.
+
+Sensor Kit and Dual OVF firmware now include DS18B20-family detection on D6/D8, sensor-specific error reporting, and 24 one-minute RAM records. The Pi acknowledges records only after durable storage, deduplicates replay after restart, and backfills water/environment/pH history. Live overflow controls never consume historical readings.
+
+Firmware uploads pause automation, verify outputs are off, drain supported logs, check binary hashes, verify uploads, and wait for the updated board to reconnect. Arduino Nano, Nano old bootloader, and Uno ATmega328P profiles are attached. Upload tools can be installed with `deploy/install-firmware-tools.sh`; choose the correct board in Connections.
+
+The repository now builds v2 from its root. Python v1, old data/media, unused dashboard dependencies, and obsolete notes are removed from the current tree and remain in commit history. The dashboard and firmware package are embedded automatically during Rust builds. Existing runtime configuration, pH calibration, and history remain readable.
+
+Hardware notes: the actual three-wire probes and tank mapping still need identification. Only confirmed, externally powered DS18B20-family probes with the correct pull-ups are supported. RAM logs cannot survive power loss or board reset, and their finite capacity is reported. Verify pH calibration after upgrading legacy firmware; analog values do not prove probe connection. Replayed pre-sync timestamps are estimates based on board uptime.

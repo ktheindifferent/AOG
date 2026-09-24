@@ -1,340 +1,41 @@
-# A.O.G. Testing Strategy
+# Testing AOG v2
 
-## Overview
-This document outlines the comprehensive testing strategy for the A.O.G. (Algae Oxygen Reactor) codebase. Our testing approach ensures reliability, maintainability, and confidence in code changes.
-
-## Test Coverage Goals
-- **Target Coverage**: >80% for critical paths
-- **Critical Modules**: sensors, pump control, GPIO operations, HTTP API
-- **Safety-Critical Code**: 100% coverage for overflow detection and pump control
-
-## Testing Pyramid
-
-### 1. Unit Tests
-Located in each module as `#[cfg(test)] mod tests`
-
-**Coverage Areas:**
-- **sensors.rs**: Arduino parsing, sensor reading, error handling
-- **pump.rs**: Pump thread management, scheduling, control logic
-- **qwiic.rs**: Relay device configuration and control
-- **gpio modules**: Pin management and state control
-- **lib.rs**: Configuration serialization, data structures
-
-**Run Unit Tests:**
-```bash
-cd src/src-v2-rust-alpha
-cargo test --lib
-```
-
-### 2. Integration Tests
-Located in `tests/` directory
-
-**Test Files:**
-- `integration_test.rs`: Full system workflow tests
-- `property_tests.rs`: Property-based testing with proptest
-
-**Coverage Areas:**
-- Configuration lifecycle
-- Sensor data processing pipelines
-- Multi-component interactions
-- JSON serialization/deserialization
-- File I/O operations
-
-**Run Integration Tests:**
-```bash
-cd src/src-v2-rust-alpha
-cargo test --test '*'
-```
-
-### 3. Property-Based Tests
-Using `proptest` for generative testing
-
-**Coverage Areas:**
-- CO2 value ranges and calculations
-- Temperature and humidity boundaries
-- GPIO pin configurations
-- Timestamp handling
-- String parsing robustness
-
-**Run Property Tests:**
-```bash
-cd src/src-v2-rust-alpha
-cargo test property_tests
-```
-
-## Mocking Strategy
-
-### Hardware Mocking
-We use `mockall` for mocking hardware interfaces:
-- GPIO operations
-- Serial port communication
-- I2C devices
-- File system operations in `/opt/aog/`
-
-### Example Mock Usage:
-```rust
-#[cfg(test)]
-use mockall::automock;
-
-#[automock]
-trait SensorReader {
-    fn read_co2(&self) -> Result<f64, Error>;
-}
-```
-
-## CI/CD Pipeline
-
-### GitHub Actions Workflow
-`.github/workflows/rust-tests.yml`
-
-**Pipeline Stages:**
-1. **Format Check**: `cargo fmt`
-2. **Linting**: `cargo clippy`
-3. **Build**: `cargo build`
-4. **Unit Tests**: `cargo test --lib`
-5. **Integration Tests**: `cargo test --test '*'`
-6. **Doc Tests**: `cargo test --doc`
-7. **Coverage Report**: `cargo tarpaulin`
-8. **Security Audit**: `cargo audit`
-
-**Supported Rust Versions:**
-- Stable (primary)
-- Beta (compatibility check)
-- Nightly (future compatibility)
-
-## Running Tests Locally
-
-### Prerequisites
-
-Serial sensor, configuration, session, and instance tests use temporary
-directories. Instance tests set `AOG_TEST_DIR` for their process and serialize
-tests that share environment variables and localhost ports.
-
-Some legacy pump-safety and water-level tests still write to `/opt/aog`.
-On the AOG device, use the helper below to mount a temporary runtime directory
-in a private mount namespace for the test process. A separate network namespace
-also keeps test requests and localhost listeners away from the running service.
-The device's live data remains outside those namespaces. The helper fetches
-dependencies first, runs Cargo as the calling user,
-limits build concurrency for the Raspberry Pi, and removes its test data on
-exit:
+Run commands from the repository root. Tests on the live Pi must use isolation: some integration tests exercise `/opt/aog` and localhost ports.
 
 ```sh
-cd src/src-v2-rust-alpha
-sh ./test-on-device.sh
+sh test-on-device.sh
 ```
 
-This runs the default suite; tests marked `ignored` that launch the full
-hardware application remain excluded.
+The helper fetches locked dependencies, mounts a temporary runtime directory in a private mount namespace, creates an isolated network namespace, and runs Cargo as the calling user. Live runtime data stays outside these namespaces. Use `sh test-on-device.sh --lib` for the library suite.
 
-```bash
-# Install development dependencies
-cargo install cargo-tarpaulin
-cargo install cargo-audit
+On a disposable machine with no AOG service or hardware, create a writable `/opt/aog` and use `cargo test --locked -j1 -- --test-threads=1`.
+
+## Firmware
+
+```sh
+c++ -std=c++11 -Wall -Wextra -Werror -fsanitize=address,undefined \
+  firmware/tests/ram_buffer_test.cpp -o /tmp/aog-ram-buffer-test
+/tmp/aog-ram-buffer-test
+python3 firmware/build.py --install
 ```
 
-### Full Test Suite
-```bash
-cd src/src-v2-rust-alpha
+The native test covers ring overflow, correct/incorrect ACKs, duplicate ACKs, and wraparound. Builds compile both sketches for Nano, Nano old bootloader, and Uno and report flash/SRAM use. Compiler success is not a physical hardware test.
 
-# Run all tests
-cargo test
+Rust regressions cover durable storage before ACK, replay deduplication after restart, failed storage, invalid timestamps, avoiding live overflow/pH changes from history, water-source ambiguity, six-column history compatibility, water backfill in exports, and firmware control interlocks.
 
-# Run with verbose output
-cargo test -- --nocapture
+## Browser
 
-# Run specific test
-cargo test test_sensor_log_valid_input
-
-# Run tests in parallel
-cargo test -- --test-threads=4
-```
-
-To check real serial devices with AOG stopped, see the
-[sensor diagnostics instructions](src/src-v2-rust-alpha/README.md#serial-sensor-diagnostics).
-The diagnostics executable reads sensors without initializing actuators.
-
-### Dashboard browser checks
-
-The Rust v2 browser checks serve the real web assets with simulated API
-responses. They cover pH history without calibration, empty/error states,
-lighting and watering schedules, output controls, password changes, and
-desktop/mobile layout. They never send commands to real hardware.
+Install Python Playwright and local Chromium. Tests simulate APIs and never operate physical outputs.
 
 ```sh
 python3 -m venv /tmp/aog-browser-env
 /tmp/aog-browser-env/bin/pip install playwright
-# Use the system Chromium package; override its path with CHROMIUM if needed.
-/tmp/aog-browser-env/bin/python src/src-v2-rust-alpha/tests/web_ui_test.py
+/tmp/aog-browser-env/bin/python tests/web_ui_test.py
+/tmp/aog-browser-env/bin/python tests/web_ui_hardware_test.py
 ```
 
-Chromium must be installed (`sudo apt-get install chromium` on Raspberry Pi
-OS). Screenshots are written to `/tmp/aog-ui-*.png`. Controller unit tests use
-fake relays to check overflow shutdown, cooldown, deadlines, overnight
-lighting, watering intervals, and persistent pause. HTTP tests use temporary
-configuration to verify password/session handling, CSRF, and schedule saves.
+Set `CHROMIUM` if the executable is not `/usr/bin/chromium`. Run browser suites sequentially on a Pi after backend builds and tests finish. Additional `tests/web_ui_*_test.py` suites cover settings conflicts, drafts, calibration, report options, charts, cameras, sessions, and output actions.
 
-### Coverage Analysis
-```bash
-# Generate coverage report
-cargo tarpaulin --out Html
+The hardware suite checks 1440, 390, and 320 pixel layouts, stale/failed reports, CRC errors, board switching, unsaved probe names, source selection, CSRF-protected update requests, and water history navigation. Screenshots go to `/tmp/aog-ui-hardware`; set `AOG_UI_ARTIFACTS` to retain them elsewhere.
 
-# View coverage report
-open tarpaulin-report.html
-```
-
-### Performance Testing
-```bash
-# Run benchmarks (if available)
-cargo bench
-
-# Run tests with optimization
-cargo test --release
-```
-
-## Test Data Management
-
-### Test Fixtures
-- Located in `tests/fixtures/` (if needed)
-- Use `tempfile` crate for temporary test files
-- Clean up test artifacts automatically
-
-### Environment Variables
-Instance tests set `AOG_TEST_DIR` to redirect PID and lock files to a temporary
-directory. Sensor, configuration, and session unit tests pass temporary
-directories directly to the implementation under test.
-
-## Writing New Tests
-
-### Guidelines
-1. **Test Naming**: Use descriptive names like `test_pump_overflow_protection`
-2. **Isolation**: Each test should be independent
-3. **Assertions**: Use clear, specific assertions
-4. **Documentation**: Comment complex test logic
-5. **Error Cases**: Test both success and failure paths
-
-### Test Template
-```rust
-#[test]
-fn test_feature_description() {
-    // Arrange
-    let input = setup_test_data();
-    
-    // Act
-    let result = function_under_test(input);
-    
-    // Assert
-    assert_eq!(result, expected_value);
-}
-```
-
-## Continuous Improvement
-
-### Metrics to Track
-- Code coverage percentage
-- Test execution time
-- Test flakiness rate
-- Bug escape rate
-
-### Regular Reviews
-- Monthly: Review test coverage gaps
-- Quarterly: Update testing strategy
-- Per Release: Full regression testing
-
-## Troubleshooting
-
-### Common Issues
-
-**Permission Errors:**
-On the device, use `sh ./test-on-device.sh` from the Rust v2 directory. It
-provides writable temporary runtime data without changing live permissions.
-
-**Serial Port Tests Failing:**
-```bash
-# Fix: Mock serial ports in tests or skip hardware tests
-cargo test --lib  # Skip integration tests requiring hardware
-```
-
-**Flaky Tests:**
-- Add retry logic for network-dependent tests
-- Use `serial_test` crate for tests requiring exclusive access
-- Increase timeouts for slow operations
-
-## Test Categories
-
-### Safety-Critical Tests
-Must pass before deployment:
-- Overflow detection
-- Pump control limits
-- Emergency shutdown
-- Sensor validation
-
-### Regression Tests
-Prevent previously fixed bugs:
-- Add test for each bug fix
-- Document original issue in test comment
-- Link to issue tracker
-
-### Smoke Tests
-Quick validation suite:
-```bash
-cargo test --test smoke_tests
-```
-
-## Hardware-in-the-Loop Testing
-
-For testing with actual hardware:
-1. Set up Raspberry Pi test environment
-2. Connect mock sensors/actuators
-3. Run hardware integration tests
-4. Monitor GPIO states and serial output
-
-## Security Testing
-
-### Dependency Auditing
-```bash
-cargo audit
-```
-
-### Input Validation Tests
-- Test boundary values
-- Test invalid input handling
-- Test injection attacks prevention
-
-## Performance Benchmarks
-
-### Baseline Metrics
-- Sensor reading: <100ms
-- HTTP API response: <200ms
-- Configuration save: <50ms
-- Pump control loop: <10ms
-
-## Documentation
-
-### Test Documentation
-- Document test purpose in comments
-- Link tests to requirements
-- Maintain test coverage reports
-
-### API Documentation Tests
-```bash
-cargo test --doc
-```
-
-## Future Enhancements
-
-### Planned Improvements
-- [ ] Mutation testing with `cargo-mutants`
-- [ ] Fuzz testing for parser functions
-- [ ] Contract testing for API endpoints
-- [ ] Visual regression testing for web UI
-- [ ] Load testing for concurrent operations
-- [ ] Chaos engineering for resilience
-
-## Support
-
-For testing-related questions:
-- Review this document
-- Check CI logs for failures
-- Open an issue with test label
-- Include test output in bug reports
+Physical acceptance requires confirming actual probe models, pull-ups, tank assignments, USB reset behavior, and bootloader profiles. Firmware updates require an identified AOG board, confirmed-off outputs, and a matching packaged binary.

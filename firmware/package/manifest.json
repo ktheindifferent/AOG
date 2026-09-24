@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "protocol": 2,
+  "core": "arduino:avr@1.8.6",
+  "sample_interval_seconds": 60,
+  "buffer_capacity": 24,
+  "artifacts": [
+    {
+      "device": "SENSORKIT_MK1",
+      "board": "nano",
+      "fqbn": "arduino:avr:nano:cpu=atmega328",
+      "file": "sensor-kit-nano-2.0.0.hex",
+      "sha256": "62c138b831aae93359f02d787d3808aa26d0bdac32997406f99cdcae3c2d9c89"
+    },
+    {
+      "device": "SENSORKIT_MK1",
+      "board": "nano-old",
+      "fqbn": "arduino:avr:nano:cpu=atmega328old",
+      "file": "sensor-kit-nano-old-2.0.0.hex",
+      "sha256": "62c138b831aae93359f02d787d3808aa26d0bdac32997406f99cdcae3c2d9c89"
+    },
+    {
+      "device": "SENSORKIT_MK1",
+      "board": "uno",
+      "fqbn": "arduino:avr:uno",
+      "file": "sensor-kit-uno-2.0.0.hex",
+      "sha256": "62c138b831aae93359f02d787d3808aa26d0bdac32997406f99cdcae3c2d9c89"
+    },
+    {
+      "device": "DUAL_OVF_SENSOR",
+      "board": "nano",
+      "fqbn": "arduino:avr:nano:cpu=atmega328",
+      "file": "dual-ovf-nano-2.0.0.hex",
+      "sha256": "3bcea977eab27aad90b618994b5a69b4ac2b217434bc0713903c1cbacd3994e1"
+    },
+    {
+      "device": "DUAL_OVF_SENSOR",
+      "board": "nano-old",
+      "fqbn": "arduino:avr:nano:cpu=atmega328old",
+      "file": "dual-ovf-nano-old-2.0.0.hex",
+      "sha256": "3bcea977eab27aad90b618994b5a69b4ac2b217434bc0713903c1cbacd3994e1"
+    },
+    {
+      "device": "DUAL_OVF_SENSOR",
+      "board": "uno",
+      "fqbn": "arduino:avr:uno",
+      "file": "dual-ovf-uno-2.0.0.hex",
+      "sha256": "3bcea977eab27aad90b618994b5a69b4ac2b217434bc0713903c1cbacd3994e1"
+    }
+  ]
+}
