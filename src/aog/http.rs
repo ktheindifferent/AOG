@@ -341,7 +341,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
     let body = if request.method() == "POST" && matches!(request.url().as_str(),
         "/api/settings" | "/api/account/password" | "/api/ph/calibrate"
             | "/api/ph/calibration/remove" | "/api/outputs/start" | "/api/outputs/stop"
-            | "/api/water-probes" | "/api/firmware/update" | "/api/co2-settings"
+            | "/api/water-probes" | "/api/firmware/update" | "/api/co2-settings" | "/api/ph-input"
     ) {
         match json_body::<serde_json::Value>(request) {
             Ok(body) => Some(body),
@@ -452,6 +452,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
         "/api/settings"
             | "/api/connections"
             | "/api/co2-settings"
+            | "/api/ph-input"
             | "/api/device-logs"
             | "/api/water-probes"
             | "/api/firmware"
@@ -709,6 +710,7 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
                 "server_time": now,
                 "co2_diagnostics": aog::co2::diagnostics_configured(&devices, now, &co2_settings),
                 "co2_settings": co2_settings,
+                "ph_input": aog::ph_sensor::input_settings(&state.directory),
                 "devices": devices,
                 "water_probes": aog::device_link::water_config(&state.directory),
                 "water_readings": [aog::device_link::water_reading(&state.directory,6),aog::device_link::water_reading(&state.directory,8)],
@@ -761,6 +763,16 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
         return match aog::co2::save_settings(&state.directory, &input) {
             Ok(()) => Response::json(&input).with_no_cache(),
             Err(e) => api_error(if e.kind() == std::io::ErrorKind::InvalidInput {400} else {500}, e),
+        };
+    }
+    if path == "/api/ph-input" {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Input { connected: bool }
+        let input = match json_input::<Input>(&body) { Ok(value) => value, Err(response) => return response };
+        return match state.ph.confirm_analog_input(input.connected) {
+            Ok(settings) => Response::json(&settings).with_no_cache(),
+            Err(error) => api_error(409, error),
         };
     }
     if path == "/api/firmware/update" {
@@ -1005,7 +1017,7 @@ mod tests {
             assert_eq!(handle_web_request(&request,&state,root.path()).status_code,401);
         }
         let (cookie,csrf)=authenticated(&state);
-        for path in ["/api/water-probes","/api/firmware/update","/api/co2-settings"] {
+        for path in ["/api/water-probes","/api/firmware/update","/api/co2-settings","/api/ph-input"] {
             let request=json_request(path,Some(&cookie),None,serde_json::json!({}));
             assert_eq!(handle_web_request(&request,&state,root.path()).status_code,403);
         }
@@ -1299,6 +1311,7 @@ mod tests {
             temperature: 25.0,
             timestamp: 123,
             alert_level: aog::ph_sensor::PhAlertLevel::Critical,
+                source_verified: true,
         });
         std::fs::write(
             root.path().join("ph_history.json"),

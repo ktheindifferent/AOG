@@ -9,6 +9,8 @@ an internet connection to load its assets.
 - `index.html`: Overview, connections, sensor history, cameras, reports, schedules, outputs,
   setup, and account screens.
 - `css/aog.css`: shared layout, responsive styles, controls, and design tokens.
+- `css/appearance.css` and `js/aog/appearance.js`: light/dark palettes, chart
+  colors and the browser's appearance preference.
 - `js/aog/index.js`: hash navigation, API requests, polling, charts, and forms.
 - `login.html` and `js/aog/login.js`: device sign-in.
 - `img/aog-mark.svg`, `img/icons.svg`, `img/grow-study.svg`, and
@@ -41,7 +43,7 @@ quick links to Overview, Connections, History and Outputs. Secondary water and
 air measurements use labeled readout cards with direct history links. History
 groups sensor and period selection above the charts. Setup has a persistent
 section index on desktop; reports group period, context and download actions,
-with raw exports before the illustrative preview. Both schedule windows have
+with raw exports before the report outline. Both schedule windows have
 visual timelines, outputs summarize confirmed relay state, and camera views
 can switch between side-by-side and stacked layouts. Account and sign-in share
 the same typography, field spacing and local-device identity.
@@ -49,12 +51,48 @@ the same typography, field spacing and local-device identity.
 Setup opens one section at a time, with an **All sections** view for reviewing
 multiple forms together. Section links retain their URLs, keyboard focus and
 unsaved edits. History offers **Compare readings**, a compact view of the last
-recorded values and period statistics, with a link into each full chart. Display
+recorded values and period statistics, with a link into each full chart. Layout
 choices last for the current browser page; they do not change device settings.
 The report outline reflects the selected title, period, snapshot and notes.
 Password requirements and confirmation feedback update while typing, while
 the device remains responsible for validating password changes. Shared refresh
 feedback and **Back to top** controls complete the page navigation.
+
+Account and sign-in offer **System**, **Light** and **Dark** appearance. System
+follows the operating system, including changes while the dashboard is open.
+The preference is stored in this browser and synchronized between its tabs;
+it never changes device settings or submits drafts. If browser storage is
+unavailable, the choice still works until the page reloads. The initial palette
+is applied before styles load, and chart colors change without replacing the
+selected sample. All nine pages, diagnostics, forms and sign-in share the
+palette. High-contrast system colors remain available.
+
+Air-quality values separate the number and unit, with roomier reading rows on
+phones. Missing readings have a quieter, explicitly unavailable presentation.
+A failed live-readings request clears both water-temperature values along with
+the air readings, so a previous temperature cannot look current during an
+interruption. Saved history remains available.
+
+## Atlas Gravity pH connection
+
+The supported analog board is the Atlas Scientific **Gravity pH Meter V2.1**.
+With the Dual OVF Arduino powered off, connect **A → A0**, **+ → 5V** and
+**− → GND**. This is the Arduino with the overflow switches on D2 and D4.
+The probe remains attached to the Gravity board. See the
+[manufacturer’s wiring diagram](https://files.atlas-scientific.com/Gravity-pH-datasheet.pdf#page=3).
+
+In **Connections → Atlas Gravity pH · connection setup**, confirm the physical
+wiring to enable measurements. A0 voltage alone cannot identify an attached
+board or detect an unplugged probe. The input is disabled until explicitly
+confirmed; raw ADC counts and voltage remain available. Disable the input
+before disconnecting the hardware. Enabling archives the previous calibration
+and starts a new measurement period; check known buffers and calibrate again.
+
+Older pH history without source verification, and unconfirmed Arduino replay
+records, are retained but excluded from live values, charts, averages and
+adjustment suggestions. Confirmation never reinterprets earlier raw logs as
+water measurements. The connection setting is stored in `ph_input.json`;
+changes use the authenticated, CSRF-protected `/api/ph-input` endpoint.
 
 ## Interaction conventions
 
@@ -181,6 +219,14 @@ drafts, comparison-to-chart navigation and range recovery, report outlines,
 Unicode password guidance and confirmation feedback. It also supports
 `AOG_AXE_PATH` and writes screenshots to `AOG_UI_ARTIFACTS` when specified.
 
+`tests/web_ui_appearance_test.py` covers both appearances across all pages,
+system changes, reload and cross-tab persistence, unavailable browser storage,
+draft preservation, sensor units and water-temperature failure/recovery. With
+`AOG_AXE_PATH`, it audits dark pages and expanded diagnostics as well as the
+new controls and unavailable states in light appearance.
+
 A plain static file server can show the shell, but live readings and device
 controls require the Rust API. Editing this source directory does not itself
 update an installed copy under `/opt/aog/www`.
+
+`tests/web_ui_ph_input_test.py` checks rejected pH readings, retained-history warnings, exact Gravity wiring, explicit enable/disable actions and contrast at desktop and phone sizes.

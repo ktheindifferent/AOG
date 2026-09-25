@@ -21,3 +21,9 @@ The RAM ring retains 24 one-minute samples; no histories are written to EEPROM. 
 Resets and power loss erase RAM; overflow reports drops. Water probes must be externally powered DS18B20-family devices with pull-ups. The actual probes and tank mapping remain to be established. Analog pH/gas voltages cannot verify physical probe presence. Verify pH calibration after replacing legacy firmware.
 
 [Wiring](../docs/wiring.md) · [Protocol](../docs/firmware-protocol.md) · [Tests](../TESTING.md)
+
+The Dual OVF firmware labels its nominal pH conversion `PH_STATUS: analog_unverified`.
+That voltage does not prove a connected Gravity board or probe. AOG requires
+physical connection confirmation in Connections before using this input as pH;
+older unverified records remain raw diagnostics. For Atlas Gravity V2.1, wire
+A to A0, + to 5V and − to GND on Dual OVF, then check known calibration buffers.

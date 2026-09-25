@@ -5,6 +5,7 @@ window.AogHardware = (() => {
   let api, snapshot, firmware, selected = 'SENSORKIT_MK1', busy = false, dirty = false, initialized = false;
   let saving = false, editRevision = 0, updateError = '';
   let co2Dirty=false,co2Saving=false,co2Revision=0;
+  let phSaving=false;
   let receivedAt=0, connectionFailed=false, lastFreshness='', inspectionView='wiring';
   const set = (id, value) => {const e = $(id); if (e && e.textContent !== String(value)) e.textContent = value;};
   // Elapsed browser time also ages a report while an HTTP request is slow or pending.
@@ -67,8 +68,8 @@ window.AogHardware = (() => {
         const raw=field(device,key), normal=raw==='NONE', triggered=raw==='OVERFLOW';
         rows.push({id:`overflow${i+1}`,label:`Overflow switch ${i+1}`,value:normal?'Circuit closed':triggered?'Circuit open':null,status:[normal?'Clear':triggered?'Stop / check':'Unavailable',normal?'good':triggered?'warning':'neutral'],pin:`D${i?4:2}`,wires:[[`D${i?4:2}`,'Switch signal','data'],['GND','Switch return','ground']],note:'An open circuit can indicate overflow or a disconnected wire.',help:'Connect the switch between the data pin and GND. The input has an internal pull-up. Inspect the float position and cable continuity before interpreting an open circuit as water level.'});
       });
-      const phValid=connected && numeric(f.PH)!==null && f.PH_STATUS!=='out_of_range';
-      rows.push({id:'ph',label:'pH probe interface',value:phValid ? `${f.PH} raw pH` : null,status:connected && f.PH_STATUS==='out_of_range'?['Check analog signal','warning']:[phValid?'Unverified analog':'Unavailable','neutral'],pin:'A0',wires:[['A0','Interface OUT','data'],supply,ground],note:connected ? [f.PH_ADC && `ADC ${f.PH_ADC}`,f.PH_MV && `${f.PH_MV} mV`,'Calibrated pH is shown in Overview.'].filter(Boolean).join(' · ') : 'No fresh pH reading.',help:'Connect the interface signal to A0, then attach the probe to its interface. Voltage alone cannot confirm the probe is plugged in. Use known buffers to check calibration in Setup.'});
+      const adc=connected?numeric(f.PH_ADC):null,enabled=Boolean(snapshot?.ph_input?.connected);
+      rows.push({id:'ph',label:'Atlas Gravity pH input',value:adc!==null?`${adc} ADC counts`:null,status:!connected?['Unavailable','neutral']:f.PH_STATUS==='out_of_range'?['Check analog signal','warning']:enabled?['Wiring confirmed by user','neutral']:['Connection not confirmed','warning'],pin:'A0',wires:[['A0','Gravity A · signal','data'],['5V','Gravity + · power','power'],['GND','Gravity − · ground','ground']],note:connected ? [f.PH_MV && `${f.PH_MV} mV`,enabled?'Analog voltage cannot detect an unplugged probe.':'Excluded from water pH until the physical connection is confirmed.'].filter(Boolean).join(' · ') : 'No fresh analog report.',help:'Atlas Gravity V2.1: A to A0, + to 5V, − to GND on Dual OVF. Keep the probe attached to the Gravity board. Open pH connection setup below, confirm the wiring, then check known buffers and recalibrate.'});
     }
     [6,8].forEach(pin => {
       const key=`WATER_D${pin}`,rom=f[`${key}_ROM`],detected=rom && rom.startsWith('28');
@@ -101,9 +102,9 @@ window.AogHardware = (() => {
       if(snapshot.co2_settings?.analog_model!=='dfrobot_sen0219_analog')return ['The analog module still needs a profile','ADC counts describe voltage. Identify the module and choose its profile before interpreting this signal as CO₂.'];
       return ['The analog signal is in range','The configured SEN0219 v1 profile converts this voltage into CO₂. Raw data shows the counts, voltage and conversion separately.'];
     }
-    if(sensor.id==='ph')return sensor.status[1]==='warning'
-      ? ['Check the pH interface signal','The firmware rejected the analog reading. Inspect A0, the interface supply and common ground; use Raw data to check ADC counts and voltage.']
-      : ['Probe connection is not independently verified','An interface voltage alone cannot confirm a connected or calibrated pH probe. Check against known buffers in Setup; Overview shows calibrated pH.'];
+    if(sensor.id==='ph')return snapshot?.ph_input?.connected
+      ? ['Analog connection requires a physical check','You confirmed this Gravity input. Voltage cannot independently detect unplugging; disable the pH input before disconnecting it and use known buffers to check measurements.']
+      : ['A voltage is not proof of a connected probe','A floating A0 can produce plausible pH numbers. This input is excluded from water measurements until you confirm the three-wire connection in pH connection setup below.'];
     if(sensor.id==='dht')return sensor.status[1]==='warning'
       ? ['The climate reading failed','Check the DHT11 data connection on D7 and its rated supply. A failed reading also prevents fresh temperature/humidity compensation for CCS811.']
       : ['Climate data is reporting','DHT11 supplies both temperature and humidity. These readings also compensate the CCS811 estimate.'];
@@ -272,6 +273,7 @@ window.AogHardware = (() => {
     $('sensor-diagnosis').dataset.status=sensor.status[1];
     set('diagnosis-symbol',sensor.status[1]==='warning'?'!':sensor.status[1]==='good'?'✓':'i');
     $('trace-history').hidden=!sensor.key;
+    $('trace-ph-setup').hidden=sensor.id!=='ph';
     if(sensor.key) {$('trace-history').href=`#history/${sensor.key}`;$('trace-history').setAttribute('aria-label',`${sensor.label} history`);}
     const tool=['ccs','analog'].includes(sensor.id)?'co2-tools':sensor.id.startsWith('water')?'water-tools':null;
     $('trace-setup').hidden=!tool;
@@ -334,6 +336,29 @@ window.AogHardware = (() => {
     const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)+'\n'],{type:'application/json'}));
     const link=document.createElement('a');link.href=url;link.download=`aog-${selected.toLowerCase()}-${sensor.id}-${device.observed_at || 'unknown'}.json`;
     document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  function renderPhInput() {
+    const device=snapshot?.devices.find(device=>device.device_id==='DUAL_OVF_SENSOR');
+    const enabled=Boolean(snapshot?.ph_input?.connected),live=fresh(device),fields=device?.fields || {};
+    set('ph-tool-summary',enabled?'Physical wiring confirmed · analog connection cannot be auto-detected':'Not enabled · raw voltage is excluded from water pH');
+    set('ph-input-state',enabled?'Atlas Gravity input enabled. Check with known pH buffers before relying on its measurements.':'Awaiting your physical connection check. No unverified pH values will be recorded.');
+    set('ph-input-adc',live && fields.PH_ADC!==undefined?`${fields.PH_ADC} counts`:'Unavailable');
+    set('ph-input-voltage',live && numeric(fields.PH_MV)!==null?`${(Number(fields.PH_MV)/1000).toFixed(3)} V`:'Unavailable');
+    $('ph-confirm-wrap').hidden=enabled;$('ph-input-enable').hidden=enabled;$('ph-input-disable').hidden=!enabled;
+    $('ph-input-confirm').disabled=phSaving || enabled;
+    $('ph-input-enable').disabled=phSaving || !$('ph-input-confirm').checked;
+    $('ph-input-disable').disabled=phSaving;
+  }
+  async function savePhInput(connected) {
+    if(phSaving)return;
+    phSaving=true;renderPhInput();
+    try {
+      await api('/api/ph-input',{body:{connected}});
+      $('ph-input-confirm').checked=false;
+      set('ph-input-result',connected?'Connection confirmed. Previous calibration was archived; calibrate again using known buffers. Earlier unverified pH records remain excluded.':'pH input disabled. Raw electrical diagnostics remain available.');
+      await refresh();
+    }catch(error){set('ph-input-result',error.message);}
+    finally{phSaving=false;renderPhInput();}
   }
   function renderGas() {
     const device=snapshot.devices.find(d=>d.device_id==='SENSORKIT_MK1'), d=snapshot.co2_diagnostics;
@@ -408,7 +433,8 @@ window.AogHardware = (() => {
       set(`water-live-${i}`,!connectionFailed && age!==null && age>=0 && age<=5?`${value[0].toFixed(2)} °C`:'No unambiguous reading');
     });
     set('water-save',saving?'Saving…':dirty?'Save probe names & sources':'Probe settings saved');$('water-save').disabled=saving || !dirty;
-    renderGas();renderFirmware();
+    renderGas();
+    renderPhInput();renderFirmware();
   }
   function renderFirmware() {
     if (!firmware) {
@@ -489,6 +515,9 @@ window.AogHardware = (() => {
     $('hardware-refresh').addEventListener('click',()=>refresh(true));
     $('firmware-board').addEventListener('change',()=>{updateError='';renderFirmware();});
     window.addEventListener('beforeunload',event=>{if(dirty || co2Dirty){event.preventDefault();event.returnValue='';}});
+    $('ph-input-confirm').addEventListener('change',renderPhInput);
+    $('ph-input-form').addEventListener('submit',event=>{event.preventDefault();if($('ph-input-confirm').checked)savePhInput(true);});
+    $('ph-input-disable').addEventListener('click',()=>savePhInput(false));
     $('co2-settings-form').addEventListener('input',()=>{
       co2Dirty=true;co2Revision++;
       const unknown=$('co2-model').value==='unidentified';

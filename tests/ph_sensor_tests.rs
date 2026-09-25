@@ -128,6 +128,7 @@ mod ph_sensor_tests {
                 temperature: 25.0,
                 timestamp: i,
                 alert_level: PhAlertLevel::Normal,
+                source_verified: true,
             });
         }
         
@@ -142,6 +143,7 @@ mod ph_sensor_tests {
                 temperature: 25.0,
                 timestamp: i as u64,
                 alert_level: PhAlertLevel::Normal,
+                source_verified: true,
             });
         }
         
@@ -160,6 +162,7 @@ mod ph_sensor_tests {
                 temperature: 25.0,
                 timestamp: i,
                 alert_level: PhAlertLevel::Normal,
+                source_verified: true,
             });
         }
         assert_eq!(history.get_trend(5), PhTrend::Rising);
@@ -173,6 +176,7 @@ mod ph_sensor_tests {
                 temperature: 25.0,
                 timestamp: i,
                 alert_level: PhAlertLevel::Normal,
+                source_verified: true,
             });
         }
         assert_eq!(history.get_trend(5), PhTrend::Falling);
@@ -186,6 +190,7 @@ mod ph_sensor_tests {
                 temperature: 25.0,
                 timestamp: i,
                 alert_level: PhAlertLevel::Normal,
+                source_verified: true,
             });
         }
         assert_eq!(history.get_trend(5), PhTrend::Stable);
@@ -203,6 +208,7 @@ mod ph_sensor_tests {
                 temperature: 25.0,
                 timestamp: i * 60,
                 alert_level: PhAlertLevel::Normal,
+                source_verified: true,
             });
         }
         
@@ -231,6 +237,7 @@ mod ph_sensor_tests {
                 temperature: 25.0,
                 timestamp: 0,
                 alert_level: PhAlertLevel::Warning,
+                source_verified: true,
             });
         }
         

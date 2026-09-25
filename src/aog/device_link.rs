@@ -41,6 +41,8 @@ pub struct DeviceRecord {
     pub fields: BTreeMap<String, String>,
     #[serde(default)]
     pub co2: Option<super::co2::Reading>,
+    #[serde(default)]
+    pub ph: Option<f32>,
 }
 struct StoreState {
     records: Vec<DeviceRecord>,
@@ -193,6 +195,7 @@ pub fn absorb(
         received_at: now(),
         time_quality: quality.into(),
         fields: raw.clone(),
+        ph: (device == DEVICES[1]).then(|| super::ph_sensor::validated_arduino_ph(raw, directory, timestamp).ok()).flatten(),
         co2: (device == DEVICES[0]).then(|| super::co2::reading(raw, &super::co2::settings(directory), timestamp)),
     };
     let logs = directory.join("device_logs/v2");
@@ -264,6 +267,7 @@ pub struct ReplaySample {
     pub timestamp: i64,
     pub values: [Option<f64>; 8],
     pub ph: Option<f32>,
+    pub ph_unverified: bool,
     pub co2_source: Option<String>,
 }
 // Charts copy compact numeric samples, not thousands of raw frame strings.
@@ -296,7 +300,8 @@ pub fn samples(directory: &Path, start: i64, end: i64) -> Vec<ReplaySample> {
                 device_id: r.device_id.clone(),
                 timestamp: r.timestamp,
                 values,
-                ph: parse("PH", "", 0.0, 14.0).map(|n| n as f32),
+                ph: r.ph.filter(|value| r.device_id == DEVICES[1] && value.is_finite() && (0.0..=14.0).contains(value)),
+                ph_unverified: r.device_id == DEVICES[1] && r.fields.contains_key("PH") && r.ph.is_none(),
                 co2_source: (r.device_id == DEVICES[0]).then(|| r.co2.as_ref().map(|v| v.source.clone()).unwrap_or_else(|| {
                     if r.fields.get("PROTOCOL_VERSION").is_some_and(|v| v == "2") { "ccs811" } else { "legacy_unattributed" }.into()
                 })),
@@ -457,6 +462,23 @@ mod tests {
         assert_eq!(rows.len(), 1); assert_eq!(rows[0].values[0], Some(1191.40625));
         assert_eq!(rows[0].co2_source.as_deref(), Some(super::super::co2::ANALOG_SOURCE));
     }
+    #[test]
+    fn unverified_ph_replay_is_durable_but_never_reinterpreted_after_confirmation() {
+        let dir=tempfile::tempdir().unwrap();let mut frame=replay();
+        frame.insert("PH".into(),"8.16".into());frame.insert("PH_STATUS".into(),"analog_unverified".into());
+        absorb(dir.path(),DEVICES[1],&frame).unwrap();
+        assert!(samples(dir.path(),now()-180,now())[0].ph.is_none());
+        fs::write(dir.path().join("ph_input.json"),serde_json::to_vec(&super::super::ph_sensor::PhInputSettings {connected:true,confirmed_at:now()-300}).unwrap()).unwrap();
+        absorb(dir.path(),DEVICES[1],&frame).unwrap();
+        assert!(samples(dir.path(),now()-180,now())[0].ph.is_none());
+        frame.insert("SEQ".into(),"2".into());
+        absorb(dir.path(),DEVICES[1],&frame).unwrap();
+        STORES.lock().unwrap().remove(dir.path());
+        let samples=samples(dir.path(),now()-180,now());
+        assert!(samples[0].ph_unverified);assert_eq!(samples[1].ph,Some(8.16));
+        assert_eq!(records(dir.path(),0,now())[0].fields.get("PH").map(String::as_str),Some("8.16"));
+    }
+
     #[test]
     fn failed_storage_never_acknowledges() {
         let dir = tempfile::tempdir().unwrap();

@@ -14,6 +14,7 @@ class Hardware(Device):
         self.probes=[{'label':'Water · D6','source':None},{'label':'Water · D8','source':None}]
         self.firmware={'package':{'version':'2.0.0','protocol':2,'artifacts':[{'device':d,'board':'nano-old','fqbn':'arduino:avr:nano:cpu=atmega328old','file':f'{d}.hex','sha256':'a'*64} for d in ['SENSORKIT_MK1','DUAL_OVF_SENSOR']]},'updater_available':True,'active':False,'job':{'stage':'','message':''}}
         self.co2_settings={'analog_model':'unidentified','primary_source':'ccs811','reference_mv':5000}
+        self.ph_input={"connected":True,"confirmed_at":int(time.time())-3600}
         self.hardware_error=False
         self.firmware_error=False
         self.firmware_hold=False
@@ -43,7 +44,7 @@ class Hardware(Device):
             converted=(mv-400)*3.125 if infrared and mv is not None and 400<=mv<=2000 else None
             primary=self.co2_settings['primary_source']=='analog'
             diagnostic={'fresh':fresh,'source':'dfrobot_sen0219_analog' if primary else 'ccs811' if v2 else 'legacy_mixed','digital_eco2_ppm':ppm if v2 and f.get('CCS811_STATUS')=='ok' else None,'reported_ppm':ppm,'analog_adc':adc,'analog_co2_ppm':converted,'primary_ppm':converted if primary else ppm,'analog_millivolts':mv,'analog_status':'unavailable' if adc is None else 'near_ground' if adc<=1 else 'near_supply' if adc>=1022 else 'converted' if converted is not None else 'below_range' if infrared and mv<400 else 'above_range' if infrared else 'unidentified','assumed_reference_mv':self.co2_settings['reference_mv'],'compensation':'live' if f.get('DHT_STATUS')=='ok' else 'unavailable','startup_warmup':int(f.get('UPTIME_S','9999'))<1200}
-            reply({'server_time':int(time.time()),'devices':self.devices,'co2_diagnostics':diagnostic,'co2_settings':self.co2_settings,'water_probes':self.probes,'water_readings':[[21.5,int(time.time())],None],'retention_days':7});return
+            reply({'server_time':int(time.time()),'devices':self.devices,'co2_diagnostics':diagnostic,'co2_settings':self.co2_settings,'ph_input':self.ph_input,'water_probes':self.probes,'water_readings':[[21.5,int(time.time())],None],'retention_days':7});return
         if path=='/api/firmware':
             if self.firmware_hold:self.held_firmware.append(route);return
             reply({'error':'Package unavailable'} if self.firmware_error else self.firmware,503 if self.firmware_error else 200);return

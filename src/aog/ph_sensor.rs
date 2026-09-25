@@ -27,6 +27,39 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+/// Analog inputs cannot detect whether the interface's three wires are connected.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PhInputSettings {
+    pub connected: bool,
+    pub confirmed_at: i64,
+}
+
+pub fn input_settings(directory: &Path) -> PhInputSettings {
+    std::fs::read(directory.join("ph_input.json")).ok()
+        .and_then(|bytes| serde_json::from_slice::<PhInputSettings>(&bytes).ok())
+        .filter(|settings| !settings.connected || settings.confirmed_at > 0)
+        .unwrap_or_default()
+}
+
+/// An explicitly identified and connected Atlas Gravity input may supply
+/// nominal pH. Its voltage still cannot independently prove probe presence.
+pub(super) fn validated_arduino_ph(fields: &std::collections::BTreeMap<String, String>, directory: &Path, timestamp: i64) -> Result<f32, String> {
+    let settings = input_settings(directory);
+    if !settings.connected {
+        return Err("pH input is unverified. Connect the Atlas Gravity board (A → A0, + → 5V, − → GND) on Dual OVF, then confirm the physical connection in Connections. A floating A0 voltage is not a pH measurement.".into());
+    }
+    if timestamp <= settings.confirmed_at {
+        return Err("Waiting for a new pH report after connection confirmation".into());
+    }
+    match fields.get("PH_STATUS").map(String::as_str) {
+        Some("analog_unverified" | "ok") => fields.get("PH").and_then(|value| value.parse::<f32>().ok())
+            .filter(|value| value.is_finite() && (0.0..=14.0).contains(value))
+            .ok_or_else(|| "The pH interface did not report a valid measurement".into()),
+        Some("out_of_range") => Err("The pH input is out of range. Check the interface and probe connection.".into()),
+        _ => Err("The Arduino did not report a supported pH input status. Check its firmware and the Gravity interface.".into()),
+    }
+}
+
 pub const PH_OPTIMAL_MIN: f32 = 6.5;
 pub const PH_OPTIMAL_MAX: f32 = 7.5;
 pub const PH_CRITICAL_MIN: f32 = 5.5;
@@ -173,6 +206,9 @@ pub struct PhReading {
     pub temperature: f32,
     pub timestamp: u64,
     pub alert_level: PhAlertLevel,
+    /// Legacy records have no evidence that the input passed sensor validation.
+    #[serde(default)]
+    pub source_verified: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -323,15 +359,20 @@ impl PhSensor {
     pub fn history(&self) -> PhHistory {
         let calibration = self.calibration.lock().unwrap();
         let config = self.config.lock().unwrap().clone();
-        self.projected_history(&calibration, &config)
+        self.projected_history(&calibration, &config).0
     }
 
     fn projected_history(
         &self,
         calibration: &PhCalibration,
         config: &crate::PhConfig,
-    ) -> PhHistory {
+    ) -> (PhHistory, usize) {
         let mut history = self.history.lock().unwrap().clone();
+        let original_count = history.readings.len();
+        if matches!(&self.sensor_type, PhSensorType::Arduino) {
+            history.readings.retain(|reading| reading.source_verified);
+        }
+        let mut excluded_unverified = original_count - history.readings.len();
         // Replay rows are already durable in device_logs. Merge them for the
         // chart without turning an old reading into the current pH signal.
         let interval = config.monitoring_interval_seconds.clamp(5, 3600);
@@ -344,11 +385,12 @@ impl PhSensor {
         };
         for record in replay {
             if record.device_id != "DUAL_OVF_SENSOR" {continue;}
+            if record.ph_unverified {excluded_unverified += 1;}
             let Some(raw) = record.ph else {continue;};
             if !occupied.insert(record.timestamp as u64 / interval) {continue;}
             // Tank/probe association is unknown; do not substitute the current
             // air temperature or arbitrarily select one of the water probes.
-            history.readings.push_back(PhReading {ph_value:raw, raw_value:raw, temperature:25.0, timestamp:record.timestamp as u64, alert_level:PhAlertLevel::Normal});
+            history.readings.push_back(PhReading {ph_value:raw, raw_value:raw, temperature:25.0, timestamp:record.timestamp as u64, alert_level:PhAlertLevel::Normal, source_verified:true});
         }
         history.readings.make_contiguous().sort_by_key(|r|r.timestamp);
         while history.readings.len()>history.max_size {history.readings.pop_front();}
@@ -356,10 +398,49 @@ impl PhSensor {
             reading.ph_value = calibration.value(reading.raw_value, reading.temperature);
             reading.alert_level = Self::alert_level_with_config(reading.ph_value, config);
         }
-        history
+        (history, excluded_unverified)
     }
     pub fn calibration(&self) -> PhCalibration {
         self.calibration.lock().unwrap().clone()
+    }
+    /// User confirmation starts a new measurement period. Old calibration may
+    /// have been captured from a floating input, so archive it before resetting.
+    pub fn confirm_analog_input(&self, connected: bool) -> Result<PhInputSettings, String> {
+        let mut calibration = self.calibration.lock().unwrap();
+        let previous = input_settings(&self.directory);
+        if previous.connected == connected {
+            return Ok(previous);
+        }
+        if connected {
+            let report = super::device_link::statuses(&self.directory).into_iter()
+                .find(|report| report.device_id == "DUAL_OVF_SENSOR")
+                .ok_or("No Dual OVF report is available; reconnect the Arduino first")?;
+            if !(0..=5).contains(&(super::device_link::now() - report.observed_at))
+                || report.error.as_deref().is_some_and(|error| error.starts_with("Live report failed:"))
+                || report.fields.get("PH_STATUS").map(String::as_str) != Some("analog_unverified")
+                || report.fields.get("PH").and_then(|value| value.parse::<f32>().ok())
+                    .is_none_or(|value| !value.is_finite() || !(0.0..=14.0).contains(&value)) {
+                return Err("A fresh, in-range Gravity input is required. Check A0, 5V and GND; voltage alone does not prove the connection.".into());
+            }
+            if calibration.point_count() > 0 {
+                let backup = self.directory.join("bak").join(format!("ph-calibration-before-connection-{}.json", chrono::Utc::now().timestamp_millis()));
+                std::fs::create_dir_all(backup.parent().unwrap()).map_err(|error| error.to_string())?;
+                crate::atomic_write(&backup, &serde_json::to_vec_pretty(&*calibration).map_err(|error| error.to_string())?)
+                    .map_err(|error| format!("Cannot archive previous calibration: {error}"))?;
+            }
+            let empty = PhCalibration::default();
+            self.save_calibration(&empty).map_err(|error| error.to_string())?;
+            *calibration = empty;
+        }
+        let settings = PhInputSettings {
+            connected,
+            confirmed_at: if connected { super::device_link::now() } else { previous.confirmed_at },
+        };
+        crate::atomic_write(&self.directory.join("ph_input.json"), &serde_json::to_vec(&settings).map_err(|error| error.to_string())?)
+            .map_err(|error| error.to_string())?;
+        *self.last_sampled.lock().unwrap() = None;
+        *self.last_error.lock().unwrap() = None;
+        Ok(settings)
     }
     pub fn last_error(&self) -> Option<String> {
         self.last_error.lock().unwrap().clone()
@@ -407,12 +488,18 @@ impl PhSensor {
     pub fn read_raw_value(&self) -> Result<f32, String> {
         match &self.sensor_type {
             PhSensorType::Arduino => {
-                let path = self.directory.join("sensors/ph");
-                super::sensors::fresh_text(&path, Duration::from_secs(10))
-                    .ok_or_else(|| "pH sensor reading is missing or stale".to_string())?
-                    .trim()
-                    .parse::<f32>()
-                    .map_err(|e| format!("Failed to parse pH value: {}", e))
+                // Read the value and its status from the same atomic report.
+                // A leftover numeric cache from older AOG versions is not trusted.
+                let report: super::device_link::DeviceStatus = std::fs::read(
+                    self.directory.join("sensors/devices/DUAL_OVF_SENSOR.json"))
+                    .ok().and_then(|bytes| serde_json::from_slice(&bytes).ok())
+                    .ok_or_else(|| "pH sensor report is missing or unverified".to_string())?;
+                let age = super::device_link::now() - report.observed_at;
+                if report.device_id != "DUAL_OVF_SENSOR" || !(0..=10).contains(&age)
+                    || report.error.as_deref().is_some_and(|error| error.starts_with("Live report failed:")) {
+                    return Err("pH sensor report is missing or stale".into());
+                }
+                validated_arduino_ph(&report.fields, &self.directory, report.observed_at)
             }
             PhSensorType::Serial(port) => self.read_serial_sensor(port),
             PhSensorType::I2C(address) => self.read_i2c_sensor(*address),
@@ -464,13 +551,13 @@ impl PhSensor {
     }
 
     pub fn read_ph(&self) -> Result<PhReading, String> {
+        let calibration = self.calibration.lock().unwrap();
         let raw_value = self.read_raw_value()?;
         if !raw_value.is_finite() {
             return Err("Invalid non-finite pH reading".into());
         }
         let temperature = self.get_temperature();
 
-        let calibration = self.calibration.lock().unwrap();
         // Keep this lock until the sample is committed: an in-flight read must
         // not publish an old calibration after a calibration change returns.
         let ph_value = calibration.value(raw_value, temperature);
@@ -490,6 +577,7 @@ impl PhSensor {
                 .unwrap_or_default()
                 .as_secs(),
             alert_level,
+            source_verified: true,
         };
 
         let mut history = self.history.lock().unwrap();
@@ -674,7 +762,7 @@ impl PhSensor {
     pub fn get_status(&self) -> PhSensorStatus {
         let config = self.config.lock().unwrap().clone();
         let calibration = self.calibration.lock().unwrap();
-        let history = self.projected_history(&calibration, &config);
+        let (history, _) = self.projected_history(&calibration, &config);
         let status = Self::status_from_history(&history, &calibration, &config);
         self.status_with_live_reading(status, &calibration, &config).0
     }
@@ -743,6 +831,7 @@ impl PhSensor {
             }
         } else {
             error = Some(raw.err().unwrap_or_else(|| "pH sensor reading is not a finite number".into()));
+            status.adjustment_suggestion.clear();
         }
         (status, raw_value, error)
     }
@@ -750,7 +839,7 @@ impl PhSensor {
     pub fn snapshot(&self) -> serde_json::Value {
         let config = self.config.lock().unwrap().clone();
         let calibration = self.calibration.lock().unwrap();
-        let history = self.projected_history(&calibration, &config);
+        let (history, excluded_unverified) = self.projected_history(&calibration, &config);
         let status = Self::status_from_history(&history, &calibration, &config);
         let (status, raw_value, error) = self.status_with_live_reading(status, &calibration, &config);
         let readings: Vec<_> = history.readings.iter().map(|reading| serde_json::json!({
@@ -765,6 +854,8 @@ impl PhSensor {
             "calibration_warning": calibration.warning(), "error": error, "config": config,
             "raw_value": raw_value, "server_time": chrono::Utc::now().timestamp(),
             "history_uses_current_calibration": true,
+            "excluded_unverified_records": excluded_unverified,
+            "history_warning": (excluded_unverified > 0).then_some("Unverified pH records are excluded from this chart and its averages. The original records remain stored for diagnosis; they are not confirmed water measurements."),
         })
     }
 }
@@ -856,8 +947,17 @@ mod tests {
     fn fixture() -> (tempfile::TempDir, PhSensor) {
         let directory = tempfile::tempdir().unwrap();
         std::fs::create_dir(directory.path().join("sensors")).unwrap();
+        std::fs::write(directory.path().join("ph_input.json"), serde_json::to_vec(&PhInputSettings {connected:true, confirmed_at:super::super::device_link::now()-300}).unwrap()).unwrap();
         let sensor = PhSensor::new_in(PhSensorType::Arduino, directory.path());
         (directory, sensor)
+    }
+
+    fn report(directory: &Path, raw: &str, age: i64) {
+        super::super::device_link::save_status(directory, &super::super::device_link::DeviceStatus {
+            device_id:"DUAL_OVF_SENSOR".into(), port:"test".into(),
+            observed_at:super::super::device_link::now()-age, error:None,
+            fields:super::super::device_link::fields(&format!("PH_STATUS:analog_unverified\nPH:{raw}\nPH_ADC:300\n")),
+        }).unwrap();
     }
 
     #[test]
@@ -870,6 +970,7 @@ mod tests {
                 raw_value: ph_value,
                 temperature: 25.0,
                 alert_level: PhAlertLevel::Normal,
+                source_verified: true,
             });
         }
         assert_eq!(sensor.history().get_average(1), Some(7.0));
@@ -890,7 +991,7 @@ mod tests {
     #[test]
     fn reads_temperature_units_and_applies_live_alert_thresholds() {
         let (directory, sensor) = fixture();
-        std::fs::write(directory.path().join("sensors/ph"), "6.0").unwrap();
+        report(directory.path(), "6.0", 0);
         for units in ["20.0C", "20.0°C"] {
             std::fs::write(directory.path().join("sensors/temp"), units).unwrap();
             assert_eq!(sensor.get_temperature(), 20.0);
@@ -914,13 +1015,9 @@ mod tests {
     fn stale_missing_and_nonfinite_readings_do_not_enter_history() {
         let (directory, sensor) = fixture();
         assert!(sensor.read_ph().is_err());
-        let path = directory.path().join("sensors/ph");
-        std::fs::write(&path, "NaN").unwrap();
+        report(directory.path(), "NaN", 0);
         assert!(sensor.read_ph().is_err());
-        std::fs::write(&path, "7.0").unwrap();
-        let file = std::fs::File::options().write(true).open(path).unwrap();
-        file.set_modified(SystemTime::now() - Duration::from_secs(11))
-            .unwrap();
+        report(directory.path(), "7.0", 61);
         assert!(sensor.read_ph().unwrap_err().contains("stale"));
         assert!(sensor.history().readings.is_empty());
     }
@@ -929,7 +1026,7 @@ mod tests {
     fn replay_backfills_arduino_ph_without_becoming_live_or_crossing_sources() {
         let (directory, sensor) = fixture();
         let raw = super::super::device_link::fields(&format!(
-            "BOOT_ID:0123456789ABCDEF\nSEQ:1\nUPTIME_S:120\nSAMPLE_UPTIME_S:60\nTIMESTAMP:{}\nPH:6.8\n",
+            "BOOT_ID:0123456789ABCDEF\nSEQ:1\nUPTIME_S:120\nSAMPLE_UPTIME_S:60\nTIMESTAMP:{}\nPH_STATUS:analog_unverified\nPH:6.8\n",
             super::super::device_link::now() - 60
         ));
         super::super::device_link::absorb(directory.path(), "DUAL_OVF_SENSOR", &raw).unwrap();
@@ -939,6 +1036,64 @@ mod tests {
         assert!(sensor.read_raw_value().is_err());
         let other = PhSensor::new_in(PhSensorType::I2C(0x63), directory.path());
         assert!(other.history().readings.is_empty());
+    }
+
+    #[test]
+    fn unconfirmed_analog_cannot_become_live_or_calibrated_history() {
+        let (directory, sensor) = fixture();
+        std::fs::remove_file(directory.path().join("ph_input.json")).unwrap();
+        report(directory.path(), "8.16", 0);
+        std::fs::write(directory.path().join("sensors/ph"), "8.16").unwrap();
+        sensor.calibrate(7.0, 7.31).unwrap();
+        assert!(sensor.read_ph().unwrap_err().contains("unverified"));
+        let snapshot = sensor.snapshot();
+        assert!(snapshot["status"]["current_ph"].is_null());
+        assert!(snapshot["raw_value"].is_null());
+        assert_eq!(snapshot["status"]["adjustment_suggestion"], "");
+        assert_eq!(snapshot["history"], serde_json::json!([]));
+        assert!(!directory.path().join("ph_history.json").exists());
+    }
+
+    #[test]
+    fn old_history_is_retained_but_excluded_from_measurements_and_advice() {
+        let (directory, _) = fixture();
+        let path = directory.path().join("ph_history.json");
+        let bytes = serde_json::to_vec(&serde_json::json!({"max_size":1440,"readings":[{
+            "ph_value":8.16,"raw_value":8.16,"temperature":25.0,
+            "timestamp":super::super::device_link::now()-60,"alert_level":"Warning"
+        }]})).unwrap();
+        std::fs::write(&path,&bytes).unwrap();
+        let sensor = PhSensor::new_in(PhSensorType::Arduino,directory.path());
+        let snapshot = sensor.snapshot();
+        assert_eq!(snapshot["history"],serde_json::json!([]));
+        assert!(snapshot["status"]["average_ph"].is_null());
+        assert_eq!(snapshot["excluded_unverified_records"],1);
+        assert!(snapshot["history_warning"].as_str().unwrap().contains("excluded"));
+        assert_eq!(std::fs::read(path).unwrap(),bytes);
+    }
+
+    #[test]
+    fn confirmation_archives_old_calibration_and_disconnect_blocks_new_samples() {
+        let (directory,sensor)=fixture();
+        sensor.confirm_analog_input(false).unwrap();
+        sensor.calibrate(7.0,7.31).unwrap();
+        report(directory.path(),"7.2",0);
+        let confirmed=sensor.confirm_analog_input(true).unwrap();
+        assert!(confirmed.connected);
+        assert_eq!(sensor.calibration().point_count(),0);
+        assert_eq!(std::fs::read_dir(directory.path().join("bak")).unwrap().count(),1);
+        assert!(sensor.read_raw_value().unwrap_err().contains("Waiting"));
+        // A later report may be used; confirmation never promotes the earlier frame.
+        std::fs::write(directory.path().join("ph_input.json"),serde_json::to_vec(&PhInputSettings {connected:true,confirmed_at:confirmed.confirmed_at-1}).unwrap()).unwrap();
+        assert_eq!(sensor.read_raw_value().unwrap(),7.2);
+        let reading=sensor.read_ph().unwrap();assert!(reading.source_verified);
+        sensor.confirm_analog_input(false).unwrap();
+        assert!(sensor.read_ph().is_err());
+        assert_eq!(sensor.history().readings.len(),1);
+        assert_eq!(std::fs::read_dir(directory.path().join("bak")).unwrap().count(),1);
+        report(directory.path(),"7.2",61);
+        assert!(sensor.confirm_analog_input(true).is_err());
+        assert!(!input_settings(directory.path()).connected);
     }
 
     #[test]
@@ -1022,6 +1177,7 @@ mod tests {
                 temperature: 25.0,
                 timestamp: i,
                 alert_level: PhAlertLevel::Normal,
+                source_verified: true,
             });
         }
 
@@ -1036,6 +1192,7 @@ mod tests {
                 temperature: 25.0,
                 timestamp: i,
                 alert_level: PhAlertLevel::Normal,
+                source_verified: true,
             });
         }
 

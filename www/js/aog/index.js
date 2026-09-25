@@ -81,14 +81,14 @@
   };
   const waterRoles = ['filling', 'tank_cycle', 'draining'];
   const historyMetrics = [
-    {key: 'co2', label: 'CO₂', unit: 'ppm', decimals: 0, color: '#5b7845'},
-    {key: 'tvoc', label: 'TVOC', unit: 'ppb', decimals: 0, color: '#83719a'},
-    {key: 'pm25', label: 'PM2.5', unit: 'µg/m³', decimals: 1, color: '#a27a36'},
-    {key: 'pm10', label: 'PM10', unit: 'µg/m³', decimals: 1, color: '#92704e'},
-    {key: 'temp', label: 'Temperature', unit: '°C', decimals: 1, color: '#a56e48'},
-    {key: 'hum', label: 'Humidity', unit: '%', decimals: 1, color: '#527f86'},
-    {key: 'water_temp_d6', label: 'Water · D6', unit: '°C', decimals: 2, color: '#236875'},
-    {key: 'water_temp_d8', label: 'Water · D8', unit: '°C', decimals: 2, color: '#596aa0'}
+    {key: 'co2', label: 'CO₂', unit: 'ppm', decimals: 0, color: 'var(--chart-co2)'},
+    {key: 'tvoc', label: 'TVOC', unit: 'ppb', decimals: 0, color: 'var(--chart-tvoc)'},
+    {key: 'pm25', label: 'PM2.5', unit: 'µg/m³', decimals: 1, color: 'var(--chart-pm25)'},
+    {key: 'pm10', label: 'PM10', unit: 'µg/m³', decimals: 1, color: 'var(--chart-pm10)'},
+    {key: 'temp', label: 'Temperature', unit: '°C', decimals: 1, color: 'var(--chart-temp)'},
+    {key: 'hum', label: 'Humidity', unit: '%', decimals: 1, color: 'var(--chart-hum)'},
+    {key: 'water_temp_d6', label: 'Water · D6', unit: '°C', decimals: 2, color: 'var(--chart-water-d6)'},
+    {key: 'water_temp_d8', label: 'Water · D8', unit: '°C', decimals: 2, color: 'var(--chart-water-d8)'}
   ];
   const sensorSelection = value => [value === 'both' || value === '1', value === 'both' || value === '2'];
   const selectionValue = sensors => sensors[0] ? sensors[1] ? 'both' : '1' : sensors[1] ? '2' : 'none';
@@ -659,7 +659,7 @@
     const validLighting = finite(start) && finite(end);
     const from = start / 1440 * 100,
       to = end / 1440 * 100;
-    $('lighting-preview').style.background = !enabled || !validLighting ? '#edf1e7' : start === end ? '#a9c77c' : start < end ? `linear-gradient(to right,#edf1e7 ${from}%,#a9c77c ${from}%,#a9c77c ${to}%,#edf1e7 ${to}%)` : `linear-gradient(to right,#a9c77c ${to}%,#edf1e7 ${to}%,#edf1e7 ${from}%,#a9c77c ${from}%)`;
+    $('lighting-preview').style.background = !enabled || !validLighting ? 'var(--schedule-idle)' : start === end ? 'var(--schedule-light)' : start < end ? `linear-gradient(to right,var(--schedule-idle) ${from}%,var(--schedule-light) ${from}%,var(--schedule-light) ${to}%,var(--schedule-idle) ${to}%)` : `linear-gradient(to right,var(--schedule-light) ${to}%,var(--schedule-idle) ${to}%,var(--schedule-idle) ${from}%,var(--schedule-light) ${from}%)`;
     const hours = start === end ? 24 : ((end - start + 1440) % 1440) / 60;
     text('lighting-preview-text', !enabled ? 'Lights + Air schedule is disabled. Manual Start/Stop remains available.' : !validLighting ? 'Choose both on and off times to preview the lighting period.' : start === end ? 'All day: 24 hours of lights and air. Equal on and off times keep both on.' : `${hours.toFixed(1)} hours of lights and air per day${start > end ? ', crossing midnight' : ''}. Both switch together.`);
     const waterStart = minutes($('watering-start').value),
@@ -667,7 +667,7 @@
     const validWatering = finite(waterStart) && finite(waterEnd) && $('watering-interval').validity.valid && $('watering-duration').validity.valid;
     const waterWindow = waterStart === waterEnd ? 'all day (equal window times)' : `${timeText(waterStart)}–${timeText(waterEnd)}${waterStart > waterEnd ? ', crossing midnight' : ''}`;
     const waterFrom=waterStart/1440*100, waterTo=waterEnd/1440*100;
-    $('watering-preview').style.background = !$('watering-enabled').checked || !validWatering ? '#edf1e7' : waterStart === waterEnd ? '#98bfbd' : waterStart < waterEnd ? `linear-gradient(to right,#edf1e7 ${waterFrom}%,#98bfbd ${waterFrom}%,#98bfbd ${waterTo}%,#edf1e7 ${waterTo}%)` : `linear-gradient(to right,#98bfbd ${waterTo}%,#edf1e7 ${waterTo}%,#edf1e7 ${waterFrom}%,#98bfbd ${waterFrom}%)`;
+    $('watering-preview').style.background = !$('watering-enabled').checked || !validWatering ? 'var(--schedule-idle)' : waterStart === waterEnd ? 'var(--schedule-water)' : waterStart < waterEnd ? `linear-gradient(to right,var(--schedule-idle) ${waterFrom}%,var(--schedule-water) ${waterFrom}%,var(--schedule-water) ${waterTo}%,var(--schedule-idle) ${waterTo}%)` : `linear-gradient(to right,var(--schedule-water) ${waterTo}%,var(--schedule-idle) ${waterTo}%,var(--schedule-idle) ${waterFrom}%,var(--schedule-water) ${waterFrom}%)`;
     for (const prefix of ['lighting','watering']) {
       const on=$(`${prefix}-enabled`).checked;
       $(`${prefix}-schedule-card`).dataset.enabled=String(on);
@@ -706,12 +706,14 @@
     $('overflow-assignment-summary').classList.toggle('warning', waterRoles.some(role => $(`overflow-${role}`).value === 'none'));
   }
 
-  function metric(id, raw, suffix = '') {
+  function metric(id, raw, suffix = '', unavailable = '—') {
     const value = typeof raw === 'string' ? Number.parseFloat(raw) : raw;
     const element = $(id);
+    const card = element.closest('.metric, .readout');
+    if (card) card.dataset.available = String(finite(value));
     element.replaceChildren();
     if (!finite(value)) {
-      element.textContent = '—';
+      element.textContent = unavailable;
       return;
     }
     element.append(document.createTextNode(Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1)));
@@ -725,14 +727,14 @@
   function showStats(data) {
     state.stats = data;
     metric('temperature-value', data.temp, '°C');
-    metric('water-d6-value', data.water_temp_d6 || 'N/A', '°C');
-    metric('water-d8-value', data.water_temp_d8 || 'N/A', '°C');
+    metric('water-d6-value', data.water_temp_d6 ?? 'N/A', '°C');
+    metric('water-d8-value', data.water_temp_d8 ?? 'N/A', '°C');
     metric('humidity-value', data.hum, '%');
     metric('co2-value', Math.round(Number.parseFloat(data.co2)), 'ppm');
     text('co2-source', data.co2_source === 'dfrobot_sen0219_analog' ? 'DFRobot · infrared CO₂' : data.co2_source === 'ccs811' ? 'CCS811 · equivalent CO₂ estimate' : data.co2_source === 'legacy_mixed' ? 'Legacy firmware · mixed estimate' : 'ppm · source unconfirmed');
-    text('pm25-value', data.pm25 === 'N/A' ? 'Unavailable' : data.pm25);
-    text('pm10-value', data.pm10 === 'N/A' ? 'Unavailable' : data.pm10);
-    text('tvoc-value', data.tvoc === 'N/A' ? 'Unavailable' : data.tvoc);
+    metric('pm25-value', data.pm25, 'µg/m³', 'Unavailable');
+    metric('pm10-value', data.pm10, 'µg/m³', 'Unavailable');
+    metric('tvoc-value', data.tvoc, 'ppb', 'Unavailable');
     for (const index of [1, 2]) {
       const value = data[`t${index}_ovf`];
       const normal = ['NONE', 'NORMAL'].includes((value || '').trim());
@@ -753,8 +755,8 @@
     text('ph-trend', !status.enabled ? 'Monitoring paused' : !hasReading ? 'Waiting for readings' : status.reading_count < 2 ? 'Collecting trend data' : `${status.trend === 'Rising' ? '↗' : status.trend === 'Falling' ? '↘' : '→'} ${status.trend} · last hour`);
     const points = status.calibration_points || 0;
     const calibrationLabel = points >= 2 ? `${points}-point calibrated` : points === 1 ? '1-point normalized' : 'Not calibrated';
-    badge($('ph-calibration-badge'), calibrationLabel, points ? 'good' : 'warning');
-    badge($('calibration-mode'), calibrationLabel, points ? 'good' : 'warning');
+    badge($('ph-calibration-badge'), calibrationLabel, points && hasReading ? 'good' : 'warning');
+    badge($('calibration-mode'), calibrationLabel, points && hasReading ? 'good' : 'warning');
     text('ph-sample-time', status.last_reading ? `Last sample ${dateText(status.last_reading)}` : 'No sample yet');
     const freshSeconds = state.settings ? Math.max(15, state.settings.ph.monitoring_interval_seconds * 2) : 120;
     const serverTime = finite(state.ph?.server_time) ? state.ph.server_time : Date.now() / 1000;
@@ -773,6 +775,8 @@
     showPhStatus(data.status);
     renderChart();
     if (data.error) text('ph-detail', data.error);
+    text('ph-history-warning', data.history_warning || '');
+    $('ph-history-warning').hidden = !data.history_warning;
     text('ph-sample-time', data.history.length ? `Last chart sample ${dateText(data.history[data.history.length - 1].timestamp)}` : 'No chart sample yet');
     text('calibration-live-raw', finite(data.raw_value) ? data.raw_value.toFixed(3) : 'Unavailable');
     text('calibration-live-ph', formatNumber(data.status.current_ph));
@@ -852,7 +856,7 @@
   function addChartInspection(svg, layout, color) {
     const marker = svgNode('g', {class: 'chart-inspection', visibility: 'hidden', 'aria-hidden': 'true', 'pointer-events': 'none'});
     marker.append(svgNode('line', {y1: layout.top, y2: layout.bottom, stroke: color, 'stroke-opacity': .55, 'stroke-dasharray': '3 4'}));
-    marker.append(svgNode('circle', {r: 4.5, fill: '#fff', stroke: color, 'stroke-width': 2.5}));
+    marker.append(svgNode('circle', {r: 4.5, fill: 'var(--surface)', stroke: color, 'stroke-width': 2.5}));
     svg.append(marker);
   }
 
@@ -981,7 +985,7 @@
       y: y(config.optimal_max),
       width: right - left,
       height: y(config.optimal_min) - y(config.optimal_max),
-      fill: '#eef2df'
+      fill: 'var(--chart-band)'
     }));
     for (const value of [0, 4, 7, 10, 14]) {
       svg.append(svgNode('line', {
@@ -989,13 +993,13 @@
         y1: y(value),
         x2: right,
         y2: y(value),
-        stroke: '#e5eadf',
+        stroke: 'var(--chart-grid)',
         'stroke-dasharray': '3 4'
       }));
       svg.append(svgNode('text', {
         x: 19,
         y: y(value) + 4,
-        fill: '#5c6f62',
+        fill: 'var(--chart-label)',
         'font-size': 11,
         'text-anchor': 'end'
       }, String(value)));
@@ -1006,7 +1010,7 @@
       svg.append(svgNode('text', {
         x: x(stamp),
         y: height - 7,
-        fill: '#5c6f62',
+        fill: 'var(--chart-label)',
         'font-size': 11,
         'text-anchor': i === 0 ? 'start' : i === divisions ? 'end' : 'middle'
       }, new Date(stamp * 1000).toLocaleTimeString([], {
@@ -1024,14 +1028,14 @@
       path.push(`${connected ? 'L' : 'M'}${x(point.timestamp)},${y(point.ph_value)}`);
       const next = windowPoints[index + 1];
       if (!connected && (!next || !finite(next.ph_value) || next.ph_value < 0 || next.ph_value > 14 || next.timestamp - point.timestamp > gapSeconds)) {
-        svg.append(svgNode('circle', {cx: x(point.timestamp), cy: y(point.ph_value), r: 2.5, fill: '#507943'}));
+        svg.append(svgNode('circle', {cx: x(point.timestamp), cy: y(point.ph_value), r: 2.5, fill: 'var(--chart-ph)'}));
       }
       previous = point;
     }
     svg.append(svgNode('path', {
       d: path.join(' '),
       fill: 'none',
-      stroke: '#507943',
+      stroke: 'var(--chart-ph)',
       'stroke-width': 2,
       'stroke-linejoin': 'round',
       'stroke-linecap': 'round'
@@ -1041,11 +1045,11 @@
       cx: x(last.timestamp),
       cy: y(last.ph_value),
       r: 3.5,
-      fill: '#507943',
-      stroke: '#fff',
+      fill: 'var(--chart-ph)',
+      stroke: 'var(--surface)',
       'stroke-width': 2
     }));
-    addChartInspection(svg, state.chartLayout, '#507943');
+    addChartInspection(svg, state.chartLayout, 'var(--chart-ph)');
     svg.setAttribute('aria-label', `${points.length} pH readings in the last ${state.range} hours. Latest value ${last.ph_value.toFixed(2)}. Use arrow keys to inspect samples.`);
     syncChartControls(svg, points, state.chartCursor, phReadingDescription(points[state.chartCursor]));
     if (inspecting) chartTooltip();
@@ -1216,14 +1220,14 @@
       state.historyCharts[key] = {points, start, end, left, right, top, bottom, y, cursor: nearestChartPoint(points, previousStamp)};
       for (let step = 0; step <= 4; step++) {
         const value = low + (high - low) * step / 4;
-        svg.append(svgNode('line', {x1: left, x2: right, y1: y(value), y2: y(value), stroke: '#e5eadf', 'stroke-dasharray': '3 4'}));
-        svg.append(svgNode('text', {x: left - 8, y: y(value) + 4, fill: '#5c6f62', 'font-size': 11, 'text-anchor': 'end'}, value.toLocaleString([], {notation: Math.abs(value) >= 10000 ? 'compact' : 'standard', maximumFractionDigits: 1})));
+        svg.append(svgNode('line', {x1: left, x2: right, y1: y(value), y2: y(value), stroke: 'var(--chart-grid)', 'stroke-dasharray': '3 4'}));
+        svg.append(svgNode('text', {x: left - 8, y: y(value) + 4, fill: 'var(--chart-label)', 'font-size': 11, 'text-anchor': 'end'}, value.toLocaleString([], {notation: Math.abs(value) >= 10000 ? 'compact' : 'standard', maximumFractionDigits: 1})));
       }
       const divisions = width < 400 ? 2 : 4;
       for (let step = 0; step <= divisions; step++) {
         const stamp = start + (end - start) * step / divisions;
         const label = history.range_hours > 24 ? new Date(stamp * 1000).toLocaleDateString([], {month: 'short', day: 'numeric'}) : new Date(stamp * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-        svg.append(svgNode('text', {x: x(stamp), y: height - 7, fill: '#5c6f62', 'font-size': 11, 'text-anchor': step === 0 ? 'start' : step === divisions ? 'end' : 'middle'}, label));
+        svg.append(svgNode('text', {x: x(stamp), y: height - 7, fill: 'var(--chart-label)', 'font-size': 11, 'text-anchor': step === 0 ? 'start' : step === divisions ? 'end' : 'middle'}, label));
       }
       let connected = false;
       const path = [];
@@ -1238,7 +1242,7 @@
       }
       svg.append(svgNode('path', {d: path.join(' '), fill: 'none', stroke: metric.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'}));
       const last = points[points.length - 1];
-      svg.append(svgNode('circle', {cx: x(last.timestamp), cy: y(last.value), r: 3.5, fill: metric.color, stroke: '#fff', 'stroke-width': 2}));
+      svg.append(svgNode('circle', {cx: x(last.timestamp), cy: y(last.value), r: 3.5, fill: metric.color, stroke: 'var(--surface)', 'stroke-width': 2}));
       addChartInspection(svg, state.historyCharts[key], metric.color);
       svg.setAttribute('aria-label', `${metric.label}: ${series.count} readings in the last ${history.range_hours} hours. Minimum ${historyNumber(series.minimum, metric)}, average ${historyNumber(series.average, metric)}, maximum ${historyNumber(series.maximum, metric)} ${metric.unit}. Use arrow keys to inspect samples.`);
       syncChartControls(svg, points, state.historyCharts[key].cursor, historyReadingDescription(points[state.historyCharts[key].cursor], metric));
@@ -1528,8 +1532,8 @@
       if (request === state.statsRequest) showStats(stats);
     } catch (error) {
       if (request === state.statsRequest) {
-        for (const id of ['temperature-value', 'humidity-value', 'co2-value']) text(id, '—');
-        for (const id of ['pm25-value', 'pm10-value', 'tvoc-value']) text(id, 'Unavailable');
+        for (const id of ['temperature-value', 'humidity-value', 'co2-value', 'water-d6-value', 'water-d8-value']) metric(id, null);
+        for (const id of ['pm25-value', 'pm10-value', 'tvoc-value']) metric(id, null, '', 'Unavailable');
         for (const index of [1, 2]) {
           badge($(`tank${index}-status`), 'Unavailable', 'warning');
           text(`tank${index}-detail`, 'Cannot confirm the current sensor state');

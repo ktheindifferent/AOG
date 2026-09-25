@@ -1,0 +1,176 @@
+/* Appearance is local to this browser. Charts use the same semantic palette. */
+:root {
+  color-scheme: light;
+  --chart-ph: #507943;
+  --chart-co2: #5b7845;
+  --chart-tvoc: #83719a;
+  --chart-pm25: #a27a36;
+  --chart-pm10: #92704e;
+  --chart-temp: #a56e48;
+  --chart-hum: #527f86;
+  --chart-water-d6: #236875;
+  --chart-water-d8: #596aa0;
+  --chart-label: #5c6f62;
+  --chart-grid: #e5eadf;
+  --chart-band: #eef2df;
+  --schedule-idle: #edf1e7;
+  --schedule-light: #a9c77c;
+  --schedule-water: #98bfbd;
+}
+.display-preferences { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(220px, .8fr); align-items: center; gap: 28px; margin-bottom: 22px; }
+.display-preferences h2 { margin-top: 8px; font-size: 23px; }
+.display-preferences .helper { margin-bottom: 0; max-width: 55ch; }
+.appearance-field label { margin: 0; }
+.appearance-field select { width: 100%; margin-top: 8px; }
+.appearance-field .helper { font-size: 11px; margin-top: 8px; }
+.login-appearance { display: flex; align-items: center; gap: 16px; margin-top: 20px; }
+.login-appearance label { margin: 0; font-size: 11px; color: var(--muted); }
+.login-appearance select { width: auto; flex: 1; min-width: 0; max-width: 180px; margin-left: auto; font-size: 12px; }
+.air-readouts .readout > strong { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 5px; }
+.air-readouts .readout > strong small { font-size: 11px; margin-left: 0; white-space: nowrap; }
+.readout[data-available=false] { border-style: dashed; background: var(--surface); }
+.readout[data-available=false] > strong { font-size: 15px; line-height: 1.5; letter-spacing: 0; color: var(--muted); overflow-wrap: normal; }
+.legend-dot { background: var(--chart-ph); }
+.legend-band { background: var(--chart-band); }
+/* Text and surface colors change together, avoiding low-contrast intermediate frames. */
+.button, .readout, .switch input, .board-node { transition-property: border-color, box-shadow; }
+
+/* Forest surfaces, warm text and distinct sensor colors for dim rooms. */
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --ink: #e5eddf;
+  --muted: #afbdab;
+  --green: #bbd791;
+  --dark: #254332;
+  --lime: #d8ec9c;
+  --bg: #111b16;
+  --surface: #1b281f;
+  --soft: #253329;
+  --line: #3a4b3e;
+  --red: #ffb4a3;
+  --amber: #efca86;
+  --good-bg: #2c4028;
+  --warn-bg: #3a3021;
+  --bad-bg: #3e2924;
+  --selected: #2d402c;
+  --chart-ph: #bcdb8f;
+  --chart-co2: #bcdb8f;
+  --chart-tvoc: #c5b0e3;
+  --chart-pm25: #e3c47c;
+  --chart-pm10: #d6b395;
+  --chart-temp: #f0ad82;
+  --chart-hum: #9cced2;
+  --chart-water-d6: #81cbd8;
+  --chart-water-d8: #a7b7f2;
+  --chart-label: #afbdab;
+  --chart-grid: #3a4b3e;
+  --chart-band: #304126;
+  --schedule-idle: #334232;
+  --schedule-light: #b9d48b;
+  --schedule-water: #8dc9c6;
+}
+:root[data-theme=dark] .sidebar { background: #15251b; border-right: 1px solid var(--line); }
+:root[data-theme=dark] :is(.primary, .switch input:checked) { background: #c5dda1; color: #172818; }
+:root[data-theme=dark] .primary:hover { background: #d5e9b5; }
+:root[data-theme=dark] .secondary:hover { background: var(--soft); border-color: #7f956d; }
+:root[data-theme=dark] .quiet:hover { background: var(--soft); }
+:root[data-theme=dark] .danger-outline { color: var(--red); background: var(--bad-bg); border-color: #725047; }
+:root[data-theme=dark] .danger-outline:hover { background: #51352e; border-color: #ba8070; }
+:root[data-theme=dark] .badge.good { background: var(--good-bg); color: #c6e3a8; }
+:root[data-theme=dark] .badge.warning { background: var(--warn-bg); color: var(--amber); }
+:root[data-theme=dark] .badge.bad { background: var(--bad-bg); color: var(--red); }
+:root[data-theme=dark] .badge.neutral { background: var(--soft); color: var(--muted); }
+:root[data-theme=dark] :is(label, .history-latest strong) { color: var(--ink); }
+:root[data-theme=dark] :is(input:not([type=checkbox]):not([type=radio]), select, textarea, .report-options textarea, dialog) { background: #17221b; border-color: #6d8067; color: var(--ink); }
+:root[data-theme=dark] :is(input, textarea)::placeholder { color: #a4b29b; }
+:root[data-theme=dark] :is(input[aria-invalid=true], select[aria-invalid=true]) { background: var(--bad-bg); border-color: var(--red); }
+:root[data-theme=dark] .switch input { background: #64765d; }
+:root[data-theme=dark] .switch input:checked::before { background: #203122; }
+:root[data-theme=dark] :is(.metric-title > span:not(.badge), .metric-temperature .metric-title .metric-icon, .metric-humidity .metric-title .metric-icon) { background: var(--soft); color: var(--green); }
+:root[data-theme=dark] .metric-temperature .metric-title .metric-icon { color: var(--chart-temp); }
+:root[data-theme=dark] .metric-humidity .metric-title .metric-icon { color: var(--chart-hum); }
+:root[data-theme=dark] .metric-ph { border-color: #668058; background: #2c402b; }
+:root[data-theme=dark] :is(.inset-note, .tank-icon, .schedule-icon, .camera-prompt-icon) { color: var(--muted); background: var(--soft); border-color: var(--line); }
+:root[data-theme=dark] :is(.notice, .notice.neutral) { background: var(--soft); color: var(--ink); border-color: var(--line); }
+:root[data-theme=dark] :is(.notice.warning, .inset-note.warning, .attention-panel, .draft-summary, .form-conflicts, .conflict-field) { background: var(--warn-bg); color: var(--amber); border-color: #77613a; }
+:root[data-theme=dark] :is(.notice.bad, .password-match) { background: var(--bad-bg); color: var(--red); border-color: #725047; }
+:root[data-theme=dark] :is(.draft-summary strong, .form-conflicts h3) { color: var(--amber); }
+:root[data-theme=dark] :is(.readout, .relay-assignment, .settings-grid .overflow-assignment-grid > label, .calibration-point, .calibration-live, .history-card .history-stats, .report-notes-preview, .form-section-heading > span, .password-requirements, .schedule-card .switch, .camera-panel, .account-device, .output-toolbar) { background: var(--soft); border-color: var(--line); }
+:root[data-theme=dark] .readout:hover { background: #2d3e2b; border-color: #91ab72; }
+:root[data-theme=dark] .readout[data-available=false] { background: var(--surface); }
+:root[data-theme=dark] :is(.calibration-point strong, .calibration-live strong, .form-section-heading > span, .password-requirements li[data-met=true]) { color: var(--green); }
+:root[data-theme=dark] .calibration-point.done { background: var(--good-bg); border-color: #799368; }
+:root[data-theme=dark] .password-requirements li[data-met=true]::before { background: #bbd791; color: #172818; border-color: #bbd791; }
+:root[data-theme=dark] .password-match[data-match=true] { background: var(--good-bg); color: #c6e3a8; border-color: #799368; }
+:root[data-theme=dark] :is(.report-preview-card, .history-export-bar) { background: var(--surface); border-color: var(--line); }
+:root[data-theme=dark] .report-preview-card { border-top-color: #8eae68; }
+:root[data-theme=dark] .account-identity { border-color: var(--line); }
+:root[data-theme=dark] .account-avatar { background: #15251b; }
+:root[data-theme=dark] :is(.history-nav a, .settings-workspace .settings-nav a) { background: var(--soft); border-color: var(--line); color: var(--muted); }
+:root[data-theme=dark] :is(.history-nav a:hover, .settings-nav a:hover) { background: #32422f; color: var(--ink); }
+:root[data-theme=dark] :is(.history-nav a[aria-current=location], .settings-workspace .settings-nav a[aria-current=location]) { background: var(--selected); border-color: #859e66; color: var(--lime); }
+:root[data-theme=dark] .settings-nav .section-number { color: var(--muted); }
+:root[data-theme=dark] .segmented { background: #122018; border: 1px solid var(--line); }
+:root[data-theme=dark] .segmented button { color: var(--muted); }
+:root[data-theme=dark] .segmented button[aria-pressed=true] { color: var(--lime); background: #30442c; }
+:root[data-theme=dark] .schedule-card[data-enabled=true] .switch { background: var(--good-bg); border-color: #7b9866; }
+:root[data-theme=dark] .schedule-card .day-preview { border-color: #839c66; }
+:root[data-theme=dark] #schedule-preview-state { background: var(--soft); color: var(--ink); }
+:root[data-theme=dark] #schedule-form.is-dirty #schedule-preview-state { background: var(--warn-bg); color: var(--amber); }
+:root[data-theme=dark] .output-card { background: var(--surface); border-color: var(--line); }
+:root[data-theme=dark] .output-card .output-timing { background: var(--soft); color: var(--ink); }
+:root[data-theme=dark] .output-card.is-on { background: #243421; border-color: #8eae68; }
+:root[data-theme=dark] .output-card.is-on .output-timing { background: var(--good-bg); }
+:root[data-theme=dark] .output-card.is-blocked { border-top-color: #bb9550; }
+:root[data-theme=dark] .output-card.is-blocked .output-timing { background: var(--warn-bg); color: var(--amber); }
+:root[data-theme=dark] :is(.toast, .chart-tooltip) { background: #354b31; color: var(--ink); border: 1px solid #829b69; }
+:root[data-theme=dark] .skip-link { color: #172818; }
+:root[data-theme=dark] .login-body { background: var(--bg); }
+:root[data-theme=dark] .login-story { background: #1b3123; }
+:root[data-theme=dark] .login-access { color: var(--green); background: var(--soft); border-color: var(--line); }
+:root[data-theme=dark] .mobile-quick-nav { background: #1b281ff5; border-color: var(--line); }
+:root[data-theme=dark] .mobile-quick-nav a { color: var(--muted); }
+:root[data-theme=dark] .mobile-quick-nav a[aria-current=page] { background: var(--selected); color: var(--lime); }
+
+/* Connection diagnostics retain separate USB, sensor and warning states. */
+:root[data-theme=dark] :is(.board-node, .sensor-connection, .connection-tool, .raw-sensor-table, .raw-sensor-table > div, .water-config-grid fieldset, .pin-guide dt, .pin-guide dd, .board-node-bottom) { border-color: var(--line); }
+:root[data-theme=dark] :is(.board-node:hover, .connection-tool > summary:hover) { background: var(--soft); }
+:root[data-theme=dark] :is(.board-node[aria-pressed=true], .sensor-connection.is-traced) { background: var(--selected); border-color: #95ad74; box-shadow: inset 0 0 0 1px #95ad74; }
+:root[data-theme=dark] :is(.sensor-filters, .sensor-pin, .tool-symbol, .buffer-health, .pin-chip, .raw-sensor-table > div:nth-child(odd), .sensor-diagnosis, .trace-conversion) { background: var(--soft); color: var(--ink); border-color: var(--line); }
+:root[data-theme=dark] :is(.sensor-filters button, .board-number, .sensor-arrow, .reading-label, .tool-chevron, .device-details dt, .buffer-health-label, .firmware-hash, .pin-label, .gas-value > span, .gas-raw-counts, .sensor-diagnosis p, .raw-sensor-table dt, .trace-conversion li span, .report-age, .inspection-tabs button) { color: var(--muted); }
+:root[data-theme=dark] :is(.board-node[data-status=good] .board-link-status, .sensor-connection[data-status=good] .sensor-row-status, .sensor-history, .water-live, .firmware-version, .pin-guide dt, .raw-sensor-table dd, .inspection-tabs [aria-selected=true]) { color: var(--green); }
+:root[data-theme=dark] :is(.board-health[data-warning=true], .board-node[data-status=bad] .board-link-status, .sensor-connection[data-status=warning] .sensor-row-status, .connection-tool[data-status=warning] .tool-summary-text > span) { color: var(--amber); }
+:root[data-theme=dark] :is(.sensor-connection[data-status=warning], .sensor-connection[data-status=warning].is-traced, .connection-checks, .connection-check, .sensor-diagnosis[data-status=warning]) { background: var(--warn-bg); border-color: #877044; }
+:root[data-theme=dark] :is(.connection-checks-heading p, .connection-check, .connection-checks-heading h3, .sensor-diagnosis[data-status=warning] p) { color: var(--amber); }
+:root[data-theme=dark] :is(.check-symbol, .sensor-diagnosis .diagnosis-symbol, .sensor-filters [data-warning=true]) { background: #504225; color: var(--amber); border-color: #8d7746; }
+:root[data-theme=dark] :is(.sensor-filters button[aria-pressed=true], .pin-chip[aria-pressed=true], .inspection-tabs button span) { background: var(--selected); border-color: #869f68; color: var(--lime); }
+:root[data-theme=dark] .sensor-connection.is-traced .sensor-pin { color: var(--lime); background: #1b2b1b; }
+:root[data-theme=dark] .gas-source { background: var(--soft); border-color: var(--line); }
+:root[data-theme=dark] .gas-analog { background: var(--warn-bg); }
+:root[data-theme=dark] .gas-comparison.infrared-primary .gas-analog { background: var(--selected); border-color: #8ba66c; }
+:root[data-theme=dark] .water-wiring text { fill: var(--ink); }
+:root[data-theme=dark] .water-wiring rect { fill: var(--soft); stroke: #91a57b; }
+:root[data-theme=dark] .water-wiring .wire-data { stroke: #bfd895; }
+:root[data-theme=dark] .water-wiring .wire-power { stroke: #e7b491; }
+:root[data-theme=dark] .water-wiring .wire-ground { stroke: #a6cbd1; }
+:root[data-theme=dark] :is(.buffer-track, .adc-track) { background: #40523a; }
+:root[data-theme=dark] :is(.buffer-track > span, .adc-track > span) { background: #b4cd85; }
+
+@media(max-width:780px) {
+  .display-preferences { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .display-preferences h2 { font-size: 21px; }
+  .login-appearance select { font-size: 16px; }
+  .air-readouts { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .air-readouts .readout { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; border-radius: 0; border-width: 0 0 1px; padding: 15px 4px; background: transparent; }
+  .air-readouts .readout:last-child { border-bottom: 0; }
+  .air-readouts .readout > span { font-size: 12px; }
+  .air-readouts .readout > strong { grid-column: 2; grid-row: 1 / 3; margin: 0; font-size: 25px; justify-content: end; }
+  .air-readouts .readout > small { margin-top: 4px; font-size: 10px; }
+  .air-readouts .readout > span > span { display: none; }
+  .air-readouts .readout[data-available=false] > strong { font-size: 13px; }
+  .text-link { min-height: 44px; }
+  .page-guide summary, .trace-guidance summary { min-height: 48px; }
+}
+@media(forced-colors:active) {
+  :root[data-theme] { --ink: CanvasText; --muted: CanvasText; --green: LinkText; --surface: Canvas; --bg: Canvas; --soft: Canvas; --line: CanvasText; --chart-label: CanvasText; --chart-grid: GrayText; --chart-band: Canvas; --chart-ph: LinkText; --chart-co2: LinkText; --chart-tvoc: LinkText; --chart-pm25: LinkText; --chart-pm10: LinkText; --chart-temp: LinkText; --chart-hum: LinkText; --chart-water-d6: LinkText; --chart-water-d8: LinkText; }
+}

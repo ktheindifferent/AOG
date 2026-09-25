@@ -7,7 +7,9 @@
   <title>AOG · Sign in</title>
   <link rel="icon" type="image/svg+xml" href="/img/aog-mark.svg">
   <link rel="preload" href="/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/js/aog/appearance.js"></script>
   <link rel="stylesheet" href="/css/aog.css">
+  <link rel="stylesheet" href="/css/appearance.css">
   <script defer src="/js/aog/login.js"></script>
 </head>
 <body class="login-body">
@@ -35,6 +37,7 @@
       <button type="submit" class="button primary">Sign in <svg class="icon" aria-hidden="true"><use href="/img/icons.svg#arrow"/></svg></button>
       <p id="login-error" class="form-result error" role="alert" aria-atomic="true" tabindex="-1"></p>
     </form>
+    <div class="login-appearance"><label for="login-appearance">Color theme</label><select id="login-appearance" data-appearance><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
     <div class="login-footer"><svg class="icon" aria-hidden="true"><use href="/img/icons.svg#network"/></svg> Your grow. Your device. Your control.</div>
   </main>
   </div>

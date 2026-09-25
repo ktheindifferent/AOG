@@ -456,8 +456,18 @@ fn save_frame(directory: &Path, device: &str, frame: &str) -> io::Result<bool> {
             Err(error) if error.kind() == ErrorKind::NotFound => {}
             Err(error) => return Err(error),
         }
-        if let Some(ph) = valid_number(frame, "PH", "", 0.0, 14.0) {
-            write_sensor(directory, "ph", ph)?;
+        let root = if directory.file_name().is_some_and(|name| name == "sensors") {directory.parent().unwrap_or(directory)} else {directory};
+        if let Ok(ph) = super::ph_sensor::validated_arduino_ph(&super::device_link::fields(frame), root, super::device_link::now()) {
+            write_sensor(directory, "ph", &ph.to_string())?;
+        } else {
+            // Do not leave a previous plausible value available after rejection.
+            for name in ["ph", "ph_calibrated"] {
+                match fs::remove_file(directory.join(name)) {
+                    Ok(()) => {},
+                    Err(error) if error.kind() == ErrorKind::NotFound => {},
+                    Err(error) => return Err(error),
+                }
+            }
         }
         Ok(true)
     } else {
@@ -818,6 +828,24 @@ mod serial_tests {
     }
 
     #[test]
+    fn unconfirmed_ph_is_removed_without_interrupting_overflow_reports() {
+        let directory=TempDir::new().unwrap();
+        let frame="T1_OVF:NONE\nT2_OVF:NONE\nPH_STATUS:analog_unverified\nPH:8.16\nPH_ADC:265\n";
+        fs::write(directory.path().join("ph"),"8.16").unwrap();
+        fs::write(directory.path().join("ph_calibrated"),"7.85").unwrap();
+        assert!(save_frame(directory.path(),OVERFLOW_DEVICE,frame).unwrap());
+        assert!(!directory.path().join("ph").exists());
+        assert!(!directory.path().join("ph_calibrated").exists());
+        assert!(overflow_allows_pumping_in(directory.path()));
+        fs::write(directory.path().join("ph_input.json"),serde_json::to_vec(&super::super::ph_sensor::PhInputSettings {connected:true,confirmed_at:super::super::device_link::now()-1}).unwrap()).unwrap();
+        save_frame(directory.path(),OVERFLOW_DEVICE,frame).unwrap();
+        assert_eq!(fs::read_to_string(directory.path().join("ph")).unwrap(),"8.16");
+        save_frame(directory.path(),OVERFLOW_DEVICE,"T1_OVF:NONE\nT2_OVF:NONE\nPH_STATUS:out_of_range").unwrap();
+        assert!(!directory.path().join("ph").exists());
+        assert!(overflow_allows_pumping_in(directory.path()));
+    }
+
+    #[test]
     fn analog_adc_never_changes_the_live_digital_co2_value() {
         let directory = TempDir::new().unwrap();
         save_frame(directory.path(), ENVIRONMENT_DEVICE, "PROTOCOL_VERSION: 2\nCO2: 1200ppm\nCO2_ADC: 160").unwrap();
@@ -884,10 +912,7 @@ mod serial_tests {
         }
         reader.poll(Ok(b"\n"), now).unwrap();
         assert!(overflow_allows_pumping_in(directory.path()));
-        assert_eq!(
-            fs::read_to_string(directory.path().join("ph")).unwrap(),
-            "7.1"
-        );
+        assert!(!directory.path().join("ph").exists(), "Legacy PH without input confirmation must not be published");
     }
 
     #[test]
