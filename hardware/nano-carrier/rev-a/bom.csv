@@ -1,0 +1,38 @@
+Designator,Quantity,Value,Footprint,Manufacturer,Manufacturer Part Number,Assembly,Notes
+J1,1,Nano left socket,Connector_PinSocket_2.54mm:PinSocket_1x15_P2.54mm_Vertical,Harwin,M20-7821546,FIT,"Female Nano socket, USB end is pin 1"
+J2,1,Nano right socket,Connector_PinSocket_2.54mm:PinSocket_1x15_P2.54mm_Vertical,Harwin,M20-7821546,FIT,"Female Nano socket, USB end is pin 1"
+J3,1,WATER D6,AOG:TerminalBlock_METZ_RT03403HBLC_P3.81_Drill1.1,METZ CONNECT,RT03403HBLC,FIT,Externally powered DS18B20 only
+J4,1,WATER D8,AOG:TerminalBlock_METZ_RT03403HBLC_P3.81_Drill1.1,METZ CONNECT,RT03403HBLC,FIT,Externally powered DS18B20 only
+J5,1,ANALOG A0,AOG:TerminalBlock_METZ_RT03403HBLC_P3.81_Drill1.1,METZ CONNECT,RT03403HBLC,FIT,Gravity pH on Dual OVF OR analog CO2 on Sensor Kit
+J6,1,DHT11 D7,AOG:TerminalBlock_METZ_RT03403HBLC_P3.81_Drill1.1,METZ CONNECT,RT03403HBLC,FIT,"DHT11 climate sensor, Sensor Kit role"
+J7,1,OVERFLOW D2,AOG:TerminalBlock_METZ_RT03402HBLC_P3.81_Drill1.1,METZ CONNECT,RT03402HBLC,FIT,Dry contact closed to ground when safe
+J8,1,OVERFLOW D4,AOG:TerminalBlock_METZ_RT03402HBLC_P3.81_Drill1.1,METZ CONNECT,RT03402HBLC,FIT,Dry contact closed to ground when safe
+J9,1,CCS811 3V3,AOG:TerminalBlock_METZ_RT03404HBLC_P3.81_Drill1.1,METZ CONNECT,RT03404HBLC,FIT,3.3 V compatible breakout; firmware address 0x5A
+J10,1,WAKE / ADDR GND,AOG:TerminalBlock_METZ_RT03402HBLC_P3.81_Drill1.1,METZ CONNECT,RT03402HBLC,FIT,Optional ground leads for CCS811 WAKE and ADDR
+R1,1,4.7k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-074K7L,FIT,D6 1-Wire pull-up
+R2,1,4.7k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-074K7L,FIT,D8 1-Wire pull-up
+R3,1,4.7k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-074K7L,FIT,Overflow 1 external pull-up
+R4,1,4.7k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-074K7L,FIT,Overflow 2 external pull-up
+R5,1,1k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-071KL,FIT,Analog input series filter
+R6,1,1M,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-071ML,FIT,Weak pull-down on disconnected analog cable; not probe detection
+R7,1,4.7k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-074K7L,FIT,DHT11 data pull-up
+R8,1,4.7k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-074K7L,FIT,SDA high-side pull-up
+R9,1,4.7k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-074K7L,FIT,SDA low-side pull-up
+R10,1,4.7k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-074K7L,FIT,SCL high-side pull-up
+R11,1,4.7k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-074K7L,FIT,SCL low-side pull-up
+R12,1,2.2k,Resistor_SMD:R_0805_2012Metric,Yageo,RC0805FR-072K2L,FIT,Power LED current limit
+C1,1,10u,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR61E106KA73L,FIT,5 V bulk decoupling; 25 V X5R
+C2,1,100n,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E104KA01L,FIT,Local 5 V decoupling; 25 V X7R
+C3,1,100n,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E104KA01L,FIT,D6 connector power decoupling
+C4,1,100n,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E104KA01L,FIT,D8 connector power decoupling
+C5,1,100n,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E104KA01L,FIT,Analog low-pass filter; nominal 1.59 kHz
+C6,1,100n,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E104KA01L,FIT,DHT11 supply decoupling
+C7,1,2.2u,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E225KA73L,FIT,"LDO input ceramic, 25 V X7R"
+C8,1,2.2u,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E225KA73L,FIT,"LDO output ceramic, 25 V X7R; retain >=1uF effective"
+C9,1,100n,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E104KA01L,FIT,CCS811 connector decoupling
+C10,1,100n,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E104KA01L,FIT,Overflow 1 contact filter
+C11,1,100n,Capacitor_SMD:C_0805_2012Metric,Murata,GRM21BR71E104KA01L,FIT,Overflow 2 contact filter
+U1,1,MCP1700T-3302E/TT,Package_TO_SOT_SMD:SOT-23,Microchip,MCP1700T-3302E/TT,FIT,"3.3 V regulator: pin 1 GND, 2 OUT, 3 IN"
+Q1,1,BSS138-7-F,Package_TO_SOT_SMD:SOT-23,Diodes Incorporated,BSS138-7-F,FIT,"I2C SDA: pin 1 gate, 2 source/3.3V side, 3 drain/5V side"
+Q2,1,BSS138-7-F,Package_TO_SOT_SMD:SOT-23,Diodes Incorporated,BSS138-7-F,FIT,"I2C SCL: pin 1 gate, 2 source/3.3V side, 3 drain/5V side"
+D1,1,GREEN,LED_SMD:LED_0805_2012Metric,Lite-On,LTST-C170KGKT,FIT,5 V power indication: pin 1 cathode

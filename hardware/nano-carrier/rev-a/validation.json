@@ -1,0 +1,34 @@
+{
+  "checked_at_utc": "2026-09-25T18:50:42.683586+00:00",
+  "kicad_version": "6.0.11+dfsg-1",
+  "board_mm": [
+    80,
+    80
+  ],
+  "copper_layers": 2,
+  "drc_violations": 0,
+  "unconnected_pads": 0,
+  "bom_placements": 37,
+  "smd_placements": 27,
+  "tht_placements": 10,
+  "unique_mpn": 14,
+  "terminal_finished_drill_mm": 1.1,
+  "socket_row_spacing_mm": 15.24,
+  "origins": "Gerber/drill/centroid: bottom-left, mm, X right, Y up",
+  "pin_contract": "pass",
+  "schematic_wires_and_labels_to_pins": "pass",
+  "footprint_bom_schematic_match": "pass",
+  "archive_checks": "pass",
+  "physical_hardware_tested": false,
+  "sensor_models_confirmed": false,
+  "erc_errors": 0,
+  "erc_warnings": 0,
+  "erc_verified_schematic_sha256": "176e09e68e0a8f57958cb835486395483c737b307818b8057abf4caf5d5b2dbb",
+  "hashes": {
+    "aog-nano-carrier-rev-a.kicad_pcb": "909d79f40f72f5e6632b028457afb5fe3dbfbef3695768ea9b395392466f2f12",
+    "aog-nano-carrier-rev-a.kicad_sch": "176e09e68e0a8f57958cb835486395483c737b307818b8057abf4caf5d5b2dbb",
+    "bom.csv": "8fc203d6654c80e833772362d1f66c30c34d8f357287bb5dfd6fd74443c520ac",
+    "positions.csv": "7121e2d90b8bc33d1f3d74ecb33e7636678de59cfcbd421f20d8c38e36dae83f",
+    "drc.txt": "e2b6b07d3534b4bc6abe8018e68671e528bb3e86369ad0c601cff904b9452e35"
+  }
+}

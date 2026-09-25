@@ -2,6 +2,11 @@
 
 **Connections** is the live source of board identity, firmware, last report, pin assignments, sensor errors, and raw values. Arduino D/A labels refer to the selected Arduino, not Pi GPIO.
 
+For a socketed Nano carrier with fitted pull-ups, see the
+[AOG Nano carrier prototype](../hardware/nano-carrier/README.md). The same PCB
+supports both firmware roles; its connector map and power limits are documented
+separately from the current loose-wire installation.
+
 | Signal | Sensor Kit | Dual OVF |
 | --- | --- | --- |
 | D2 | Unused | Overflow switch 1 to GND |

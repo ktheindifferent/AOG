@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210"><rect width="297" height="210" fill="white"/><g font-family="DejaVu Sans,sans-serif" fill="#172c30">
+<text x="12" y="16" font-size="6">Nano sockets / USB power</text>
+<text x="12" y="24" font-size="3.3">AOG Nano carrier Rev A · Electrical connection reference · Same net names are electrically connected</text>
+<rect x="12" y="36" width="86" height="83" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="15" y="41" font-size="3.5" font-weight="bold">J1 · Nano left socket</text>
+<text x="15" y="47" font-size="3.1">Pad 1 → unconnected: D13</text>
+<text x="15" y="52" font-size="3.1">Pad 2 → unconnected: 3V3</text>
+<text x="15" y="57" font-size="3.1">Pad 3 → unconnected: AREF</text>
+<text x="15" y="62" font-size="3.1">Pad 4 → A0</text>
+<text x="15" y="67" font-size="3.1">Pad 5 → unconnected: A1</text>
+<text x="15" y="72" font-size="3.1">Pad 6 → unconnected: A2</text>
+<text x="15" y="77" font-size="3.1">Pad 7 → unconnected: A3</text>
+<text x="15" y="82" font-size="3.1">Pad 8 → SDA_5V</text>
+<text x="15" y="87" font-size="3.1">Pad 9 → SCL_5V</text>
+<text x="15" y="92" font-size="3.1">Pad 10 → unconnected: A6</text>
+<text x="15" y="97" font-size="3.1">Pad 11 → unconnected: A7</text>
+<text x="15" y="102" font-size="3.1">Pad 12 → +5V</text>
+<text x="15" y="107" font-size="3.1">Pad 13 → unconnected: RESET_L</text>
+<text x="15" y="112" font-size="3.1">Pad 14 → GND</text>
+<text x="15" y="117" font-size="3.1">Pad 15 → unconnected: VIN</text>
+<rect x="152" y="36" width="86" height="83" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="155" y="41" font-size="3.5" font-weight="bold">J2 · Nano right socket</text>
+<text x="155" y="47" font-size="3.1">Pad 1 → unconnected: D12</text>
+<text x="155" y="52" font-size="3.1">Pad 2 → unconnected: D11</text>
+<text x="155" y="57" font-size="3.1">Pad 3 → unconnected: D10</text>
+<text x="155" y="62" font-size="3.1">Pad 4 → unconnected: D9</text>
+<text x="155" y="67" font-size="3.1">Pad 5 → D8</text>
+<text x="155" y="72" font-size="3.1">Pad 6 → D7</text>
+<text x="155" y="77" font-size="3.1">Pad 7 → D6</text>
+<text x="155" y="82" font-size="3.1">Pad 8 → unconnected: D5</text>
+<text x="155" y="87" font-size="3.1">Pad 9 → D4</text>
+<text x="155" y="92" font-size="3.1">Pad 10 → unconnected: D3</text>
+<text x="155" y="97" font-size="3.1">Pad 11 → D2</text>
+<text x="155" y="102" font-size="3.1">Pad 12 → GND</text>
+<text x="155" y="107" font-size="3.1">Pad 13 → unconnected: RESET_R</text>
+<text x="155" y="112" font-size="3.1">Pad 14 → unconnected: RX</text>
+<text x="155" y="117" font-size="3.1">Pad 15 → unconnected: TX</text>
+<text x="12" y="204" font-size="3">Pin-number reference only; editable KiCad schematic accompanies this drawing. Nano USB end is socket pin 1.</text></g></svg>

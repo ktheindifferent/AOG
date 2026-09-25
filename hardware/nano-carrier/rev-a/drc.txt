@@ -1,0 +1,10 @@
+** Drc report for /home/aog/AOG/hardware/nano-carrier/rev-a/aog-nano-carrier-rev-a.kicad_pcb **
+** Created on 2026-09-25 14:32:28 **
+
+** Found 0 DRC violations **
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** End of Report **

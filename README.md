@@ -45,6 +45,12 @@ Open **Connections → Firmware**, select the identified Arduino and its actual 
 
 The installed three-wire water probes are **not yet identified**. Firmware detects externally powered DS18B20 family `0x28` probes on **D6 and D8 on either Arduino**, verifies CRCs, and exposes each source board and ROM. It does not assume tank assignments. Name and bind probes after identifying them. [Wiring and troubleshooting](docs/wiring.md).
 
+The [Nano carrier PCB](hardware/nano-carrier/README.md) provides removable Nano
+sockets, fitted water-probe pull-ups, labeled sensor terminals and CCS811 level
+shifting. One common design serves Sensor Kit and Dual OVF. Its prototype
+manufacturing/assembly package and small-order instructions are included;
+physical hardware qualification is still required.
+
 Each Arduino retains **24 one-minute records in RAM**. The Pi acknowledges a record only after syncing it to disk. Deduplicated replays feed environmental/water history and the pH chart. Original timestamps, raw fields, boot IDs, and sequences can be downloaded from Connections. RAM does not survive resets, flashing, or power loss. A full ring replaces its oldest record and reports drops. USB hardware may reset a board during a Pi reboot even when normal service reconnects preserve it. [Protocol and recovery](docs/firmware-protocol.md).
 
 ## Repository
@@ -53,6 +59,7 @@ Each Arduino retains **24 one-minute records in RAM**. The Pi acknowledges a rec
 src/                 Rust v2 controller
 www/                 Dashboard, local fonts, and vector artwork
 firmware/            Arduino sources, build script, tests, and release package
+hardware/            Nano carrier PCB, assembly package, and ordering guide
 deploy/              systemd service and upload-tool installer
 tests/               Backend and browser regression tests
 docs/                Operation, wiring, and protocol documentation

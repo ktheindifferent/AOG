@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210"><rect width="297" height="210" fill="white"/><g font-family="DejaVu Sans,sans-serif" fill="#172c30">
+<text x="12" y="16" font-size="6">Analog input and overflow contacts</text>
+<text x="12" y="24" font-size="3.3">AOG Nano carrier Rev A · Electrical connection reference · Same net names are electrically connected</text>
+<rect x="12" y="36" width="86" height="23" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="15" y="41" font-size="3.5" font-weight="bold">J5 · ANALOG A0</text>
+<text x="15" y="47" font-size="3.1">Pad 1 → +5V</text>
+<text x="15" y="52" font-size="3.1">Pad 2 → ANALOG_IN</text>
+<text x="15" y="57" font-size="3.1">Pad 3 → GND</text>
+<rect x="106" y="36" width="86" height="22" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="109" y="41" font-size="3.5" font-weight="bold">R5 · 1k</text>
+<text x="109" y="47" font-size="3.1">Pad 1 → ANALOG_IN</text>
+<text x="109" y="52" font-size="3.1">Pad 2 → A0</text>
+<rect x="200" y="36" width="86" height="22" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="203" y="41" font-size="3.5" font-weight="bold">R6 · 1M</text>
+<text x="203" y="47" font-size="3.1">Pad 1 → A0</text>
+<text x="203" y="52" font-size="3.1">Pad 2 → GND</text>
+<rect x="12" y="66" width="86" height="22" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="15" y="71" font-size="3.5" font-weight="bold">C5 · 100n</text>
+<text x="15" y="77" font-size="3.1">Pad 1 → A0</text>
+<text x="15" y="82" font-size="3.1">Pad 2 → GND</text>
+<rect x="106" y="66" width="86" height="22" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="109" y="71" font-size="3.5" font-weight="bold">J7 · OVERFLOW D2</text>
+<text x="109" y="77" font-size="3.1">Pad 1 → D2</text>
+<text x="109" y="82" font-size="3.1">Pad 2 → GND</text>
+<rect x="200" y="66" width="86" height="22" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="203" y="71" font-size="3.5" font-weight="bold">R3 · 4.7k</text>
+<text x="203" y="77" font-size="3.1">Pad 1 → +5V</text>
+<text x="203" y="82" font-size="3.1">Pad 2 → D2</text>
+<rect x="12" y="96" width="86" height="22" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="15" y="101" font-size="3.5" font-weight="bold">C10 · 100n</text>
+<text x="15" y="107" font-size="3.1">Pad 1 → D2</text>
+<text x="15" y="112" font-size="3.1">Pad 2 → GND</text>
+<rect x="106" y="96" width="86" height="22" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="109" y="101" font-size="3.5" font-weight="bold">J8 · OVERFLOW D4</text>
+<text x="109" y="107" font-size="3.1">Pad 1 → D4</text>
+<text x="109" y="112" font-size="3.1">Pad 2 → GND</text>
+<rect x="200" y="96" width="86" height="22" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="203" y="101" font-size="3.5" font-weight="bold">R4 · 4.7k</text>
+<text x="203" y="107" font-size="3.1">Pad 1 → +5V</text>
+<text x="203" y="112" font-size="3.1">Pad 2 → D4</text>
+<rect x="12" y="126" width="86" height="22" rx="2" fill="#edf4f0" stroke="#bccfc8" stroke-width=".3"/>
+<text x="15" y="131" font-size="3.5" font-weight="bold">C11 · 100n</text>
+<text x="15" y="137" font-size="3.1">Pad 1 → D4</text>
+<text x="15" y="142" font-size="3.1">Pad 2 → GND</text>
+<text x="12" y="204" font-size="3">Pin-number reference only; editable KiCad schematic accompanies this drawing. Nano USB end is socket pin 1.</text></g></svg>

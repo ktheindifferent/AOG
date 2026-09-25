@@ -1,0 +1,3 @@
+(fp_lib_table
+ (lib (name "AOG")(type "KiCad")(uri "${KIPRJMOD}/AOG.pretty")(options "")(descr "AOG manufacturer-checked footprints"))
+)
