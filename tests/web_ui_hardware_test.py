@@ -16,6 +16,8 @@ class Hardware(Device):
         self.co2_settings={'analog_model':'unidentified','primary_source':'ccs811','reference_mv':5000}
         self.hardware_error=False
         self.firmware_error=False
+        self.firmware_hold=False
+        self.held_firmware=[]
         self.offline=set()
     def sensor_history(self, hours):
         data=super().sensor_history(hours)
@@ -42,7 +44,9 @@ class Hardware(Device):
             primary=self.co2_settings['primary_source']=='analog'
             diagnostic={'fresh':fresh,'source':'dfrobot_sen0219_analog' if primary else 'ccs811' if v2 else 'legacy_mixed','digital_eco2_ppm':ppm if v2 and f.get('CCS811_STATUS')=='ok' else None,'reported_ppm':ppm,'analog_adc':adc,'analog_co2_ppm':converted,'primary_ppm':converted if primary else ppm,'analog_millivolts':mv,'analog_status':'unavailable' if adc is None else 'near_ground' if adc<=1 else 'near_supply' if adc>=1022 else 'converted' if converted is not None else 'below_range' if infrared and mv<400 else 'above_range' if infrared else 'unidentified','assumed_reference_mv':self.co2_settings['reference_mv'],'compensation':'live' if f.get('DHT_STATUS')=='ok' else 'unavailable','startup_warmup':int(f.get('UPTIME_S','9999'))<1200}
             reply({'server_time':int(time.time()),'devices':self.devices,'co2_diagnostics':diagnostic,'co2_settings':self.co2_settings,'water_probes':self.probes,'water_readings':[[21.5,int(time.time())],None],'retention_days':7});return
-        if path=='/api/firmware':reply({'error':'Package unavailable'} if self.firmware_error else self.firmware,503 if self.firmware_error else 200);return
+        if path=='/api/firmware':
+            if self.firmware_hold:self.held_firmware.append(route);return
+            reply({'error':'Package unavailable'} if self.firmware_error else self.firmware,503 if self.firmware_error else 200);return
         if path in ['/api/firmware/update','/api/water-probes','/api/co2-settings']:
             assert route.request.method=='POST'
             assert route.request.headers.get('x-aog-csrf')=='browser-test-token'
@@ -69,6 +73,29 @@ def run(browser,width):
     expect(page.locator('[data-sensor=analog]')).not_to_contain_text('160ppm')
     for tool in ['co2-tools','water-tools','firmware-tools','board-details']:
         assert not page.locator('#'+tool).evaluate('(el) => el.open')
+    # Checks across both boards navigate directly to the relevant connection.
+    page.click('[data-check="DUAL_OVF_SENSOR:overflow2"]')
+    expect(page.locator('#trace-title')).to_have_text('Overflow switch 2')
+    expect(page.locator('#diagnosis-title')).to_contain_text('open circuit')
+    expect(page.locator('#wire-paths')).to_be_visible()
+    page.click('[data-check="DUAL_OVF_SENSOR:water8"]')
+    expect(page.locator('#trace-status')).to_have_text('Data check failed')
+    expect(page.locator('#diagnosis-detail')).to_contain_text('integrity check')
+    page.locator('#inspection-tab-wiring').focus()
+    page.keyboard.press('ArrowRight')
+    expect(page.locator('#inspection-tab-data')).to_be_focused()
+    expect(page.locator('#inspection-data')).to_be_visible()
+    expect(page.locator('#inspection-wiring')).to_be_hidden()
+    expect(page.locator('[data-field=WATER_D8_STATUS] dd')).to_have_text('crc_error')
+    with page.expect_download() as download:
+        page.click('#trace-download')
+    saved=json.loads(Path(download.value.path()).read_text())
+    assert saved['device']=='DUAL_OVF_SENSOR' and saved['sensor']=='water8'
+    assert saved['fields']['WATER_D8_STATUS']=='crc_error' and saved['display_value'] is None
+    assert saved['live'] and saved['reported_at']
+    page.locator('#inspection-tab-data').focus();page.keyboard.press('Home')
+    expect(page.locator('#inspection-wiring')).to_be_visible()
+    page.click('[data-board=SENSORKIT_MK1]')
     page.locator('#hardware-refresh').focus()
     page.evaluate('window.AogHardware.refresh()')
     expect(page.locator('#hardware-refresh')).to_be_focused()
@@ -87,8 +114,9 @@ def run(browser,width):
     if width<=780:
         assert page.evaluate("document.querySelector('[data-sensor=analog]').nextElementSibling.id==='wiring-inspector'")
         assert page.locator('#wiring-inspector').bounding_box()['y']>=90
-    page.click('.sensor-raw-details summary')
-    expect(page.locator('#raw-sensor-frame')).to_have_text('CO2_ADC: 160')
+    page.click('#inspection-tab-data')
+    expect(page.locator('[data-field=CO2_ADC] dd')).to_have_text('160')
+    expect(page.locator('#trace-ppm-label')).to_have_text('Profile needed')
     page.click('#trace-back')
     expect(page.locator('[data-trace=analog]')).to_be_focused()
     if width<=780:
@@ -136,6 +164,9 @@ def run(browser,width):
     expect(page.locator('#gas-digital-value')).to_have_text('1,200')
     page.fill('#co2-reference','5.000');page.click('#co2-save')
     expect(page.locator('#gas-analog-primary')).to_have_text('1,191')
+    expect(page.locator('#trace-adc')).to_have_text('160')
+    expect(page.locator('#trace-volts')).to_have_text('0.781')
+    expect(page.locator('#trace-ppm')).to_have_text('1,191')
     expect(page.locator('#gas-analog-unit')).to_have_text('ppm CO₂')
     expect(page.locator('#gas-source-rule')).to_contain_text('DFRobot infrared CO₂')
     expect(page.locator('[data-sensor=ccs] a')).to_have_count(0)
@@ -151,13 +182,13 @@ def run(browser,width):
     expect(page.locator('#co2-source')).to_contain_text('DFRobot')
     navigate(page,'connections')
     page.click('[data-board=DUAL_OVF_SENSOR]')
-    expect(page.locator('#sensor-connections')).to_contain_text('crc error')
+    expect(page.locator('#sensor-connections')).to_contain_text('Data check failed')
     expect(page.locator('#sensor-connections')).to_contain_text('Circuit open')
     expect(page.locator('#pin-d2-label')).to_have_text('Overflow switch 1')
     page.click('[data-trace=water6]')
     expect(page.locator('#trace-note')).to_contain_text('DS18B20 family detected')
     expect(page.locator('#wire-paths')).to_contain_text('DQ / data')
-    expect(page.locator('#raw-sensor-frame')).to_contain_text('WATER_D6_ROM: 28010203040506AA')
+    expect(page.locator('[data-field=WATER_D6_ROM] dd')).to_have_text('28010203040506AA')
     expect(page.locator('#trace-value')).to_have_text('21.5 °C')
     page.click('#trace-setup')
     assert page.locator('#water-tools').evaluate('(el) => el.open')
@@ -206,6 +237,26 @@ def run(browser,width):
     expect(page.locator('#firmware-install')).to_be_disabled()
     expect(page.locator('#firmware-tool')).to_contain_text('could not be refreshed')
     d.firmware_error=False
+    if width==1440:
+        # A delayed independent API must not keep old sensor values looking live.
+        page.click('[data-board=SENSORKIT_MK1]')
+        page.evaluate('window.AogHardware.refresh()')
+        d.firmware_hold=True
+        page.evaluate('void window.AogHardware.refresh(true)')
+        expect(page.locator('#hardware-refresh')).to_be_disabled()
+        expect(page.locator('#trace-value')).to_have_text('—',timeout=9000)
+        expect(page.locator('#hardware-error')).to_be_hidden()
+        expect(page.locator('#trace-freshness')).to_contain_text('Last report')
+        expect(page.locator('#raw-sensor-frame')).to_contain_text('160')
+        d.offline={'SENSORKIT_MK1','DUAL_OVF_SENSOR'}
+        d.firmware_hold=False
+        for held in d.held_firmware:
+            held.fulfill(status=200,content_type='application/json',body=json.dumps(d.firmware))
+        d.held_firmware.clear()
+        expect(page.locator('#hardware-refresh')).to_be_enabled()
+        expect(page.locator('#board-status')).to_have_text('Offline')
+        d.offline.clear();page.click('#hardware-refresh')
+        expect(page.locator('#trace-value')).to_have_text('1,191 ppm')
     d.devices[0]['observed_at']=int(time.time())-100;d.offline.add('SENSORKIT_MK1')
     page.click('#hardware-refresh')
     expect(page.locator('#gas-digital-value')).to_have_text('—')
@@ -222,7 +273,7 @@ def run(browser,width):
     for tool in ['co2-tools','water-tools','firmware-tools']:
         page.locator('#'+tool+' > summary').click()
     page.click('[data-trace=analog]')
-    page.click('.sensor-raw-details summary')
+    page.click('#inspection-tab-wiring')
     original_width=width
     page.set_viewport_size({'width':900 if width<=780 else 390,'height':1080})
     page.locator('[data-pin-sensor=analog]').focus()
@@ -240,11 +291,17 @@ def run(browser,width):
         page.click('#co2-tools > summary')
         page.locator('#wiring-inspector').scroll_into_view_if_needed()
         page.screenshot(path=str(output/f'wiring-{width}.png'),animations="disabled",timeout=60000)
+    page.click('#inspection-tab-data')
+    page.locator('#inspection-data').scroll_into_view_if_needed()
+    page.screenshot(path=str(output/f'raw-data-{width}.png'),animations="disabled",timeout=60000)
     if os.environ.get('AOG_AXE_PATH'):
         # Audit the forms and maintenance controls as well as the main connection inspector.
         page.evaluate("document.querySelectorAll('#page-connections details').forEach(el=>el.open=true)")
         page.add_script_tag(path=os.environ['AOG_AXE_PATH'])
         issues=page.evaluate("async () => (await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))}))")
+        assert not issues,issues
+        page.click('#inspection-tab-wiring')
+        issues=page.evaluate("async () => (await axe.run(document.getElementById('inspection-wiring'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))}))")
         assert not issues,issues
         print(f'Accessibility passed at {width}px',flush=True)
     navigate(page,'history');page.click('[data-history-sensor=water_temp_d6]')

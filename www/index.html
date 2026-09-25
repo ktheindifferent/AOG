@@ -101,6 +101,10 @@
         </div>
         <div class="topology-footer"><p class="helper">A USB link can be healthy while an individual sensor needs attention.</p><p id="hardware-updated" class="helper"></p></div>
       </article>
+      <aside id="connection-checks" class="connection-checks" aria-labelledby="connection-checks-title" hidden>
+        <div class="connection-checks-heading"><span class="check-symbol" aria-hidden="true">!</span><div><h3 id="connection-checks-title">Connections to check</h3><p>Choose a check to inspect its connection.</p></div></div>
+        <div id="connection-check-list" class="connection-check-list"></div>
+      </aside>
       <div id="board-inspector" class="hardware-section-heading"><div><span class="eyebrow">02 / READ & TRACE</span><h2 id="inspector-title">Sensor Kit connections</h2></div><span id="board-status" class="badge neutral">Waiting</span></div>
       <div class="connection-workspace">
         <div class="sensor-list-panel">
@@ -116,6 +120,10 @@
             <div class="trace-heading"><h3 id="trace-title">Choose a sensor</h3><span id="trace-status" class="badge neutral">Waiting</span></div>
             <div class="trace-reading"><div><span id="trace-reading-label" class="reading-label">LATEST READING</span><strong id="trace-value">—</strong></div><a id="trace-history" class="text-link" href="#history" hidden>View history ↗</a></div>
             <p id="trace-note" class="helper"></p>
+            <div class="trace-freshness"><span id="trace-freshness" class="report-age">Waiting for a report</span><span>Auto refresh · 3s</span></div>
+            <div class="inspection-tabs" role="tablist" aria-label="Sensor inspector view"><button type="button" id="inspection-tab-wiring" role="tab" aria-selected="true" aria-controls="inspection-wiring" tabindex="0" data-inspection-view="wiring">Wiring guide</button><button type="button" id="inspection-tab-data" role="tab" aria-selected="false" aria-controls="inspection-data" tabindex="-1" data-inspection-view="data">Raw data <span id="trace-raw-count"></span></button></div>
+            <div id="inspection-wiring" role="tabpanel" aria-labelledby="inspection-tab-wiring" tabindex="0">
+            <div class="sensor-diagnosis" id="sensor-diagnosis"><span class="diagnosis-symbol" id="diagnosis-symbol" aria-hidden="true">i</span><div><h4 id="diagnosis-title">Check this connection</h4><p id="diagnosis-detail"></p></div></div>
             <div class="wire-guide" aria-labelledby="wiring-heading">
               <div class="wire-guide-heading"><h4 id="wiring-heading">Follow the wire</h4><span id="trace-pin" class="wire-selected-pin">—</span></div>
               <div class="wire-endpoints" aria-hidden="true"><span><svg class="icon"><use href="/img/icons.svg#network"/></svg> Arduino</span><span>Sensor / module</span></div>
@@ -123,14 +131,23 @@
               <div class="wire-legend" aria-label="Diagram line colors"><span class="signal">Signal</span><span class="power">Power</span><span class="ground">Ground</span></div>
               <p class="wire-caption">Match printed pin labels. This diagram does not show physical pin positions or cable colors.</p>
             </div>
-            <div class="trace-guidance"><span class="eyebrow" id="trace-help-label">CONNECTION CHECK</span><p id="trace-help" class="helper"></p><button type="button" id="trace-setup" class="text-link" hidden>Sensor settings →</button></div>
-            <details class="raw-details sensor-raw-details"><summary>Raw sensor fields <span id="trace-raw-count"></span></summary><p id="trace-raw-stamp" class="helper"></p><pre id="raw-sensor-frame" class="raw-frame" tabindex="0">Waiting for a report…</pre></details>
+            <details class="trace-guidance" id="trace-guidance"><summary id="trace-help-label">Connection checklist</summary><p id="trace-help" class="helper"></p></details>
+            </div>
+            <div id="inspection-data" role="tabpanel" aria-labelledby="inspection-tab-data" tabindex="0" hidden>
+              <div id="trace-conversion" class="trace-conversion" hidden><span class="reading-label">ANALOG SIGNAL → CO₂</span><ol><li><strong id="trace-adc">—</strong><span>ADC counts</span></li><li><strong id="trace-volts">—</strong><span>Volts · estimated</span></li><li><strong id="trace-ppm">—</strong><span id="trace-ppm-label">ppm CO₂</span></li></ol><p id="trace-conversion-note" class="helper"></p></div>
+              <p id="trace-raw-stamp" class="helper"></p>
+              <dl id="raw-sensor-frame" class="raw-sensor-table" aria-label="Fields from the last Arduino report"></dl>
+              <p id="trace-no-fields" class="helper" hidden>No fields received for this sensor.</p>
+              <div class="raw-data-footer"><p class="helper">Original Arduino values. Units and status codes are kept as reported.</p><button type="button" id="trace-download" class="button secondary" disabled>Download snapshot ↓</button></div>
+            </div>
+            <button type="button" id="trace-setup" class="text-link trace-setup" hidden>Sensor settings →</button>
             <div class="pin-navigation"><span class="reading-label">JUMP TO PIN</span><div id="pin-selector" class="pin-selector" role="group" aria-label="Highlight sensor pins"></div></div>
           </article>
         </div>
       </div>
       <details class="connection-tool board-inspector-panel" id="board-details"><summary><span class="tool-symbol" aria-hidden="true">≡</span><span class="tool-summary-text"><strong><span id="board-title">Sensor Kit</span> · board details</strong><span id="board-detail-summary">USB, firmware & buffered logs</span></span><span class="tool-chevron" aria-hidden="true">+</span></summary><div class="tool-content">
 <dl class="device-details"><div><dt>USB port</dt><dd id="board-port">—</dd></div><div><dt>Firmware</dt><dd id="board-version">—</dd></div><div><dt>Last board report</dt><dd id="board-seen">—</dd></div><div><dt>RAM buffer</dt><dd id="board-buffer">—</dd></div><div><dt>Dropped records</dt><dd id="board-dropped">—</dd></div><div><dt>Uptime</dt><dd id="board-clock">—</dd></div></dl>
+          <p id="board-connection-help" class="notice warning" hidden>Waiting for a fresh board report. Check its USB connection and power, then refresh connections.</p>
           <p id="board-errors" class="notice warning" role="status" hidden></p>
           <div class="buffer-health"><span class="buffer-health-label">LOG CONTINUITY</span><p id="board-log-health">Checking buffered readings…</p><div class="buffer-track" aria-hidden="true"><span id="board-buffer-level"></span></div></div><details class="raw-details"><summary>How the RAM buffer works</summary><p class="helper">Each buffered reading clears only after the Pi saves it to disk. Firmware v2 holds 24 minutes at one reading per minute. When full, the oldest record is replaced and the drop count increases. Power loss or a board reset erases RAM.</p></details>
           <details class="raw-details"><summary>Inspect the raw board report</summary><p class="helper">Latest received frame. Check its timestamp above; values remain visible here when a board goes offline.</p><pre id="raw-device-frame" class="raw-frame" tabindex="0">Waiting for a report…</pre></details>

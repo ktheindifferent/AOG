@@ -5,8 +5,11 @@ window.AogHardware = (() => {
   let api, snapshot, firmware, selected = 'SENSORKIT_MK1', busy = false, dirty = false, initialized = false;
   let saving = false, editRevision = 0, updateError = '';
   let co2Dirty=false,co2Saving=false,co2Revision=0;
+  let receivedAt=0, connectionFailed=false, lastFreshness='', inspectionView='wiring';
   const set = (id, value) => {const e = $(id); if (e && e.textContent !== String(value)) e.textContent = value;};
-  const fresh = device => snapshot && device && snapshot.server_time - device.observed_at >= 0 && snapshot.server_time - device.observed_at <= 5 && !device.error?.startsWith('Live report failed:');
+  // Elapsed browser time also ages a report while an HTTP request is slow or pending.
+  const reportAge = device => snapshot && device?.observed_at ? snapshot.server_time-device.observed_at+(performance.now()-receivedAt)/1000 : null;
+  const fresh = device => !connectionFailed && reportAge(device)!==null && reportAge(device)>=0 && reportAge(device)<=5 && !device.error?.startsWith('Live report failed:');
   const stamp = seconds => seconds ? new Date(seconds * 1000).toLocaleString() : 'No report received';
   const field = (device, key) => fresh(device) ? device.fields[key] : null;
   const selectedDevice = () => snapshot?.devices.find(d => d.device_id === selected);
@@ -41,9 +44,15 @@ window.AogHardware = (() => {
     water6: ['WATER_D6_STATUS','WATER_D6','WATER_D6_ROM'],
     water8: ['WATER_D8_STATUS','WATER_D8','WATER_D8_ROM']
   };
+  const statusLabels = {
+    crc_error:'Data check failed', unsupported_family:'Unsupported probe',
+    out_of_range:'Outside sensor range', multiple_probes:'Multiple probes',
+    external_power_required:'External power needed', read_error:'Read failed', unavailable:'No sensor response'
+  };
+  const sensorStatus = (connected,raw) => !connected?['Unavailable','neutral']:!raw?['Not reported','neutral']:raw==='ok'?['Reporting','good']:raw==='not_detected'?['Not detected','neutral']:[statusLabels[raw] || raw.replaceAll('_',' '),'warning'];
   function sensorsFor(device) {
     const connected = fresh(device), f = device?.fields || {}, kit = device?.device_id === 'SENSORKIT_MK1';
-    const status = key => !connected ? ['Unavailable','neutral'] : !f[key] ? ['Not reported','neutral'] : f[key] === 'ok' ? ['Reporting','good'] : f[key] === 'not_detected' ? ['Not detected','neutral'] : [f[key].replaceAll('_',' '),'warning'];
+    const status = key => sensorStatus(connected,f[key]);
     const rows = [], adc = connected ? numeric(f.CO2_ADC) : null;
     const analogValid = Number.isInteger(adc) && adc >= 0 && adc <= 1023;
     const gas=snapshot?.co2_diagnostics,configured=snapshot?.co2_settings?.analog_model==='dfrobot_sen0219_analog';
@@ -58,13 +67,103 @@ window.AogHardware = (() => {
         const raw=field(device,key), normal=raw==='NONE', triggered=raw==='OVERFLOW';
         rows.push({id:`overflow${i+1}`,label:`Overflow switch ${i+1}`,value:normal?'Circuit closed':triggered?'Circuit open':null,status:[normal?'Clear':triggered?'Stop / check':'Unavailable',normal?'good':triggered?'warning':'neutral'],pin:`D${i?4:2}`,wires:[[`D${i?4:2}`,'Switch signal','data'],['GND','Switch return','ground']],note:'An open circuit can indicate overflow or a disconnected wire.',help:'Connect the switch between the data pin and GND. The input has an internal pull-up. Inspect the float position and cable continuity before interpreting an open circuit as water level.'});
       });
-      rows.push({id:'ph',label:'pH probe interface',value:connected && f.PH ? `${f.PH} raw pH` : null,status:[connected && f.PH ? 'Unverified analog' : 'Unavailable','neutral'],pin:'A0',wires:[['A0','Interface OUT','data'],supply,ground],note:connected ? [f.PH_ADC && `ADC ${f.PH_ADC}`,f.PH_MV && `${f.PH_MV} mV`,'Calibrated pH is shown in Overview.'].filter(Boolean).join(' · ') : 'No fresh pH reading.',help:'Connect the interface signal to A0, then attach the probe to its interface. Voltage alone cannot confirm the probe is plugged in. Use known buffers to check calibration in Setup.'});
+      const phValid=connected && numeric(f.PH)!==null && f.PH_STATUS!=='out_of_range';
+      rows.push({id:'ph',label:'pH probe interface',value:phValid ? `${f.PH} raw pH` : null,status:connected && f.PH_STATUS==='out_of_range'?['Check analog signal','warning']:[phValid?'Unverified analog':'Unavailable','neutral'],pin:'A0',wires:[['A0','Interface OUT','data'],supply,ground],note:connected ? [f.PH_ADC && `ADC ${f.PH_ADC}`,f.PH_MV && `${f.PH_MV} mV`,'Calibrated pH is shown in Overview.'].filter(Boolean).join(' · ') : 'No fresh pH reading.',help:'Connect the interface signal to A0, then attach the probe to its interface. Voltage alone cannot confirm the probe is plugged in. Use known buffers to check calibration in Setup.'});
     }
     [6,8].forEach(pin => {
       const key=`WATER_D${pin}`,rom=f[`${key}_ROM`],detected=rom && rom.startsWith('28');
       rows.push({id:`water${pin}`,label:`Water probe · D${pin}`,value:f[`${key}_STATUS`]==='ok'?displayNumber(field(device,key),'C',' °C'):null,status:status(`${key}_STATUS`),pin:`D${pin}`,key:`water_temp_d${pin}`,wires:[[`D${pin}`,'DQ / data','data'],['5 V','VDD','power'],ground],note:`${detected?'DS18B20 family detected':'Optional · probe model unconfirmed'}${rom && !/^0+$/.test(rom)?` · ROM ${rom}`:''}.`,help:`For an externally powered DS18B20, use D${pin} for data with its own 4.7 kΩ pull-up to 5 V. Check power, pin labels and ground. Wire colors alone do not identify their functions.`});
     });
     return rows;
+  }
+  function diagnosis(sensor,device) {
+    const f=device?.fields || {}, raw=sensor.id.startsWith('water')?f[`WATER_D${sensor.id.slice(5)}_STATUS`]:null;
+    if(connectionFailed)return ['Live view unavailable','AOG could not refresh connection details. Raw data keeps the last received report.'];
+    if(!fresh(device))return ['Waiting for a board report','Live values are hidden until this Arduino reports again. Check its USB connection and power; the last received fields remain in Raw data.'];
+    if(!sensor.value && sensor.status[1]!=='warning' && !sensor.id.startsWith('water'))return ['No usable sensor value received','The board is reporting, but this sensor has no usable value. Check Raw data for its status and the connection checklist for its wiring.'];
+    if(sensor.id.startsWith('overflow'))return sensor.status[1]==='warning'
+      ? ['An open circuit needs a physical check','Overflow and a disconnected wire can both open this circuit. Inspect the float position and cable continuity before interpreting the water level.']
+      : ['Switch circuit is closed','The Arduino reads a closed path to ground. This describes the switch circuit, not a measured tank depth.'];
+    if(sensor.id.startsWith('water')) {
+      const messages={
+        not_detected:['No probe detected on this pin','This input is optional. If a probe is fitted, confirm its model, power and data pin before interpreting this status.'],
+        crc_error:['The data check failed','The probe’s data did not pass its integrity check. Check the data cable, shared ground and pull-up; this sample is not used as a temperature reading.'],
+        unsupported_family:['This probe type is not supported','The returned device family does not match DS18B20 (0x28). Identify the probe model before changing its wiring.'],
+        multiple_probes:['More than one probe shares this pin','The firmware expects one probe per input. Give the two probes separate data lines on D6 and D8.'],
+        external_power_required:['The probe needs external power','The firmware detected a probe without external power. For a confirmed DS18B20, check VDD, GND and the data pull-up shown in Probe setup.'],
+        out_of_range:['Temperature was rejected','The returned value is outside the firmware’s sensor range. Check the probe model, cable and supply before using the reading.'],
+        ok:['A valid temperature was received','The detected DS18B20 passed the firmware’s data check. Raw data includes its ROM identifier.']
+      };
+      return messages[raw] || ['No probe status received','Inspect the raw fields and confirm that the Arduino is running firmware with water-probe support.'];
+    }
+    if(sensor.id==='analog') {
+      if(sensor.status[1]==='warning')return ['Check the analog signal','A0 is at a voltage limit or outside the selected profile’s range. Check the module’s supply, ground and output type; no replacement ppm value is used.'];
+      if(snapshot.co2_settings?.analog_model!=='dfrobot_sen0219_analog')return ['The analog module still needs a profile','ADC counts describe voltage. Identify the module and choose its profile before interpreting this signal as CO₂.'];
+      return ['The analog signal is in range','The configured SEN0219 v1 profile converts this voltage into CO₂. Raw data shows the counts, voltage and conversion separately.'];
+    }
+    if(sensor.id==='ph')return sensor.status[1]==='warning'
+      ? ['Check the pH interface signal','The firmware rejected the analog reading. Inspect A0, the interface supply and common ground; use Raw data to check ADC counts and voltage.']
+      : ['Probe connection is not independently verified','An interface voltage alone cannot confirm a connected or calibrated pH probe. Check against known buffers in Setup; Overview shows calibrated pH.'];
+    if(sensor.id==='dht')return sensor.status[1]==='warning'
+      ? ['The climate reading failed','Check the DHT11 data connection on D7 and its rated supply. A failed reading also prevents fresh temperature/humidity compensation for CCS811.']
+      : ['Climate data is reporting','DHT11 supplies both temperature and humidity. These readings also compensate the CCS811 estimate.'];
+    return sensor.status[1]==='warning'
+      ? ['The CCS811 is not reporting','Check SDA on A4, SCL on A5, and the breakout’s rated power, wake and address connections.']
+      : ['The digital estimate is reporting','CCS811 reports equivalent CO₂ from its gas response. It remains separate from the infrared CO₂ reading.'];
+  }
+  function renderChecks() {
+    const checks=[];
+    if(!connectionFailed)snapshot.devices.forEach(device=>{
+      if(!fresh(device)) {
+        checks.push({id:`${device.device_id}:link`,device:device.device_id,label:names[device.device_id],detail:device.observed_at?'No fresh board report':'Arduino not identified'});
+        return;
+      }
+      sensorsFor(device).filter(s=>s.status[1]==='warning').forEach(sensor=>checks.push({id:`${device.device_id}:${sensor.id}`,device:device.device_id,sensor:sensor.id,label:`${names[device.device_id]} · ${sensor.pin}`,detail:`${sensor.label} · ${sensor.status[0]}`}));
+      const dropped=numeric(device.fields.BUFFER_DROPPED);
+      if(dropped>0)checks.push({id:`${device.device_id}:logs`,device:device.device_id,label:`${names[device.device_id]} · logs`,detail:`${dropped} record${dropped===1?'':'s'} dropped since board reset`});
+    });
+    const list=$('connection-check-list'),keys=new Set(checks.map(c=>c.id));
+    list.querySelectorAll('[data-check]').forEach(button=>{
+      if(!keys.has(button.dataset.check)) {
+        if(button===document.activeElement)document.querySelector(`[data-board="${button.dataset.check.split(':')[0]}"]`)?.focus({preventScroll:true});
+        button.remove();
+      }
+    });
+    checks.forEach(check=>{
+      let button=[...list.children].find(b=>b.dataset.check===check.id);
+      if(!button) {
+        button=document.createElement('button');button.type='button';button.className='connection-check';button.dataset.check=check.id;
+        button.innerHTML='<span><strong></strong><span></span></span><span aria-hidden="true">↗</span>';
+        button.addEventListener('click',()=>{
+          select(check.device);
+          if(check.sensor) {setInspectionView('wiring');chooseTrace(check.sensor,true);}
+          else openTool('board-details');
+        });
+        list.append(button);
+      }
+      const label=button.querySelector('strong'),detail=button.querySelector('span>span');
+      if(label.textContent!==check.label)label.textContent=check.label;
+      if(detail.textContent!==check.detail)detail.textContent=check.detail;
+      button.setAttribute('aria-label',`${check.label}: ${check.detail}. Inspect connection`);
+    });
+    $('connection-checks').hidden=!checks.length;
+    set('connection-checks-title',`${checks.length} hardware check${checks.length===1?'':'s'}`);
+  }
+  function renderReportAge() {
+    const device=selectedDevice(),age=reportAge(device);
+    const elapsed=age===null?'No report received':age<0?'Report time is ahead of the controller':age<60?`${Math.floor(age)}s ago`:age<3600?`${Math.floor(age/60)}m ago`:`${Math.floor(age/3600)}h ago`;
+    set('trace-freshness',`${fresh(device)?'Live report':connectionFailed?'Last received':device?.observed_at?'Last report':'Waiting'} · ${elapsed}`);
+    $('trace-freshness').dataset.live=String(fresh(device));
+    $('trace-freshness').title=stamp(device?.observed_at);
+  }
+  function setInspectionView(view,focus=false) {
+    inspectionView=view;
+    document.querySelectorAll('[data-inspection-view]').forEach(tab=>{
+      const active=tab.dataset.inspectionView===view;
+      tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
+      $(tab.getAttribute('aria-controls')).hidden=!active;
+      if(active && focus)tab.focus({preventScroll:true});
+    });
   }
   function readingRow(sensor) {
     const item=document.createElement('article'); item.className='sensor-connection'; item.dataset.sensor=sensor.id;
@@ -119,6 +218,7 @@ window.AogHardware = (() => {
     document.querySelectorAll('[data-sensor-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.sensorFilter===sensorFilter)));
     sensorRows.forEach(sensor=>{document.querySelector(`[data-sensor="${sensor.id}"]`).hidden=sensorFilter==='attention' && sensor.status[1]!=='warning';});
     $('sensor-empty').hidden=sensorFilter!=='attention' || warnings.length>0;
+    set('sensor-empty',fresh(selectedDevice())?'No reported sensor warnings. Choose All to see optional and unverified connections.':'No fresh sensor checks are available. Choose All to inspect wiring and the last received data.');
     const empty=sensorFilter==='attention' && !warnings.length;
     if(empty && $('wiring-inspector').contains(document.activeElement))document.querySelector('[data-sensor-filter="attention"]').focus({preventScroll:true});
     const hidden=empty || (narrowInspector.matches && !mobileInspectorOpen);
@@ -165,8 +265,12 @@ window.AogHardware = (() => {
     set('trace-title',sensor.label);tag('trace-status',...sensor.status);set('trace-help',sensor.help);
     set('trace-board',`${names[selected]} / ${sensor.pin}`);set('trace-value',sensor.value || '—');set('trace-note',sensor.note);set('trace-pin',sensor.pin);
     set('trace-reading-label',fresh(selectedDevice())?'LATEST READING':'NO FRESH READING');
-    set('trace-help-label',sensor.status[1]==='warning'?'WHAT TO CHECK':'CONNECTION CHECK');
+    set('trace-help-label',sensor.status[1]==='warning'?'Connection checks to try':'Connection checklist');
     $('wiring-inspector').dataset.status=sensor.status[1];
+    const [title,detail]=diagnosis(sensor,selectedDevice());
+    set('diagnosis-title',title);set('diagnosis-detail',detail);
+    $('sensor-diagnosis').dataset.status=sensor.status[1];
+    set('diagnosis-symbol',sensor.status[1]==='warning'?'!':sensor.status[1]==='good'?'✓':'i');
     $('trace-history').hidden=!sensor.key;
     if(sensor.key) {$('trace-history').href=`#history/${sensor.key}`;$('trace-history').setAttribute('aria-label',`${sensor.label} history`);}
     const tool=['ccs','analog'].includes(sensor.id)?'co2-tools':sensor.id.startsWith('water')?'water-tools':null;
@@ -175,9 +279,29 @@ window.AogHardware = (() => {
     set('trace-setup',tool==='co2-tools'?'CO₂ source & sensor profile →':'Probe setup & full wiring diagram →');
     const fields=selectedDevice()?.fields || {}, keys=sensorFields[sensor.id] || [];
     const entries=keys.filter(key=>fields[key]!==undefined);
-    set('trace-raw-count',`${entries.length} field${entries.length===1?'':'s'}`);
-    set('raw-sensor-frame',entries.map(key=>`${key}: ${fields[key]}`).join('\n') || 'No fields received for this sensor.');
-    set('trace-raw-stamp',`Last board report: ${stamp(selectedDevice()?.observed_at)}.${fresh(selectedDevice())?'':' Stored values below are not live.'}`);
+    set('trace-raw-count',entries.length);
+    const table=$('raw-sensor-frame');
+    if(table.dataset.fields!==entries.join(',')) {
+      table.dataset.fields=entries.join(',');
+      table.replaceChildren(...entries.map(key=>{
+        const row=document.createElement('div');row.dataset.field=key;
+        const term=document.createElement('dt'),value=document.createElement('dd');term.textContent=key;row.append(term,value);return row;
+      }));
+    }
+    entries.forEach(key=>{const value=table.querySelector(`[data-field="${key}"] dd`);if(value.textContent!==fields[key])value.textContent=fields[key];});
+    $('trace-no-fields').hidden=entries.length>0;$('trace-download').disabled=!entries.length;
+    set('trace-raw-stamp',`${fresh(selectedDevice())?'Received':'Stored report'} · ${stamp(selectedDevice()?.observed_at)}.${fresh(selectedDevice())?'':' These fields are not live.'}`);
+    $('trace-conversion').hidden=sensor.id!=='analog';
+    if(sensor.id==='analog') {
+      const gas=snapshot.co2_diagnostics,live=fresh(selectedDevice()) && gas?.fresh;
+      const profile=snapshot.co2_settings?.analog_model==='dfrobot_sen0219_analog';
+      set('trace-adc',live && gas.analog_adc!=null?gas.analog_adc:'—');
+      set('trace-volts',live && gas.analog_millivolts!=null?(gas.analog_millivolts/1000).toFixed(3):'—');
+      set('trace-ppm',live && gas.analog_co2_ppm!=null?Math.round(gas.analog_co2_ppm).toLocaleString():'—');
+      set('trace-ppm-label',profile?'ppm CO₂':'Profile needed');
+      set('trace-conversion-note',!live?'No fresh conversion is available. Original fields from the last report are shown below.':profile?`SEN0219 v1 · ${((gas.assumed_reference_mv || snapshot.co2_settings.reference_mv)/1000).toFixed(3)} V reference. Counts and ppm use different units.`:'Identify the module and select its profile to convert voltage into ppm.');
+    }
+    renderReportAge();
     const signature=JSON.stringify(sensor.wires);
     if($('wire-paths').dataset.wires!==signature) {
       $('wire-paths').dataset.wires=signature;
@@ -193,6 +317,23 @@ window.AogHardware = (() => {
     });
     document.querySelectorAll('[data-sensor]').forEach(e=>e.classList.toggle('is-traced',e.dataset.sensor===traced));
     placeInspector();
+  }
+  function downloadSensor() {
+    const sensor=sensorRows.find(s=>s.id===traced),device=selectedDevice();
+    if(!sensor || !device)return;
+    const fields=Object.fromEntries((sensorFields[sensor.id] || []).filter(key=>device.fields[key]!==undefined).map(key=>[key,device.fields[key]]));
+    if(!Object.keys(fields).length)return;
+    const record={
+      format:'aog-sensor-snapshot-v1',device:device.device_id,port:device.port,
+      sensor:sensor.id,pins:sensor.pin,firmware:device.fields.FIRMWARE_VERSION || null,
+      reported_at:device.observed_at?new Date(device.observed_at*1000).toISOString():null,
+      live:fresh(device),display_value:fresh(device)?sensor.value || null:null,
+      status:fresh(device)?sensor.status[0]:'Unavailable',fields
+    };
+    if(sensor.id==='analog')record.co2_profile={...snapshot.co2_settings};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)+'\n'],{type:'application/json'}));
+    const link=document.createElement('a');link.href=url;link.download=`aog-${selected.toLowerCase()}-${sensor.id}-${device.observed_at || 'unknown'}.json`;
+    document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function renderGas() {
     const device=snapshot.devices.find(d=>d.device_id==='SENSORKIT_MK1'), d=snapshot.co2_diagnostics;
@@ -225,6 +366,7 @@ window.AogHardware = (() => {
   }
   function render() {
     if (!snapshot) return;
+    lastFreshness=snapshot.devices.map(d=>String(fresh(d))).join();
     const device=selectedDevice(),connected=fresh(device),f=device?.fields || {},kit=selected==='SENSORKIT_MK1';
     const good=snapshot.devices.filter(fresh).length;
     set('hardware-summary',`${good} of 2 Arduino links reporting · select a board, then a sensor.`);
@@ -232,14 +374,14 @@ window.AogHardware = (() => {
     snapshot.devices.forEach(d=>{
       const short=d.device_id==='SENSORKIT_MK1'?'kit':'ovf', rows=sensorsFor(d), warnings=rows.filter(s=>s.status[1]==='warning').length;
       $('map-'+short).dataset.status=nodeStatus(d);
-      set('map-status-'+short,fresh(d)?'● USB reporting':d.observed_at?'○ Offline':'○ Not identified');
+      set('map-status-'+short,connectionFailed?'○ Status unavailable':fresh(d)?'● USB reporting':d.observed_at?'○ Offline':'○ Not identified');
       set('map-port-'+short,d.port || 'Discovering USB…');
       const reporting=rows.filter(s=>s.status[1]==='good').length;
       set('map-health-'+short,!fresh(d)?'Sensor readings unavailable':warnings?`${warnings} sensor${warnings>1?'s':''} need attention`:`${reporting} reporting · ${rows.length-reporting} unverified / optional`);
       $('map-health-'+short).dataset.warning=String(warnings>0 && fresh(d));
     });
     set('inspector-title',`${names[selected]} connections`);set('board-title',names[selected]);
-    tag('board-status',connected?'USB reporting':device?.observed_at?'Offline':'Not identified',connected?'good':'warning');
+    tag('board-status',connectionFailed?'Status unavailable':connected?'USB reporting':device?.observed_at?'Offline':'Not identified',connected?'good':connectionFailed?'neutral':'warning');
     set('board-port',device?.port || 'Waiting for serial discovery');set('board-seen',stamp(device?.observed_at));
     set('board-version',f.FIRMWARE_VERSION?`v${f.FIRMWARE_VERSION} · protocol ${f.PROTOCOL_VERSION || 'legacy'}`:'Unknown');
     set('board-buffer',f.PROTOCOL_VERSION==='2'?`${f.BUFFER_PENDING || 0} / ${f.BUFFER_CAPACITY || '—'} readings`:'Requires firmware v2');
@@ -251,14 +393,20 @@ window.AogHardware = (() => {
     set('board-log-health',!connected?'No current buffer report. Last received details are shown above.':f.PROTOCOL_VERSION!=='2'?'Install firmware v2 for buffered logging.':dropped?`${dropped} readings were dropped since reset. ${pending} waiting for the Pi.`:pending?`${pending} readings waiting to be saved by the Pi.`:'All buffered readings saved. No dropped records.');
     $('board-buffer-level').style.width=`${connected?Math.min(100,pending/capacity*100):0}%`;
     set('board-errors',device?.error || '');$('board-errors').hidden=!device?.error;
+    $('board-connection-help').hidden=connected;
+    set('board-connection-help',connectionFailed?'AOG could not refresh connection details. Retry Refresh connections to check the current board status.':'Waiting for a fresh board report. Check its USB connection and power, then refresh connections.');
     sensorRows=sensorsFor(device);
     if(!sensorRows.some(s=>s.id===traced))traced=sensorRows.find(s=>s.status[1]==='warning')?.id || (kit && snapshot.co2_settings?.primary_source==='analog'?'analog':sensorRows[0].id);
     renderSensors();
     renderWiring();
+    renderChecks();
     set('raw-device-frame',Object.entries(f).map(([k,v])=>`${k}: ${v}`).join('\n') || 'A raw report will appear when this Arduino is identified.');
     set('pin-a0-label',kit?'Gas module signal':'pH interface signal');set('pin-d2-label',kit?'Unused':'Overflow switch 1');set('pin-d4-label',kit?'Unused':'Overflow switch 2');set('pin-d7-label',kit?'DHT11 data':'Unused');set('pin-a4-label',kit?'CCS811 SDA':'Unused');set('pin-a5-label',kit?'CCS811 SCL':'Unused');
     if(!dirty)snapshot.water_probes.forEach((probe,i)=>{$(`water-label-${i}`).value=probe.label;$(`water-source-${i}`).value=probe.source || '';});
-    snapshot.water_readings.forEach((value,i)=>set(`water-live-${i}`,value?`${value[0].toFixed(2)} °C`:'No unambiguous reading'));
+    snapshot.water_readings.forEach((value,i)=>{
+      const age=value?reportAge({observed_at:value[1]}):null;
+      set(`water-live-${i}`,!connectionFailed && age!==null && age>=0 && age<=5?`${value[0].toFixed(2)} °C`:'No unambiguous reading');
+    });
     set('water-save',saving?'Saving…':dirty?'Save probe names & sources':'Probe settings saved');$('water-save').disabled=saving || !dirty;
     renderGas();renderFirmware();
   }
@@ -292,15 +440,16 @@ window.AogHardware = (() => {
     busy=true;
     if(manual) {$('hardware-refresh').disabled=true;set('hardware-refresh','Refreshing…');}
     try {
-      const [connectionResult, firmwareResult] = await Promise.allSettled([api('/api/connections'), api('/api/firmware')]);
+      const [connectionResult, firmwareResult] = await Promise.allSettled([api('/api/connections').then(data=>({data,receivedAt:performance.now()})), api('/api/firmware')]);
       if(connectionResult.status==='rejected')throw connectionResult.reason;
-      const data=connectionResult.value,fw=firmwareResult.status==='fulfilled'?firmwareResult.value:null;
-      if (!Array.isArray(data.devices) || data.devices.length!==2 || !Array.isArray(data.water_probes) || !Array.isArray(data.water_readings)) throw new Error('Invalid connection report');
-      snapshot=data;firmware=fw;render();$('hardware-error').hidden=true;
+      const data=connectionResult.value.data,fw=firmwareResult.status==='fulfilled'?firmwareResult.value:null;
+      if (!Number.isFinite(data.server_time) || !Array.isArray(data.devices) || data.devices.length!==2 || new Set(data.devices.map(d=>d.device_id)).size!==2 || data.devices.some(d=>!names[d.device_id] || !Number.isFinite(d.observed_at) || !d.fields || typeof d.fields!=='object') || !Array.isArray(data.water_probes) || !Array.isArray(data.water_readings)) throw new Error('Invalid connection report');
+      snapshot=data;receivedAt=connectionResult.value.receivedAt;connectionFailed=false;firmware=fw;render();$('hardware-error').hidden=true;
     } catch(error) {
       set('hardware-error', `Connection details could not be refreshed. ${error.message}`);$('hardware-error').hidden=false;
       // Invalidate old green states immediately when the Pi cannot be reached.
-      if (snapshot) {snapshot.server_time = Math.max(Date.now()/1000,...snapshot.devices.map(d=>d.observed_at+9));snapshot.water_readings=[null,null];render();}
+      connectionFailed=true;
+      if (snapshot)render();
     } finally {
       busy=false;
       if(manual) {$('hardware-refresh').disabled=false;set('hardware-refresh','↻ Refresh connections');}
@@ -323,6 +472,16 @@ window.AogHardware = (() => {
       if(trigger) {event.preventDefault();openTool(trigger.dataset.hardwareJump);}
     });
     $('trace-back').addEventListener('click',backToSensors);
+    document.querySelectorAll('[data-inspection-view]').forEach(tab=>{
+      tab.addEventListener('click',()=>setInspectionView(tab.dataset.inspectionView));
+      tab.addEventListener('keydown',event=>{
+        if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+        event.preventDefault();
+        const view=event.key==='Home'?'wiring':event.key==='End'?'data':inspectionView==='wiring'?'data':'wiring';
+        setInspectionView(view,true);
+      });
+    });
+    $('trace-download').addEventListener('click',downloadSensor);
     narrowInspector.addEventListener('change',()=>{
       if(narrowInspector.matches && $('wiring-inspector').contains(document.activeElement))mobileInspectorOpen=true;
       renderFilter();renderWiring();
@@ -364,6 +523,11 @@ window.AogHardware = (() => {
       catch(error) {updateError=error.message;renderFirmware();}
     });
     setInterval(()=>{if (!document.hidden && (location.hash==='#connections' || firmware?.active)) refresh();},3000);
+    setInterval(()=>{
+      if(document.hidden || location.hash!=='#connections' || !snapshot)return;
+      if(lastFreshness!==snapshot.devices.map(d=>String(fresh(d))).join())render();
+      else renderReportAge();
+    },1000);
     select(selected);
     if(location.hash==='#connections') refresh();
   }
