@@ -2475,6 +2475,5 @@
     pollCameras();
     setTimeout(pollSettings, 15000);
   }
-  $('firmware-jump').addEventListener('click', event => {event.preventDefault();$('firmware-tools').focus();$('firmware-tools').scrollIntoView({behavior:'smooth',block:'start'});});
   boot();
 })();
