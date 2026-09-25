@@ -9,26 +9,46 @@ class Hardware(Device):
     def __init__(self):
         super().__init__()
         self.devices = [
-            {'device_id':'SENSORKIT_MK1','port':'/dev/ttyUSB1','observed_at':int(time.time()),'error':None,'fields':{'FIRMWARE_VERSION':'2.0.0','PROTOCOL_VERSION':'2','TEMP':'24.50C','HUM':'62%','DHT_STATUS':'ok','CO2':'820ppm','TVOC':'18ppb','CCS811_STATUS':'ok','CO2_ADC':'428','WATER_D6_STATUS':'not_detected','WATER_D8_STATUS':'not_detected','BUFFER_PENDING':'7','BUFFER_CAPACITY':'24','BUFFER_DROPPED':'0','UPTIME_S':'3900'}},
+            {'device_id':'SENSORKIT_MK1','port':'/dev/ttyUSB1','observed_at':int(time.time()),'error':None,'fields':{'FIRMWARE_VERSION':'2.0.0','PROTOCOL_VERSION':'2','TEMP':'24.50C','HUM':'62%','DHT_STATUS':'ok','CO2':'1200ppm','TVOC':'18ppb','CCS811_STATUS':'ok','CO2_ADC':'160','WATER_D6_STATUS':'not_detected','WATER_D8_STATUS':'not_detected','BUFFER_PENDING':'7','BUFFER_CAPACITY':'24','BUFFER_DROPPED':'0','UPTIME_S':'3900'}},
             {'device_id':'DUAL_OVF_SENSOR','port':'/dev/ttyUSB0','observed_at':int(time.time()),'error':None,'fields':{'FIRMWARE_VERSION':'2.0.0','PROTOCOL_VERSION':'2','T1_OVF':'NONE','T2_OVF':'OVERFLOW','PH':'6.85','PH_ADC':'313','PH_MV':'1528.3','PH_STATUS':'analog_unverified','WATER_D6_STATUS':'ok','WATER_D6':'21.50C','WATER_D6_ROM':'28010203040506AA','WATER_D8_STATUS':'crc_error','WATER_D8_ROM':'28010203040507BB','BUFFER_PENDING':'0','BUFFER_CAPACITY':'24','BUFFER_DROPPED':'2','UPTIME_S':'1200'}}]
         self.probes=[{'label':'Water · D6','source':None},{'label':'Water · D8','source':None}]
         self.firmware={'package':{'version':'2.0.0','protocol':2,'artifacts':[{'device':d,'board':'nano-old','fqbn':'arduino:avr:nano:cpu=atmega328old','file':f'{d}.hex','sha256':'a'*64} for d in ['SENSORKIT_MK1','DUAL_OVF_SENSOR']]},'updater_available':True,'active':False,'job':{'stage':'','message':''}}
+        self.co2_settings={'analog_model':'unidentified','primary_source':'ccs811','reference_mv':5000}
         self.hardware_error=False
+        self.firmware_error=False
         self.offline=set()
+    def sensor_history(self, hours):
+        data=super().sensor_history(hours)
+        data['series'][0]['source']='dfrobot_sen0219_analog' if self.co2_settings['primary_source']=='analog' else 'ccs811'
+        return data
     def route(self, route):
         path=urlparse(route.request.url).path
         def reply(data,status=200): route.fulfill(status=status,content_type='application/json',body=json.dumps(data))
+        if path=='/api/stats':
+            fields=self.devices[0]['fields'];analog=self.co2_settings['primary_source']=='analog'
+            mv=int(fields.get('CO2_ADC','0'))*self.co2_settings['reference_mv']/1024
+            co2=f'{(mv-400)*3.125}ppm' if analog and 400<=mv<=2000 else 'N/A' if analog else fields.get('CO2','N/A')
+            reply({'water_temp_d6':'21.50C','water_temp_d8':'22.10C','temp':'24.50C','hum':'62%','co2':co2,'co2_source':'dfrobot_sen0219_analog' if analog else 'ccs811','pm25':'4.2','pm10':'6.1','tvoc':'18ppb','t1_ovf':'NONE','t2_ovf':'NONE','overflow_error':False,'ph':'6.85','ph_status':None,'device_time':self.settings['device_time']});return
         if path=='/api/connections':
             if self.hardware_error: reply({'error':'USB diagnostics unavailable'},503);return
             for device in self.devices:
                 if device['device_id'] not in self.offline: device['observed_at']=int(time.time())
-            reply({'server_time':int(time.time()),'devices':self.devices,'water_probes':self.probes,'water_readings':[[21.5,int(time.time())],None],'retention_days':7});return
-        if path=='/api/firmware':reply(self.firmware);return
-        if path in ['/api/firmware/update','/api/water-probes']:
+            kit=self.devices[0];f=kit['fields'];fresh=0<=time.time()-kit['observed_at']<=5;v2=f.get('PROTOCOL_VERSION')=='2'
+            raw=f.get('CO2_ADC');adc=int(raw) if fresh and raw and raw.isdigit() and 0<=int(raw)<=1023 else None
+            ppm=float(f['CO2'].removesuffix('ppm')) if fresh and f.get('CO2') else None
+            mv=adc*self.co2_settings['reference_mv']/1024 if adc is not None else None
+            infrared=self.co2_settings['analog_model']=='dfrobot_sen0219_analog'
+            converted=(mv-400)*3.125 if infrared and mv is not None and 400<=mv<=2000 else None
+            primary=self.co2_settings['primary_source']=='analog'
+            diagnostic={'fresh':fresh,'source':'dfrobot_sen0219_analog' if primary else 'ccs811' if v2 else 'legacy_mixed','digital_eco2_ppm':ppm if v2 and f.get('CCS811_STATUS')=='ok' else None,'reported_ppm':ppm,'analog_adc':adc,'analog_co2_ppm':converted,'primary_ppm':converted if primary else ppm,'analog_millivolts':mv,'analog_status':'unavailable' if adc is None else 'near_ground' if adc<=1 else 'near_supply' if adc>=1022 else 'converted' if converted is not None else 'below_range' if infrared and mv<400 else 'above_range' if infrared else 'unidentified','assumed_reference_mv':self.co2_settings['reference_mv'],'compensation':'live' if f.get('DHT_STATUS')=='ok' else 'unavailable','startup_warmup':int(f.get('UPTIME_S','9999'))<1200}
+            reply({'server_time':int(time.time()),'devices':self.devices,'co2_diagnostics':diagnostic,'co2_settings':self.co2_settings,'water_probes':self.probes,'water_readings':[[21.5,int(time.time())],None],'retention_days':7});return
+        if path=='/api/firmware':reply({'error':'Package unavailable'} if self.firmware_error else self.firmware,503 if self.firmware_error else 200);return
+        if path in ['/api/firmware/update','/api/water-probes','/api/co2-settings']:
             assert route.request.method=='POST'
             assert route.request.headers.get('x-aog-csrf')=='browser-test-token'
             body=route.request.post_data_json;self.requests.append((path,body))
-            if path=='/api/water-probes':self.probes=body;reply({'saved':True})
+            if path=='/api/co2-settings':self.co2_settings=body;reply(body)
+            elif path=='/api/water-probes':self.probes=body;reply({'saved':True})
             else:
                 self.firmware['active']=True;self.firmware['job']={'stage':'draining','message':'Saving the Arduino’s buffered readings before reset'}
                 reply({'started':True},202)
@@ -40,12 +60,63 @@ def run(browser,width):
     navigate(page,'connections')
     expect(page.locator('#board-port')).to_have_text('/dev/ttyUSB1')
     expect(page.locator('#board-buffer')).to_have_text('7 / 24 readings')
-    expect(page.locator('#sensor-connections')).to_contain_text('Analog · unverified')
+    expect(page.locator('#sensor-connections')).to_contain_text('Unverified analog')
+    expect(page.locator('#gas-digital-value')).to_have_text('1,200')
+    expect(page.locator('#gas-analog-value')).to_have_text('160')
+    expect(page.locator('#gas-analog-voltage')).to_contain_text('0.781 V')
+    expect(page.locator('#gas-source-rule')).to_contain_text('never averaged')
+    expect(page.locator('[data-sensor=analog]')).not_to_contain_text('160ppm')
+    page.click('[data-trace=analog]')
+    expect(page.locator('#wiring-inspector')).to_be_focused()
+    expect(page.locator('#trace-title')).to_have_text('Analog gas input')
+    expect(page.locator('#wire-paths')).to_contain_text('Analog OUT')
+    page.locator('[data-pin-sensor=analog]').focus()
+    page.evaluate('window.AogHardware.refresh()')
+    expect(page.locator('[data-pin-sensor=analog]')).to_be_focused()
+    d.devices[0]['fields'].update(CO2='400ppm',DHT_STATUS='read_error',CO2_ADC='0')
+    page.click('#hardware-refresh')
+    expect(page.locator('#gas-digital-detail')).to_contain_text('reporting floor')
+    expect(page.locator('#gas-digital-detail')).to_contain_text('DHT error')
+    expect(page.locator('#gas-analog-value')).to_have_text('0')
+    expect(page.locator('#gas-analog-status')).to_have_text('Check signal voltage')
+    expect(page.locator('#map-health-kit')).to_contain_text('2 sensors need attention')
+    d.devices[0]['fields'].update(CO2='1200ppm',DHT_STATUS='ok',CO2_ADC='160')
+    page.click('#hardware-refresh')
+    page.click('#co2-settings-details summary')
+    page.select_option('#co2-model','dfrobot_sen0219_analog')
+    page.select_option('#co2-primary-source','analog')
+    page.fill('#co2-reference','4.900')
+    page.click('#hardware-refresh')
+    expect(page.locator('#co2-reference')).to_have_value('4.900')
+    page.click('#co2-save')
+    expect(page.locator('#co2-settings-result')).to_contain_text('CO₂ settings saved')
+    expect(page.locator('#gas-analog-primary')).to_have_text('1,143')
+    expect(page.locator('#gas-digital-value')).to_have_text('1,200')
+    page.fill('#co2-reference','5.000');page.click('#co2-save')
+    expect(page.locator('#gas-analog-primary')).to_have_text('1,191')
+    expect(page.locator('#gas-analog-unit')).to_have_text('ppm CO₂')
+    expect(page.locator('#gas-source-rule')).to_contain_text('DFRobot infrared CO₂')
+    expect(page.locator('[data-sensor=ccs] a')).to_have_count(0)
+    expect(page.locator('[data-sensor=analog] a')).to_have_count(1)
+    assert d.co2_settings=={'analog_model':'dfrobot_sen0219_analog','primary_source':'analog','reference_mv':5000}
+    d.devices[0]['fields']['CO2_ADC']='0';page.click('#hardware-refresh')
+    expect(page.locator('#gas-analog-primary')).to_have_text('—')
+    expect(page.locator('#gas-digital-value')).to_have_text('1,200')
+    d.devices[0]['fields']['CO2_ADC']='160';page.click('#hardware-refresh')
+    page.click('#co2-settings-details summary')
+    navigate(page,'overview')
+    expect(page.locator('#co2-value')).to_have_text('1,191')
+    expect(page.locator('#co2-source')).to_contain_text('DFRobot')
+    navigate(page,'connections')
     page.click('[data-board=DUAL_OVF_SENSOR]')
     expect(page.locator('#sensor-connections')).to_contain_text('crc error')
     expect(page.locator('#sensor-connections')).to_contain_text('DS18B20 family detected')
     expect(page.locator('#sensor-connections')).to_contain_text('Circuit open')
     expect(page.locator('#pin-d2-label')).to_have_text('Overflow switch 1')
+    page.click('[data-trace=overflow2]')
+    expect(page.locator('#wire-paths')).to_contain_text('D4')
+    expect(page.locator('#trace-help')).to_contain_text('cable continuity')
+    expect(page.locator('#gas-digital-value')).to_have_text('1,200')
     expect(page.locator('#board-dropped')).to_have_text('2 since board reset')
     page.fill('#water-label-0','Display tank')
     page.select_option('#water-source-0','DUAL_OVF_SENSOR')
@@ -77,15 +148,45 @@ def run(browser,width):
     d.hardware_error=False;d.devices[1]['observed_at']=int(time.time());d.devices[0]['observed_at']=int(time.time());d.firmware['active']=False;d.firmware['job']={'stage':'complete','message':'Firmware verified. Schedules remain paused.'}
     page.click('#hardware-refresh')
     expect(page.locator('#board-status')).to_have_text('USB reporting')
-    # No unbounded page overflow on narrow screens; only the labelled diagram scrolls.
+    # An independent firmware API failure must not turn healthy USB links offline.
+    d.firmware_error=True
+    page.click('#hardware-refresh')
+    expect(page.locator('#board-status')).to_have_text('USB reporting')
+    expect(page.locator('#firmware-install')).to_be_disabled()
+    expect(page.locator('#firmware-tool')).to_contain_text('could not be refreshed')
+    d.firmware_error=False
+    d.devices[0]['observed_at']=int(time.time())-100;d.offline.add('SENSORKIT_MK1')
+    page.click('#hardware-refresh')
+    expect(page.locator('#gas-digital-value')).to_have_text('—')
+    expect(page.locator('#gas-analog-value')).to_have_text('—')
+    d.offline.clear();d.devices[0]['fields']['PROTOCOL_VERSION']='1';d.co2_settings['primary_source']='ccs811'
+    page.click('#hardware-refresh')
+    expect(page.locator('#gas-digital-value')).to_have_text('—')
+    expect(page.locator('#gas-source-rule')).to_contain_text('Legacy firmware supplies a mixed')
+    d.devices[0]['fields']['PROTOCOL_VERSION']='2';d.co2_settings['primary_source']='analog'
+    page.click('[data-board=SENSORKIT_MK1]');page.click('#hardware-refresh')
+    # The complete topology and wiring guide fit narrow screens without panning.
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
     output=Path(os.environ.get('AOG_UI_ARTIFACTS','/tmp/aog-ui-hardware'));output.mkdir(parents=True,exist_ok=True)
-    page.screenshot(path=str(output/f'connections-{width}.png'),full_page=True)
+    page.screenshot(path=str(output/f'connections-{width}.png'),full_page=width>600,animations="disabled",timeout=60000)
+    if width<=600:
+        page.locator('.co2-diagnostics').scroll_into_view_if_needed()
+        page.screenshot(path=str(output/f'co2-{width}.png'),animations="disabled",timeout=60000)
+        page.locator('#wiring-inspector').scroll_into_view_if_needed()
+        page.screenshot(path=str(output/f'wiring-{width}.png'),animations="disabled",timeout=60000)
+    if os.environ.get('AOG_AXE_PATH'):
+        page.add_script_tag(path=os.environ['AOG_AXE_PATH'])
+        issues=page.evaluate("async () => (await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))}))")
+        assert not issues,issues
+        print(f'Accessibility passed at {width}px',flush=True)
     navigate(page,'history');page.click('[data-history-sensor=water_temp_d6]')
     expect(page.locator('#history-card-water_temp_d6')).to_be_visible()
     expect(page.locator('#history-value-water_temp_d6')).not_to_have_text('—')
+    page.click('[data-history-sensor=co2]')
+    expect(page.locator('#history-detail-co2')).to_contain_text('Average is over saved samples')
     assert not errors,errors
     context.close()
+    print(f'Connection and CO₂ workflows passed at {width}px',flush=True)
 
 if __name__=='__main__':
     with sync_playwright() as p:

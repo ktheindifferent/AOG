@@ -39,6 +39,8 @@ pub struct DeviceRecord {
     pub received_at: i64,
     pub time_quality: String,
     pub fields: BTreeMap<String, String>,
+    #[serde(default)]
+    pub co2: Option<super::co2::Reading>,
 }
 struct StoreState {
     records: Vec<DeviceRecord>,
@@ -191,6 +193,7 @@ pub fn absorb(
         received_at: now(),
         time_quality: quality.into(),
         fields: raw.clone(),
+        co2: (device == DEVICES[0]).then(|| super::co2::reading(raw, &super::co2::settings(directory), timestamp)),
     };
     let logs = directory.join("device_logs/v2");
     fs::create_dir_all(&logs)?;
@@ -261,6 +264,7 @@ pub struct ReplaySample {
     pub timestamp: i64,
     pub values: [Option<f64>; 8],
     pub ph: Option<f32>,
+    pub co2_source: Option<String>,
 }
 // Charts copy compact numeric samples, not thousands of raw frame strings.
 pub fn samples(directory: &Path, start: i64, end: i64) -> Vec<ReplaySample> {
@@ -280,7 +284,8 @@ pub fn samples(directory: &Path, start: i64, end: i64) -> Vec<ReplaySample> {
             };
             let mut values = [None; 8];
             if r.device_id == DEVICES[0] {
-                values[0] = parse("CO2", "ppm", 0.0, 1_000_000.0);
+                values[0] = r.co2.as_ref().map_or_else(|| parse("CO2", "ppm", 0.0, 1_000_000.0), |v| v.value)
+                    .filter(|v| v.is_finite() && (0.0..=1_000_000.0).contains(v));
                 values[1] = parse("TVOC", "ppb", 0.0, 100_000.0);
                 values[4] = parse("TEMP", "C", -80.0, 85.0);
                 values[5] = parse("HUM", "%", 0.0, 100.0);
@@ -292,6 +297,9 @@ pub fn samples(directory: &Path, start: i64, end: i64) -> Vec<ReplaySample> {
                 timestamp: r.timestamp,
                 values,
                 ph: parse("PH", "", 0.0, 14.0).map(|n| n as f32),
+                co2_source: (r.device_id == DEVICES[0]).then(|| r.co2.as_ref().map(|v| v.source.clone()).unwrap_or_else(|| {
+                    if r.fields.get("PROTOCOL_VERSION").is_some_and(|v| v == "2") { "ccs811" } else { "legacy_unattributed" }.into()
+                })),
             }
         })
         .collect()
@@ -421,6 +429,33 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].time_quality, "estimated_from_uptime");
         assert!((now() - rows[0].timestamp - 120).abs() < 2);
+    }
+    #[test]
+    fn recovered_history_uses_reported_co2_without_averaging_adc_counts() {
+        let dir = tempfile::tempdir().unwrap(); let mut frame = replay();
+        frame.insert("CO2".into(), "1200ppm".into());
+        frame.insert("CO2_ADC".into(), "160".into());
+        absorb(dir.path(), DEVICES[0], &frame).unwrap();
+        let rows = samples(dir.path(), now() - 180, now());
+        assert_eq!(rows.len(), 1); assert_eq!(rows[0].values[0], Some(1200.0));
+        frame.insert("SEQ".into(), "2".into()); frame.remove("CO2");
+        absorb(dir.path(), DEVICES[0], &frame).unwrap();
+        let rows = samples(dir.path(), now() - 180, now());
+        assert_eq!(rows[1].values[0], None);
+    }
+    #[test]
+    fn recovered_infrared_co2_keeps_its_conversion_after_settings_change() {
+        let dir = tempfile::tempdir().unwrap(); let mut frame = replay();
+        let config = super::super::co2::Settings { analog_model: super::super::co2::ANALOG_SOURCE.into(), reference_mv: 5000, primary_source: "analog".into() };
+        super::super::co2::save_settings(dir.path(), &config).unwrap();
+        frame.insert("CO2".into(), "400ppm".into()); frame.insert("CO2_ADC".into(), "160".into());
+        absorb(dir.path(), DEVICES[0], &frame).unwrap();
+        super::super::co2::save_settings(dir.path(), &super::super::co2::Settings::default()).unwrap();
+        STORES.lock().unwrap().remove(dir.path());
+        absorb(dir.path(), DEVICES[0], &frame).unwrap(); // duplicate must not be reinterpreted
+        let rows = samples(dir.path(), now()-180, now());
+        assert_eq!(rows.len(), 1); assert_eq!(rows[0].values[0], Some(1191.40625));
+        assert_eq!(rows[0].co2_source.as_deref(), Some(super::super::co2::ANALOG_SOURCE));
     }
     #[test]
     fn failed_storage_never_acknowledges() {

@@ -95,6 +95,10 @@ pub(super) fn current_readings(directory: &Path) -> [(&'static str, Option<f64>)
 }
 
 fn read_latest(directory: &Path, metric: &Metric) -> Option<(f64, i64)> {
+    if metric.key == "co2" {
+        let reading = super::co2::current(directory)?;
+        return reading.value.map(|v| (v, reading.observed_at));
+    }
     if metric.key.starts_with("water_temp_") {
         return super::device_link::water_reading(directory, if metric.key.ends_with('6') {6} else {8});
     }
@@ -128,6 +132,8 @@ pub struct Sample {
     pub timestamp: i64,
     #[serde(deserialize_with = "read_values")]
     pub values: [Option<f64>; 8],
+    #[serde(default)]
+    pub co2_source: Option<String>,
 }
 
 // Existing installed environmental history is retained. This schema version is
@@ -141,6 +147,21 @@ fn read_values<'de, D: serde::Deserializer<'de>>(d: D) -> Result<[Option<f64>; 8
 #[cfg(test)]
 mod replay_tests {
     use super::*;
+    #[test]
+    fn infrared_average_excludes_ccs811_and_preserves_original_export_values() {
+        let root = tempfile::tempdir().unwrap(); let now = Utc::now();
+        let history = SensorHistory::new(root.path());
+        let config = super::super::co2::Settings { analog_model: super::super::co2::ANALOG_SOURCE.into(), reference_mv: 5000, primary_source: "analog".into() };
+        super::super::co2::save_settings(root.path(), &config).unwrap();
+        history.state.lock().unwrap().samples.extend([
+            Sample { timestamp: now.timestamp()-120, values: [Some(400.0),None,None,None,None,None,None,None], co2_source: Some("ccs811".into()) },
+            Sample { timestamp: now.timestamp()-60, values: [Some(1200.0),None,None,None,None,None,None,None], co2_source: Some(super::super::co2::ANALOG_SOURCE.into()) },
+        ]);
+        let snapshot = history.snapshot(1);
+        assert_eq!(snapshot.series[0].average, Some(1200.0)); assert_eq!(snapshot.series[0].count, 1);
+        let export = history.export(now.timestamp()-3600, now.timestamp(), false, "Test");
+        assert_eq!(export.samples[0].values[0], Some(400.0)); assert_eq!(export.samples[1].values[0], Some(1200.0));
+    }
     #[test] fn preserves_existing_six_column_history() {
         let sample: Sample=serde_json::from_str(r#"{"timestamp":123,"values":[800,10,2,3,24,60]}"#).unwrap();
         assert_eq!(sample.values,[Some(800.0),Some(10.0),Some(2.0),Some(3.0),Some(24.0),Some(60.0),None,None]);
@@ -191,6 +212,7 @@ pub struct Series {
     maximum: Option<f64>,
     average: Option<f64>,
     points: Vec<Point>,
+    source: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -215,6 +237,7 @@ pub struct CurrentReadings {
     pub timestamp: i64,
     pub values: [Option<f64>; 8],
     pub observed_at: [Option<i64>; 8],
+    pub co2_source: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -230,6 +253,7 @@ pub struct AirQualityExport {
     pub current: Option<CurrentReadings>,
     pub samples: Vec<Sample>,
     pub error: Option<String>,
+    pub co2_source: String,
 }
 
 fn log_date(path: &Path) -> Option<NaiveDate> {
@@ -331,9 +355,11 @@ impl SensorHistory {
         // Serialize recorders without holding the history snapshot lock during
         // filesystem I/O. Exports remain available during a slow or failed save.
         let _recording = self.recording.lock().unwrap_or_else(|error| error.into_inner());
+        let co2 = super::co2::current(&self.directory);
         let sample = Sample {
             timestamp: now.timestamp(),
-            values: std::array::from_fn(|index| self.read_value(&METRICS[index])),
+            values: std::array::from_fn(|index| if index == 0 { co2.as_ref().and_then(|r| r.value) } else { self.read_value(&METRICS[index]) }),
+            co2_source: co2.map(|r| r.source),
         };
         let cutoff = now - chrono::Duration::hours(RETENTION_HOURS);
         {
@@ -433,7 +459,7 @@ impl SensorHistory {
         for record in super::device_link::samples(&self.directory, Utc::now().timestamp()-RETENTION_HOURS*3600, Utc::now().timestamp()) {
             let bucket = record.timestamp / 60;
             let index = *buckets.entry(bucket).or_insert_with(|| {
-                samples.push(Sample {timestamp: record.timestamp, values: [None; 8]}); samples.len()-1
+                samples.push(Sample {timestamp: record.timestamp, values: [None; 8], co2_source: None}); samples.len()-1
             });
             for column in [0,1,4,5,6,7] {
                 if column < 6 && record.device_id != "SENSORKIT_MK1" {continue;}
@@ -443,7 +469,10 @@ impl SensorHistory {
                     let source = sources.entry((bucket,column)).or_insert_with(|| record.device_id.clone());
                     if source != &record.device_id { *source = "ambiguous".into(); samples[index].values[column] = None; continue; }
                 }
-                if samples[index].values[column].is_none() {samples[index].values[column] = value;}
+                if samples[index].values[column].is_none() {
+                    samples[index].values[column] = value;
+                    if column == 0 {samples[index].co2_source = record.co2_source.clone();}
+                }
             }
         }
         samples.sort_by_key(|s| s.timestamp);
@@ -467,12 +496,14 @@ impl SensorHistory {
         let error = state.error.clone();
         drop(state);
         let current = include_current.then(|| {
+            let co2 = super::co2::current(&self.directory);
             let readings: [Option<(f64, i64)>; 8] =
-                std::array::from_fn(|index| self.read_latest(&METRICS[index]));
+                std::array::from_fn(|index| if index == 0 { co2.as_ref().and_then(|r| r.value.map(|v| (v,r.observed_at))) } else { self.read_latest(&METRICS[index]) });
             CurrentReadings {
                 timestamp: Utc::now().timestamp(),
                 values: std::array::from_fn(|index| readings[index].map(|reading| reading.0)),
                 observed_at: std::array::from_fn(|index| readings[index].map(|reading| reading.1)),
+                co2_source: co2.map(|r| r.source),
             }
         });
         AirQualityExport {
@@ -494,6 +525,7 @@ impl SensorHistory {
             current,
             samples,
             error,
+            co2_source: super::co2::settings(&self.directory).source().into(),
         }
     }
 
@@ -502,7 +534,13 @@ impl SensorHistory {
         let hours = hours.clamp(1, RETENTION_HOURS as u64);
         let start = now - hours as i64 * 3600;
         let current = current_readings(&self.directory);
-        let combined = self.combined_samples();
+        let mut combined = self.combined_samples();
+        let co2_source = super::co2::settings(&self.directory).source().to_owned();
+        // Keep original records in storage and exports, but never dilute an
+        // infrared CO2 average with CCS811 eCO2 or legacy mixed samples.
+        for sample in &mut combined {
+            if !super::co2::source_matches(sample.co2_source.as_deref(), &co2_source) { sample.values[0] = None; }
+        }
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let samples: Vec<_> = combined.iter()
             .filter(|sample| (start..=now).contains(&sample.timestamp))
@@ -526,6 +564,7 @@ impl SensorHistory {
                     sample.timestamp <= now
                         && now - sample.timestamp <= SAMPLE_SECONDS as i64 * 2
                         && sample.values[index].is_some()
+                        && (index != 0 || super::co2::source_matches(sample.co2_source.as_deref(), &co2_source))
                 });
                 let points = samples
                     .iter()
@@ -546,6 +585,7 @@ impl SensorHistory {
                     average: (!values.is_empty())
                         .then(|| values.iter().sum::<f64>() / values.len() as f64),
                     points: chart_points(&points, start, now),
+                    source: (index == 0).then(|| co2_source.clone()),
                 }
             })
             .collect();

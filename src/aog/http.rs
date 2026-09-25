@@ -341,7 +341,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
     let body = if request.method() == "POST" && matches!(request.url().as_str(),
         "/api/settings" | "/api/account/password" | "/api/ph/calibrate"
             | "/api/ph/calibration/remove" | "/api/outputs/start" | "/api/outputs/stop"
-            | "/api/water-probes" | "/api/firmware/update"
+            | "/api/water-probes" | "/api/firmware/update" | "/api/co2-settings"
     ) {
         match json_body::<serde_json::Value>(request) {
             Ok(body) => Some(body),
@@ -451,6 +451,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
         request.url().as_str(),
         "/api/settings"
             | "/api/connections"
+            | "/api/co2-settings"
             | "/api/device-logs"
             | "/api/water-probes"
             | "/api/firmware"
@@ -560,6 +561,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
             pm25: String,
             pm10: String,
             co2: String,
+            co2_source: String,
             tvoc: String,
             temp: String,
             hum: String,
@@ -586,6 +588,7 @@ fn handle_web_request(request: &Request, state: &WebState, www_root: &Path) -> R
         let overflow_error = overflow.contains(&aog::sensors::OverflowReading::Unavailable);
         let response = Response::json(&WebApiStats {
             co2: value("co2", "ppm"),
+            co2_source: aog::co2::diagnostics_configured(&aog::device_link::statuses(&state.directory), aog::device_link::now(), &aog::co2::settings(&state.directory)).source.into(),
             tvoc: value("tvoc", "ppb"),
             temp: value("temp", "C"),
             hum: value("hum", "%"),
@@ -698,13 +701,20 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
     let path = request.url();
     if request.method() == "GET" {
         return match path.as_str() {
-            "/api/connections" => Response::json(&serde_json::json!({
-                "server_time": aog::device_link::now(),
-                "devices": aog::device_link::statuses(&state.directory),
+            "/api/connections" => {
+                let now = aog::device_link::now();
+                let devices = aog::device_link::statuses(&state.directory);
+                let co2_settings = aog::co2::settings(&state.directory);
+                Response::json(&serde_json::json!({
+                "server_time": now,
+                "co2_diagnostics": aog::co2::diagnostics_configured(&devices, now, &co2_settings),
+                "co2_settings": co2_settings,
+                "devices": devices,
                 "water_probes": aog::device_link::water_config(&state.directory),
                 "water_readings": [aog::device_link::water_reading(&state.directory,6),aog::device_link::water_reading(&state.directory,8)],
                 "retention_days": 7
-            })).with_no_cache(),
+            })).with_no_cache()
+            },
             "/api/device-logs" => Response::json(&serde_json::json!({"schema_version":2,
                 "records":aog::device_link::records(&state.directory,aog::device_link::now()-7*86400,aog::device_link::now())
             })).with_additional_header("Content-Disposition","attachment; filename=\"aog-device-logs.json\"").with_no_cache(),
@@ -744,6 +754,13 @@ fn handle_dashboard_api(request: &Request, state: &WebState, config: &mut Config
         return match aog::device_link::save_water_config(&state.directory,probes) {
             Ok(())=>Response::json(&serde_json::json!({"saved":true})).with_no_cache(),
             Err(e)=>api_error(if e.kind()==std::io::ErrorKind::InvalidInput {400} else {500},e)
+        };
+    }
+    if path == "/api/co2-settings" {
+        let input = match json_input::<aog::co2::Settings>(&body) { Ok(v) => v, Err(r) => return r };
+        return match aog::co2::save_settings(&state.directory, &input) {
+            Ok(()) => Response::json(&input).with_no_cache(),
+            Err(e) => api_error(if e.kind() == std::io::ErrorKind::InvalidInput {400} else {500}, e),
         };
     }
     if path == "/api/firmware/update" {
@@ -988,7 +1005,7 @@ mod tests {
             assert_eq!(handle_web_request(&request,&state,root.path()).status_code,401);
         }
         let (cookie,csrf)=authenticated(&state);
-        for path in ["/api/water-probes","/api/firmware/update"] {
+        for path in ["/api/water-probes","/api/firmware/update","/api/co2-settings"] {
             let request=json_request(path,Some(&cookie),None,serde_json::json!({}));
             assert_eq!(handle_web_request(&request,&state,root.path()).status_code,403);
         }
@@ -1000,8 +1017,43 @@ mod tests {
         let data=json_response(handle_web_request(&request,&state,root.path()));
         assert_eq!(data["water_probes"][0]["label"],"Display tank");
         assert_eq!(data["devices"].as_array().unwrap().len(),2);
+        assert_eq!(data["co2_diagnostics"]["source"],"unknown");
         let request=web_request("GET","/api/firmware/download?file=../../data.json",Some(&cookie),"");
         assert_eq!(handle_web_request(&request,&state,root.path()).status_code,404);
+    }
+    #[test]
+    fn connection_diagnostics_and_dashboard_keep_raw_adc_out_of_co2() {
+        let root = tempfile::tempdir().unwrap(); let state = state(root.path());
+        let (cookie, _) = authenticated(&state);
+        aog::device_link::save_status(root.path(), &aog::device_link::DeviceStatus {
+            device_id: "SENSORKIT_MK1".into(), port: "/dev/ttyUSB2".into(),
+            observed_at: aog::device_link::now(), error: None,
+            fields: aog::device_link::fields("PROTOCOL_VERSION: 2\nCCS811_STATUS: ok\nCO2: 1200ppm\nCO2_ADC: 160\nDHT_STATUS: ok")
+        }).unwrap();
+        std::fs::write(root.path().join("sensors/co2"), "1200ppm").unwrap();
+        let request = web_request("GET", "/api/connections", Some(&cookie), "");
+        let data = json_response(handle_web_request(&request, &state, root.path()));
+        assert_eq!(data["co2_diagnostics"]["digital_eco2_ppm"], 1200.0);
+        assert_eq!(data["co2_diagnostics"]["analog_adc"], 160);
+        assert_eq!(data["co2_diagnostics"]["analog_millivolts"], 781.25);
+        let request = web_request("GET", "/api/stats", Some(&cookie), "");
+        let data = json_response(handle_web_request(&request, &state, root.path()));
+        assert_eq!(data["co2"], "1200ppm"); assert_eq!(data["co2_source"], "ccs811");
+    }
+    #[test]
+    fn configured_analog_source_reaches_dashboard_without_mixing_digital() {
+        let root = tempfile::tempdir().unwrap(); let state = state(root.path());
+        let (cookie, csrf) = authenticated(&state);
+        let request = json_request("/api/co2-settings", Some(&cookie), Some(&csrf), serde_json::json!({"analog_model":"dfrobot_sen0219_analog","reference_mv":5000,"primary_source":"analog"}));
+        assert_eq!(handle_web_request(&request, &state, root.path()).status_code, 200);
+        let frame = aog::device_link::fields("PROTOCOL_VERSION: 2\nCO2: 1400ppm\nCCS811_STATUS: ok\nCO2_ADC: 160");
+        aog::co2::publish(&root.path().join("sensors"), &frame).unwrap();
+        aog::device_link::save_status(root.path(), &aog::device_link::DeviceStatus { device_id: "SENSORKIT_MK1".into(), port: "test".into(), observed_at: aog::device_link::now(), error: None, fields: frame }).unwrap();
+        let request = web_request("GET", "/api/stats", Some(&cookie), "");
+        let data = json_response(handle_web_request(&request, &state, root.path()));
+        assert_eq!(data["co2"], "1191.40625ppm"); assert_eq!(data["co2_source"], "dfrobot_sen0219_analog");
+        let request = json_request("/api/co2-settings", Some(&cookie), Some(&csrf), serde_json::json!({"analog_model":"unidentified","reference_mv":5000,"primary_source":"analog"}));
+        assert_eq!(handle_web_request(&request, &state, root.path()).status_code, 400);
     }
     #[test]
     fn login_cookie_authenticates_later_requests_and_logout_revokes_it() {

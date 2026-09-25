@@ -462,8 +462,12 @@ fn save_frame(directory: &Path, device: &str, frame: &str) -> io::Result<bool> {
         Ok(true)
     } else {
         let mut saved = false;
+        let co2 = super::co2::publish(directory, &super::device_link::fields(frame))?;
+        if let Some(value) = co2.value {
+            write_sensor(directory, "co2", &format!("{value}ppm"))?;
+            saved = true;
+        }
         for (key, name, unit, min, max) in [
-            ("CO2", "co2", "ppm", 0.0, 1_000_000.0),
             ("TVOC", "tvoc", "ppb", 0.0, 100_000.0),
             ("TEMP", "temp", "C", -80.0, 85.0),
             ("HUM", "hum", "%", 0.0, 100.0),
@@ -811,6 +815,16 @@ mod serial_tests {
         assert_eq!(super::super::device_link::records(root.path(), 0, super::super::device_link::now()).len(), 1);
         // Historical traffic does not extend the deadline for live safety data.
         assert!(reader.poll(Ok(log), now + STALE_TIMEOUT).is_err());
+    }
+
+    #[test]
+    fn analog_adc_never_changes_the_live_digital_co2_value() {
+        let directory = TempDir::new().unwrap();
+        save_frame(directory.path(), ENVIRONMENT_DEVICE, "PROTOCOL_VERSION: 2\nCO2: 1200ppm\nCO2_ADC: 160").unwrap();
+        assert_eq!(fs::read_to_string(directory.path().join("co2")).unwrap(), "1200ppm");
+        // A digital outage does not promote the raw analog input to ppm.
+        save_frame(directory.path(), ENVIRONMENT_DEVICE, "PROTOCOL_VERSION: 2\nCCS811_STATUS: unavailable\nCO2_ADC: 180").unwrap();
+        assert_eq!(fs::read_to_string(directory.path().join("co2")).unwrap(), "1200ppm");
     }
 
     #[test]

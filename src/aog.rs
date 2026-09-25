@@ -42,6 +42,7 @@ pub mod error_monitor;
 pub mod qwiic;
 pub mod auth;
 pub mod ph_sensor;
+pub mod co2;
 pub mod instance;
 
 #[cfg(test)]

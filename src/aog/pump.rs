@@ -85,7 +85,10 @@ impl Default for PumpThread {
 // Helper function to check if pump should run based on photo cycle
 fn is_within_photo_cycle(start: u8, end: u8) -> bool {
     let current_hour = Local::now().hour() as u8;
-    
+    is_within_photo_cycle_at(start, end, current_hour)
+}
+
+fn is_within_photo_cycle_at(start: u8, end: u8, current_hour: u8) -> bool {
     if start < end {
         // Normal case: start=6, end=22 means run from 6am to 10pm
         current_hour >= start && current_hour < end
@@ -697,12 +700,10 @@ mod tests {
 
     #[test]
     fn test_photo_cycle_logic() {
-        // Test normal day cycle (6am to 10pm)
-        assert!(is_within_photo_cycle(6, 22));
-        
-        // Test overnight cycle (10pm to 6am)  
-        // Note: This will depend on actual time, so we just test the logic exists
-        let _ = is_within_photo_cycle(22, 6);
+        for hour in 0..24 {
+            assert_eq!(is_within_photo_cycle_at(6, 22, hour), (6..22).contains(&hour));
+            assert_eq!(is_within_photo_cycle_at(22, 6, hour), !(6..22).contains(&hour));
+        }
     }
 
     #[test]

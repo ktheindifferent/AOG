@@ -699,7 +699,8 @@
     metric('water-d6-value', data.water_temp_d6 || 'N/A', '°C');
     metric('water-d8-value', data.water_temp_d8 || 'N/A', '°C');
     metric('humidity-value', data.hum, '%');
-    metric('co2-value', data.co2);
+    metric('co2-value', Math.round(Number.parseFloat(data.co2)));
+    text('co2-source', data.co2_source === 'dfrobot_sen0219_analog' ? 'DFRobot · infrared CO₂' : data.co2_source === 'ccs811' ? 'CCS811 · equivalent CO₂ estimate' : data.co2_source === 'legacy_mixed' ? 'Legacy firmware · mixed estimate' : 'ppm · source unconfirmed');
     text('pm25-value', data.pm25 === 'N/A' ? 'Unavailable' : data.pm25);
     text('pm10-value', data.pm10 === 'N/A' ? 'Unavailable' : data.pm10);
     text('tvoc-value', data.tvoc === 'N/A' ? 'Unavailable' : data.tvoc);
@@ -1147,7 +1148,7 @@
       text(`history-min-${key}`, historyNumber(series && series.minimum, metric));
       text(`history-average-${key}`, historyNumber(series && series.average, metric));
       text(`history-max-${key}`, historyNumber(series && series.maximum, metric));
-      text(`history-detail-${key}`, series ? `${series.count.toLocaleString()} readings in this range. ${latest ? `Last sample ${dateText(latest.timestamp)}.` : 'No valid sample recorded yet.'}` : error ? 'No saved readings loaded for this range.' : `Loading saved readings for ${historyRangeLabel().toLowerCase()}.`);
+      text(`history-detail-${key}`, (series ? `${series.count.toLocaleString()} readings in this range. ${latest ? `Last sample ${dateText(latest.timestamp)}.` : 'No valid sample recorded yet.'}` : error ? 'No saved readings loaded for this range.' : `Loading saved readings for ${historyRangeLabel().toLowerCase()}.`) + (key === 'co2' ? ` Average is over saved samples in this time range. ${series?.source==='dfrobot_sen0219_analog'?'DFRobot infrared CO₂ samples only; CCS811 and legacy readings are excluded.':'CCS811 eCO₂ / legacy readings; infrared samples are excluded.'}` : ''));
       $(`history-empty-${key}`).hidden = points.length > 0;
       svg.toggleAttribute('hidden', points.length === 0);
       if (!points.length) {

@@ -21,7 +21,7 @@ Only live frames update overflow and pH files. Replayed “clear” overflow nev
 
 Journals: `/opt/aog/device_logs/v2/`, retained seven days. Pi history: `/opt/aog/sensor_history/v2/`; original six-column `sensor_history/v1/` files remain readable. These schema names are unrelated to the removed Python application.
 
-`GET /api/device-logs` exports raw records and time quality. `GET /api/history` and reports include recovered temperatures. D6/D8 chart keys stay fixed when display names change.
+`GET /api/device-logs` exports raw records and time quality. Controller 2.0.1 also attaches a `co2` object to newly absorbed Sensor Kit records, storing the selected source, derived value, ADC reference and observation time. The original Arduino fields remain unchanged. Replaying the same identity after a source/reference change keeps its first stored conversion. Pi history carries `co2_source`; infrared statistics exclude older CCS811/legacy samples, which remain in full CSV/JSON exports. `GET /api/history` and reports include recovered temperatures. D6/D8 chart keys stay fixed when display names change.
 
 ## Managed updates
 
