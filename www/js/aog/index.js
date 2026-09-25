@@ -28,6 +28,8 @@
     formBaselines: new Map(),
     formConflicts: new Map(),
     activePage: null,
+    settingsView: 'focused',
+    historyView: 'charts',
     outputsRequest: 0,
     outputActionRequest: 0,
     outputPending: new Map(),
@@ -244,7 +246,25 @@
   function focusSettingsSection(section) {
     const heading = $(settingsSections[section]).querySelector('h2');
     heading.focus({preventScroll: true});
-    heading.scrollIntoView({block: 'start', behavior: 'instant'});
+    (state.settingsView === 'focused' ? $('page-settings') : heading).scrollIntoView({block: 'start', behavior: 'instant'});
+  }
+
+  function renderSettingsView() {
+    const route = currentRoute();
+    const selected = route.page === 'settings' ? route.section || 'relays' : 'relays';
+    for (const [section, id] of Object.entries(settingsSections)) {
+      $(id).hidden = state.settingsView === 'focused' && section !== selected;
+    }
+    document.querySelectorAll('[data-settings-section]').forEach(link => {
+      if (link.dataset.settingsSection === selected) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('[data-settings-view]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.settingsView === state.settingsView));
+    });
+    text('settings-view-help', state.settingsView === 'focused'
+      ? 'Choose a section. Your unsaved edits stay here as you move between sections.'
+      : 'All five sections are open. Use the section links to jump to a form.');
   }
 
   function focusHistorySelection() {
@@ -279,10 +299,7 @@
     text('page-title', pageCopy[page][0]);
     text('page-description', pageCopy[page][1]);
     document.title = `AOG · ${pageCopy[page][0]}`;
-    document.querySelectorAll('[data-settings-section]').forEach(link => {
-      if (link.dataset.settingsSection === section) link.setAttribute('aria-current', 'location');
-      else link.removeAttribute('aria-current');
-    });
+    renderSettingsView();
     if (page === 'settings' && section) {
       focusSettingsSection(section);
     } else if (page === 'overview' && section === 'ph') {
@@ -1102,6 +1119,12 @@
       card.style.setProperty('--sensor-color', metric.color);
       card.innerHTML = `<div class="panel-heading"><div><span class="eyebrow">${metric.unit}</span><h2>${metric.label} over time</h2></div><span id="history-status-${metric.key}" class="badge neutral">Waiting</span></div><div class="history-latest"><strong id="history-value-${metric.key}">—</strong><span>Last recorded · ${metric.unit}</span></div><div class="chart-interaction"><div class="chart-wrap"><svg id="history-chart-${metric.key}" class="sensor-chart-svg" viewBox="0 0 500 230" role="img" tabindex="0" aria-label="${metric.label} readings over time"></svg><div id="history-empty-${metric.key}" class="chart-empty">Loading history…</div><output id="history-tooltip-${metric.key}" class="chart-tooltip" aria-hidden="true" aria-live="off" hidden></output></div><div class="chart-step-buttons"><button type="button" class="button quiet" data-chart-step="-1" aria-label="Previous ${metric.label} reading" aria-describedby="history-reading-${metric.key}" disabled>← Previous</button><button type="button" class="button quiet" data-chart-step="1" aria-label="Next ${metric.label} reading" aria-describedby="history-reading-${metric.key}" disabled>Next →</button></div><output id="history-reading-${metric.key}" class="chart-reading" aria-live="off">No readings to inspect.</output><span class="sr-only chart-announcement" role="status"></span></div><dl class="history-stats"><div><dt>Minimum</dt><dd id="history-min-${metric.key}">—</dd></div><div><dt>Average</dt><dd id="history-average-${metric.key}">—</dd></div><div><dt>Maximum</dt><dd id="history-max-${metric.key}">—</dd></div></dl><p id="history-detail-${metric.key}" class="helper">Waiting for readings</p>`;
       $('history-cards').append(card);
+      const openChart = document.createElement('a');
+      openChart.className = 'history-open-chart text-link';
+      openChart.href = `#history/${metric.key}`;
+      openChart.textContent = 'Inspect chart →';
+      openChart.setAttribute('aria-label', `Inspect ${metric.label} chart`);
+      card.append(openChart);
       card.querySelector('h2').id = `history-title-${metric.key}`;
       card.querySelector('h2').tabIndex = -1;
       const chart = $(`history-chart-${metric.key}`);
@@ -1116,6 +1139,13 @@
   function renderHistory() {
     const route = currentRoute();
     const selected = route.page === 'history' ? route.section : null;
+    const summary = !selected && state.historyView === 'summary';
+    $('history-cards').dataset.view = summary ? 'summary' : 'charts';
+    $('history-view-controls').hidden = Boolean(selected);
+    $('history-summary-help').hidden = !summary;
+    document.querySelectorAll('[data-history-view]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.historyView === state.historyView));
+    });
     $('history-cards').classList.toggle('single-sensor', Boolean(selected));
     document.querySelectorAll('[data-history-sensor]').forEach(link => {
       if (link.dataset.historySensor === (selected || '')) link.setAttribute('aria-current', 'location');
@@ -1139,6 +1169,7 @@
       : error ? 'History could not be loaded. Retry history or choose another range.' : 'Waiting for saved history…');
     for (const metric of historyMetrics) {
       const key = metric.key;
+      text(`history-title-${key}`, summary ? metric.label : `${metric.label} over time`);
       $(`history-card-${key}`).hidden = Boolean(selected && selected !== key);
       if (selected && selected !== key) {
         hideChartInspection($(`history-chart-${key}`), $(`history-tooltip-${key}`));
@@ -1162,6 +1193,7 @@
       text(`history-average-${key}`, historyNumber(series && series.average, metric));
       text(`history-max-${key}`, historyNumber(series && series.maximum, metric));
       text(`history-detail-${key}`, (series ? `${series.count.toLocaleString()} readings in this range. ${latest ? `Last sample ${dateText(latest.timestamp)}.` : 'No valid sample recorded yet.'}` : error ? 'No saved readings loaded for this range.' : `Loading saved readings for ${historyRangeLabel().toLowerCase()}.`) + (key === 'co2' ? ` Average is over saved samples in this time range. ${series?.source==='dfrobot_sen0219_analog'?'DFRobot infrared CO₂ samples only; CCS811 and legacy readings are excluded.':'CCS811 eCO₂ / legacy readings; infrared samples are excluded.'}` : ''));
+      if (summary) continue;
       $(`history-empty-${key}`).hidden = points.length > 0;
       svg.toggleAttribute('hidden', points.length === 0);
       if (!points.length) {
@@ -1764,6 +1796,36 @@
       message('export-result', '');
     }
     if ($('report-selection-summary')) text('report-selection-summary', `CSV and JSON use: ${reportSelectionSnapshot().label}.`);
+    const currentOnly = $('report-range').value === 'current';
+    text('report-outline-title', $('report-title').value.trim() || 'Environment & water report');
+    text('report-outline-period', reportSelectionSnapshot().label);
+    text('report-outline-contents', currentOnly ? 'Current sensor values and availability' : 'Trend charts, averages, peaks, percentiles and data coverage');
+    text('report-outline-snapshot', $('report-current').checked ? 'Fresh readings included' : 'Historical readings only');
+    text('report-outline-notes', $('report-notes').value.trim() || 'No notes added');
+    $('report-outline-notes').classList.toggle('is-empty', !$('report-notes').value.trim());
+    text('report-title-count', `${$('report-title').value.length} / 100`);
+    text('report-notes-count', `${$('report-notes').value.length} / 2,000`);
+  }
+
+  function updatePasswordFeedback() {
+    const value = $('new-password').value;
+    // This is guidance, not a second validation gate. The server owns the
+    // Unicode-aware policy, including any differences between Unicode versions.
+    const checks = {
+      length: [...value].length >= 12 && [...value].length <= 128,
+      case: /\p{Uppercase}/u.test(value) && /\p{Lowercase}/u.test(value),
+      number: /[0-9]/.test(value),
+      symbol: /[^\p{Alphabetic}\p{Number}]/u.test(value)
+    };
+    document.querySelectorAll('[data-password-rule]').forEach(item => {
+      const met = Boolean(value) && checks[item.dataset.passwordRule];
+      item.dataset.met = String(met);
+      item.querySelector('.password-rule-state').textContent = met ? 'Met: ' : 'Needed: ';
+    });
+    const confirmation = $('confirm-password').value;
+    $('password-match').hidden = !confirmation;
+    $('password-match').dataset.match = String(Boolean(value) && value === confirmation);
+    text('password-match', value && value === confirmation ? 'Passwords match.' : 'Passwords do not match yet.');
   }
   function reportFieldError(id, value) {
     const input = $(id);
@@ -2143,6 +2205,8 @@
     if (button.dataset.busy) return;
     button.dataset.busy = 'true';
     button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    if (button.id === 'refresh-button') button.textContent = 'Refreshing…';
     globalError('');
     try {
       await action();
@@ -2151,6 +2215,8 @@
     } finally {
       delete button.dataset.busy;
       button.disabled = false;
+      button.removeAttribute('aria-busy');
+      if (button.id === 'refresh-button') button.textContent = '↻ Refresh';
       renderOutputs();
     }
   }
@@ -2159,6 +2225,7 @@
   makeOutputCards();
   makeHistoryCards();
   makeCalibrationCards();
+  updatePasswordFeedback();
   navigate();
   document.querySelectorAll('form').forEach(element => {
     const edited = event => {
@@ -2204,6 +2271,19 @@
     $('camera-feeds').dataset.layout=button.dataset.cameraLayout;
     document.querySelectorAll('[data-camera-layout]').forEach(control=>control.setAttribute('aria-pressed',String(control===button)));
   }));
+  document.querySelectorAll('[data-settings-view]').forEach(button => button.addEventListener('click', () => {
+    state.settingsView = button.dataset.settingsView;
+    renderSettingsView();
+  }));
+  document.querySelectorAll('[data-history-view]').forEach(button => button.addEventListener('click', () => {
+    state.historyView = button.dataset.historyView;
+    renderHistory();
+  }));
+  $('back-to-top').addEventListener('click', () => {
+    $('page-title').focus({preventScroll: true});
+    window.scrollTo({top: 0, behavior: 'instant'});
+  });
+  ['new-password', 'confirm-password'].forEach(id => $(id).addEventListener('input', updatePasswordFeedback));
   document.querySelectorAll('[data-settings-section]').forEach(link => link.addEventListener('click', event => {
     if (link.hash !== location.hash) return;
     event.preventDefault();

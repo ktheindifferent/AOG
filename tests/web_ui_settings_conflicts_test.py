@@ -12,6 +12,8 @@ def check_settings_conflicts(browser):
     context, page, errors = open_page(browser, device)
     try:
         navigate(page, 'settings')
+        # Keep multiple forms visible for the overlapping edit/save scenarios.
+        page.click('[data-settings-view=all]')
         page.fill('#setup-name-input', 'My grow room')
         device.settings['setup']['relay_labels'][2] = 'Updated fill label'
         refresh(page)

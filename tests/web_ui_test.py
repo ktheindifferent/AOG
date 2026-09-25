@@ -528,6 +528,7 @@ def check_settings_navigation(browser):
     expect(page.locator('#ph-settings-form h2')).to_be_focused()
     expect(page.locator('#setup-name-input')).to_have_value('A retained setup draft')
     page.click('[data-settings-section=relays]')
+    page.click('[data-settings-view=all]')
     page.click('#setup-form [type=submit]')
     page.locator('#overflow-label-1').focus()
     assert len(pending_settings) == 1

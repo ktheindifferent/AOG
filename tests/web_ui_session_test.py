@@ -54,8 +54,11 @@ def check_session_return(browser):
             page.goto(f'https://aog.test/index.html#{view}')
             expect(page.locator('#connection')).to_contain_text('Connected')
             if view == 'settings/calibration':
+                page.click('[data-settings-section=relays]')
                 page.fill('#setup-name-input', draft_name)
                 expect(page.locator('[data-form-state="setup-form"]')).to_have_text('Unsaved changes')
+                page.click('[data-settings-section=calibration]')
+                expect(page.locator('#calibration-form h2')).to_be_focused()
             device.authenticated = False
             # Let the existing status polls observe the 401. Clicking a control
             # here races the automatic redirect and may target a detached page.

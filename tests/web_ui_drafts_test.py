@@ -121,6 +121,7 @@ def check_draft_summary(browser):
         expect(page.locator('#draft-summary')).not_to_be_visible()
         navigate(page, 'settings')
         page.fill('#setup-name-input', 'Draft grow room')
+        page.click('[data-settings-section=overflow]')
         page.fill('#overflow-label-1', 'Display tank draft')
         expect(page.locator('#draft-summary-status')).to_contain_text('2 sections have changes')
         expect(page.locator('#settings-draft-count')).to_have_text('2')

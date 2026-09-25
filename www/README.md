@@ -46,6 +46,16 @@ visual timelines, outputs summarize confirmed relay state, and camera views
 can switch between side-by-side and stacked layouts. Account and sign-in share
 the same typography, field spacing and local-device identity.
 
+Setup opens one section at a time, with an **All sections** view for reviewing
+multiple forms together. Section links retain their URLs, keyboard focus and
+unsaved edits. History offers **Compare readings**, a compact view of the last
+recorded values and period statistics, with a link into each full chart. Display
+choices last for the current browser page; they do not change device settings.
+The report outline reflects the selected title, period, snapshot and notes.
+Password requirements and confirmation feedback update while typing, while
+the device remains responsible for validating password changes. Shared refresh
+feedback and **Back to top** controls complete the page navigation.
+
 ## Interaction conventions
 
 - Mobile navigation opens with **Menu**, closes after selection, and supports
@@ -165,6 +175,11 @@ retained drafts, schedule windows, output summaries, camera layout, export order
 and reading units across desktop and 390/320px screens. Set `AOG_AXE_PATH` to a
 local axe-core script to audit every page, including sign-in, for WCAG A/AA
 violations during this check.
+
+`tests/web_ui_refinement_test.py` checks focused settings navigation and retained
+drafts, comparison-to-chart navigation and range recovery, report outlines,
+Unicode password guidance and confirmation feedback. It also supports
+`AOG_AXE_PATH` and writes screenshots to `AOG_UI_ARTIFACTS` when specified.
 
 A plain static file server can show the shell, but live readings and device
 controls require the Rust API. Editing this source directory does not itself
