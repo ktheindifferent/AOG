@@ -8,13 +8,13 @@ Use a Git credential helper or SSH key with write access. If using GitHub CLI:
 
 ```sh
 sudo apt-get install gh
-gh auth login --hostname github.com --git-protocol https --web --scopes workflow
+gh auth login --hostname github.com --git-protocol https --web
 gh auth setup-git
 ```
 
 Authenticate as an account with write access to the existing AOG repository. Keep tokens out of commands, repository files, and chat. Revoke the token previously shared in chat.
 
-The additional `workflow` scope allows publication of the included GitHub Actions workflow. See [GitHub CLI authentication](https://cli.github.com/manual/gh_auth_login) and [GitHub OAuth scopes](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps).
+This checkout does not include GitHub Actions workflows. No additional `workflow` scope is needed for workflow files in this tree. Run verification locally before publishing. See [GitHub CLI authentication](https://cli.github.com/manual/gh_auth_login).
 
 ## Publish the committed v2 tree
 
@@ -31,7 +31,7 @@ In GitHub **Settings → General → Default branch**, select `main`. Optionally
 
 ## Publish firmware downloads
 
-After the code is pushed and checks pass:
+After local verification passes and the code is pushed:
 
 ```sh
 gh release create v2.0.0 firmware/package/*.hex firmware/package/manifest.json firmware/package/sources.zip \
