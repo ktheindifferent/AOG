@@ -271,6 +271,11 @@
       if (link.dataset.page === page) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     });
+    document.querySelectorAll('[data-quick-page]').forEach(link => {
+      if (link.dataset.quickPage === page) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+    text('page-category', ['overview','connections','history','cameras','reports'].includes(page) ? 'Observe' : page === 'account' ? 'Account' : 'Cultivate');
     text('page-title', pageCopy[page][0]);
     text('page-description', pageCopy[page][1]);
     document.title = `AOG · ${pageCopy[page][0]}`;
@@ -644,6 +649,13 @@
       waterEnd = minutes($('watering-end').value);
     const validWatering = finite(waterStart) && finite(waterEnd) && $('watering-interval').validity.valid && $('watering-duration').validity.valid;
     const waterWindow = waterStart === waterEnd ? 'all day (equal window times)' : `${timeText(waterStart)}–${timeText(waterEnd)}${waterStart > waterEnd ? ', crossing midnight' : ''}`;
+    const waterFrom=waterStart/1440*100, waterTo=waterEnd/1440*100;
+    $('watering-preview').style.background = !$('watering-enabled').checked || !validWatering ? '#edf1e7' : waterStart === waterEnd ? '#98bfbd' : waterStart < waterEnd ? `linear-gradient(to right,#edf1e7 ${waterFrom}%,#98bfbd ${waterFrom}%,#98bfbd ${waterTo}%,#edf1e7 ${waterTo}%)` : `linear-gradient(to right,#98bfbd ${waterTo}%,#edf1e7 ${waterTo}%,#edf1e7 ${waterFrom}%,#98bfbd ${waterFrom}%)`;
+    for (const prefix of ['lighting','watering']) {
+      const on=$(`${prefix}-enabled`).checked;
+      $(`${prefix}-schedule-card`).dataset.enabled=String(on);
+      text(`${prefix}-enabled-label`,on?'Enabled':'Disabled');
+    }
     text('watering-preview-text', !$('watering-enabled').checked ? 'Water pump schedule is disabled. Choose the pump and interval, then enable it when ready.' : !validWatering ? 'Choose both window times and enter a repeat interval and run duration of at least 1 to preview the water cycle.' : `${roleNames[waterRole]}: run for ${$('watering-duration').value} seconds every ${$('watering-interval').value} minutes, ${waterWindow}. The first run waits one interval. Runs wait for the previous run to finish and for window and safety conditions to allow pumping.`);
     const dirty = state.dirtyForms.has('schedule-form');
     text('schedule-preview-state', dirty ? 'Preview of unsaved changes · Save schedules to apply.' : 'Preview of saved schedules');
@@ -699,7 +711,7 @@
     metric('water-d6-value', data.water_temp_d6 || 'N/A', '°C');
     metric('water-d8-value', data.water_temp_d8 || 'N/A', '°C');
     metric('humidity-value', data.hum, '%');
-    metric('co2-value', Math.round(Number.parseFloat(data.co2)));
+    metric('co2-value', Math.round(Number.parseFloat(data.co2)), 'ppm');
     text('co2-source', data.co2_source === 'dfrobot_sen0219_analog' ? 'DFRobot · infrared CO₂' : data.co2_source === 'ccs811' ? 'CCS811 · equivalent CO₂ estimate' : data.co2_source === 'legacy_mixed' ? 'Legacy firmware · mixed estimate' : 'ppm · source unconfirmed');
     text('pm25-value', data.pm25 === 'N/A' ? 'Unavailable' : data.pm25);
     text('pm10-value', data.pm10 === 'N/A' ? 'Unavailable' : data.pm10);
@@ -1081,6 +1093,7 @@
       link.href = `#history/${metric.key}`;
       link.dataset.historySensor = metric.key;
       link.textContent = metric.label;
+      link.style.setProperty('--sensor-color', metric.color);
       $('history-sensors').append(link);
       const card = document.createElement('article');
       card.id = `history-card-${metric.key}`;
@@ -1378,6 +1391,9 @@
       last_event: 'Waiting for the relay board'
     };
     const unavailable = outputsUnavailable();
+    const enabledSchedules = Object.values(state.settings.schedules).filter(schedule=>schedule.enabled).length;
+    text('output-live-summary', unavailable ? 'Output state unavailable' : `${data.outputs.filter(output=>output.on===true).length} of 4 outputs running`);
+    text('output-automation-summary', unavailable ? 'Refresh to check the relays and automation.' : data.automation_paused ? 'Schedules paused · manual control' : enabledSchedules ? `${enabledSchedules} saved schedule${enabledSchedules===1?'':'s'} enabled` : 'No schedules enabled · manual control');
     const elapsed = Math.max(0, Math.floor((performance.now() - state.outputsReceivedAt) / 1000));
     $('paused-banner').hidden = !data.automation_paused;
     if ($('paused-banner-message')) text('paused-banner-message', unavailable ? 'Schedules were last reported paused. Current automation state is unavailable.' : 'Schedules are paused. Outputs will stay under manual control until you resume.');
@@ -1411,6 +1427,7 @@
       const kind = !known && state.outputs ? 'warning' : output.on ? 'good' : 'neutral';
       badge($(`output-state-${channel}`), label, kind);
       $(`output-card-${channel}`).classList.toggle('is-on', output.on === true);
+      $(`output-card-${channel}`).classList.toggle('is-blocked', known && Boolean(output.blocked_reason));
       const role = state.settings.setup.relay_roles[channel - 1];
       let detail;
       if (!known) detail = state.outputs ? 'Relay state is unavailable. Stop remains available.' : 'Waiting for the relay board';
@@ -2168,11 +2185,12 @@
   window.matchMedia('(max-width: 780px)').addEventListener('change', event => {
     const focusedNavigation = $('primary-navigation')?.contains(document.activeElement)
       || document.querySelector('.sidebar-bottom')?.contains(document.activeElement);
+    const focusedQuickNavigation = document.querySelector('.mobile-quick-nav').contains(document.activeElement);
     setNavigationOpen(false);
     if (event.matches && focusedNavigation) $('navigation-toggle')?.focus();
-    else if (!event.matches && document.activeElement === $('navigation-toggle')) document.querySelector('[data-page][aria-current="page"]')?.focus();
+    else if (!event.matches && (document.activeElement === $('navigation-toggle') || focusedQuickNavigation)) document.querySelector('[data-page][aria-current="page"]')?.focus();
   });
-  document.querySelector('.sidebar').addEventListener('click', event => {
+  document.querySelectorAll('.sidebar, .mobile-quick-nav').forEach(navigation => navigation.addEventListener('click', event => {
     const link = event.target.closest('a[href^="#"]');
     if (!link) return;
     setNavigationOpen(false);
@@ -2181,7 +2199,11 @@
       $('page-title').focus({preventScroll: true});
       window.scrollTo({top: 0, behavior: 'instant'});
     }
-  });
+  }));
+  document.querySelectorAll('[data-camera-layout]').forEach(button => button.addEventListener('click', () => {
+    $('camera-feeds').dataset.layout=button.dataset.cameraLayout;
+    document.querySelectorAll('[data-camera-layout]').forEach(control=>control.setAttribute('aria-pressed',String(control===button)));
+  }));
   document.querySelectorAll('[data-settings-section]').forEach(link => link.addEventListener('click', event => {
     if (link.hash !== location.hash) return;
     event.preventDefault();

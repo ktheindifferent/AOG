@@ -434,7 +434,7 @@ def check_sensor_navigation(browser):
         bounds = page.locator('#ph-history-title').bounding_box()
         menu = page.locator('.sidebar').bounding_box()
         assert bounds['y'] >= menu['y'] + menu['height'], 'Menu obscures pH history heading'
-        page.click('.air-reading[href="#history/tvoc"]')
+        page.click('.readout[href="#history/tvoc"]')
         expect(page.locator('#history-card-tvoc')).to_be_visible()
     page.click('#history-to-reports')
     expect(page.locator('#report-range')).to_have_value('6')

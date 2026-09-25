@@ -178,7 +178,7 @@ def run(browser,width):
     d.devices[0]['fields']['CO2_ADC']='160';page.click('#hardware-refresh')
     page.click('#co2-settings-details summary')
     navigate(page,'overview')
-    expect(page.locator('#co2-value')).to_have_text('1,191')
+    expect(page.locator('#co2-value')).to_have_text('1,191 ppm')
     expect(page.locator('#co2-source')).to_contain_text('DFRobot')
     navigate(page,'connections')
     page.click('[data-board=DUAL_OVF_SENSOR]')

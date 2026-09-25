@@ -36,6 +36,16 @@ The sign-in illustration gives way to a compact brand header on mobile.
 Controls retain visible keyboard focus, touch targets, reduced-motion support,
 and native checkboxes in forced-colors mode.
 
+The shared header identifies the current workspace, and phones have persistent
+quick links to Overview, Connections, History and Outputs. Secondary water and
+air measurements use labeled readout cards with direct history links. History
+groups sensor and period selection above the charts. Setup has a persistent
+section index on desktop; reports group period, context and download actions,
+with raw exports before the illustrative preview. Both schedule windows have
+visual timelines, outputs summarize confirmed relay state, and camera views
+can switch between side-by-side and stacked layouts. Account and sign-in share
+the same typography, field spacing and local-device identity.
+
 ## Interaction conventions
 
 - Mobile navigation opens with **Menu**, closes after selection, and supports
@@ -88,7 +98,7 @@ and native checkboxes in forced-colors mode.
   sample in the selected period. Intentional stepping announces the selection
   without repeated announcements from hovering or background updates.
 - Overview readings link directly to their histories. Choose a single sensor
-  or all six; `#history/temp` and the other sensor links support browser
+  or all eight; `#history/temp` and the other sensor links support browser
   Back/Forward and keep the selected time range. `#overview/ph` focuses pH
   history. Export controls follow the charts, keeping readings within reach.
 - Schedule previews distinguish saved values from drafts and explain all-day
@@ -131,6 +141,10 @@ CHROMIUM=/usr/bin/chromium /tmp/aog-ui-venv/bin/python tests/web_ui_test.py
 
 The tests intercept requests to `https://aog.test` and serve these files with a
 simulated device. They do not connect to hardware or switch physical outputs.
+On the controller Pi, run browser checks one at a time, separately from Rust
+builds. A temporary directory on `/dev/shm` and a CPU limit for the test process
+reduce disk contention with sensor collection; monitor live board reports
+while verifying an installed system.
 They cover dashboard interactions, form saves and recovery, keyboard controls,
 deep links, single-sensor history, report downloads and previews, camera
 reconnection, sign-in feedback, and responsive layouts. The companion
@@ -145,6 +159,12 @@ commands, credential submission, and bookmarked sign-in.
 and `tests/web_ui_report_options_test.py` cover refreshed settings conflicts,
 sample stepping, and edits made while report requests are pending.
 Screenshots are written to `/tmp`.
+
+`tests/web_ui_workspace_test.py` checks the shared navigation, viewport changes,
+retained drafts, schedule windows, output summaries, camera layout, export order
+and reading units across desktop and 390/320px screens. Set `AOG_AXE_PATH` to a
+local axe-core script to audit every page, including sign-in, for WCAG A/AA
+violations during this check.
 
 A plain static file server can show the shell, but live readings and device
 controls require the Rust API. Editing this source directory does not itself
